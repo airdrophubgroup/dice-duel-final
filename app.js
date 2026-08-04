@@ -268,7 +268,12 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
   }
 
   try {
-    const { data, error } = await supabaseClient.from('user_rewards').select('tnv_balance, wld_balance, is_blocked').eq('wallet_address', wallet).maybeSingle();
+   const { data, error } = await supabaseClient
+  .from('user_rewards')
+  .select('tnv_balance, wld_balance, is_blocked')
+  .eq('wallet_address', wallet ? wallet.toLowerCase() : '')
+  .maybeSingle();
+  
     if (!error && data) {
       if (data.is_blocked) { $('blocked-screen').style.display = 'flex'; return; }
       currentTnvBalance = Number(data.tnv_balance || 0);
