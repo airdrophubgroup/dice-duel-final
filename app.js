@@ -61,9 +61,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             let refundBal = Number((curBal + feeToRefund).toFixed(2));
             await supabaseClient.from('user_rewards').update({ wld_balance: refundBal }).eq('wallet_address', myAddress);
             
-            if (myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) {
-              await logMatchHistory(myAddress, 'REFUND', feeToRefund, `Search timeout refund (${feeToRefund} WLD)`);
-            }
+            await logMatchHistory(myAddress, 'REFUND', feeToRefund, `Search timeout refund (${feeToRefund} WLD)`, match.id);
             await supabaseClient.from('matches').delete().eq('id', match.id);
           }
         }
