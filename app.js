@@ -262,40 +262,55 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
   if (wallet.toLowerCase() === ADMIN_WALLET.toLowerCase()) {
     $('admin-panel').style.display = 'block';
     $('admin-cheaters-panel').style.display = 'block';
-    if ($('admin-history-nav-btn')) $('admin-history-nav-btn').style.display = 'inline-block';
+if ($('admin-history-nav-btn')) $('admin-history-nav-btn').style.display = 'inline-block';
     fetchAdminWithdrawRequests();
     fetchAdminCheaters();
   }
 
   try {
-   const { data, error } = await supabaseClient
-  .from('user_rewards')
-  .select('tnv_balance, wld_balance, is_blocked')
-  .eq('wallet_address', wallet ? wallet.toLowerCase() : '')
-  .maybeSingle();
+    const cleanWallet = wallet ? wallet.toLowerCase().trim() : '';
+    
+    const { data, error } = await supabaseClient
+      .from('user_rewards')
+      .select('tnv_balance, wld_balance, is_blocked')
+      .eq('wallet_address', cleanWallet)
+      .maybeSingle();
   
     if (!error && data) {
       if (data.is_blocked) { $('blocked-screen').style.display = 'flex'; return; }
       currentTnvBalance = Number(data.tnv_balance || 0);
       currentWldBalance = Number(data.wld_balance || 100);
     } else {
-      await supabaseClient.from('user_rewards').upsert({ wallet_address: wallet, tnv_balance: 0, wld_balance: 100, is_blocked: false });
-      currentTnvBalance = 0; currentWldBalance = 100;
+      await supabaseClient.from('user_rewards').upsert({ 
+        wallet_address: cleanWallet, 
+        tnv_balance: 0, 
+        wld_balance: 100, 
+        is_blocked: false 
+      });
+      currentTnvBalance = 0; 
+      currentWldBalance = 100;
     }
+
     $('balance-num').innerText = currentTnvBalance;
     if ($('wld-balance-num')) $('wld-balance-num').innerText = currentWldBalance.toFixed(2);
     $('progress-text').innerText = `${currentTnvBalance.toLocaleString()} / 5,000 TNV`;
     $('p-fill').style.width = Math.min(100, (currentTnvBalance / 5000) * 100) + '%';
     if (currentTnvBalance >= 5000) $('withdraw-btn').removeAttribute('disabled');
     else $('withdraw-btn').setAttribute('disabled', 'true');
-  } catch (e) {}
+  } catch (e) {
+    console.error("Balance fetch error:", e);
+  }
   fetchLeaderboard();
 }
 
 async function logMatchHistory(wallet, type, amount, details) {
   try {
     await supabaseClient.from('match_history').insert({
-      wallet_address: wallet, action_type: type, amount: amount, description: details, created_at: new Date().toISOString()
+      wallet_address: wallet ? wallet.toLowerCase().trim() : '', 
+      action_type: type, 
+      amount: amount, 
+      description: details, 
+      created_at: new Date().toISOString()
     });
   } catch(e) {}
 }
