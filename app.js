@@ -58,6 +58,12 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (stuckMatches && stuckMatches.length > 0) {
         for (let match of stuckMatches) {
           if (!match.game_started) {
+            let feeToRefund = Number(match.fee || selectedFee);
+            const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
+            let curBal = Number(usrData?.wld_balance || 0);
+            let refundBal = Number((curBal + feeToRefund).toFixed(2));
+            await supabaseClient.from('user_rewards').update({ wld_balance: refundBal }).eq('wallet_address', myAddress);
+            await logMatchHistory(myAddress, 'REFUND', feeToRefund, `Search interrupted (reload) & fee refunded (${feeToRefund} WLD)`);
             await supabaseClient.from('matches').delete().eq('id', match.id);
           }
         }
@@ -626,8 +632,24 @@ async function cancelMatchmaking(showAlert = true) {
   if (!matchmakingActive || gameActive) return;
   if (matchId) {
     try {
-      await supabaseClient.from('matches').delete().eq('id', matchId).eq('status', 'waiting');
-      if (showAlert) alert(`Search cancelled.`);
+      const { data: matchCheck } = await supabaseClient.from('matches').select('status, game_started, fee').eq('id', matchId).single();
+
+      if (matchCheck && !matchCheck.game_started && matchCheck.status === 'waiting') {
+        // Verified: opponent never joined & game never started -> safe to refund
+        let matchFee = Number(matchCheck.fee || selectedFee);
+        const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
+        const currentBal = Number(usrData?.wld_balance || 0);
+        const refundBal = Number((currentBal + matchFee).toFixed(2));
+
+        await supabaseClient.from('user_rewards').update({ wld_balance: refundBal }).eq('wallet_address', myAddress);
+        await logMatchHistory(myAddress, 'REFUND', matchFee, `Search cancelled & fee refunded (${matchFee} WLD)`);
+        await supabaseClient.from('matches').delete().eq('id', matchId).eq('status', 'waiting');
+
+        if (showAlert) alert(`Search cancelled. ${matchFee} WLD entry fee has been refunded.`);
+      } else {
+        // Already matched/playing by the time cancel fired -> do NOT refund
+        if (showAlert) alert(`Search cancelled.`);
+      }
     } catch(e) {}
   }
   resetToHome();
