@@ -1,4 +1,4 @@
-import { MiniKit } from "https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@latest/+esm";
+import { MiniKit, Tokens, tokenToDecimals } from "https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@1.9.6/+esm";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
 const SB_URL = "https://efmkazyrxllcyvcwmewd.supabase.co";
@@ -26,22 +26,25 @@ const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
 const $ = (id) => document.getElementById(id);
 
 window.addEventListener('DOMContentLoaded', async () => {
-  try{ MiniKit.install(WORLD_APP_ID); }catch(e){}
-  if (MiniKit.isInstalled()){
-    $('landingHint').textContent = 'World App detected';
-  } else {
-    $('landingHint').textContent = 'open inside World App to play';
-  }
+  try { MiniKit.install(WORLD_APP_ID); } catch(e) {}
 
-  const savedAddress = localStorage.getItem("myAddress");
-  const savedUsername = localStorage.getItem("myUsername");
-  if (savedAddress) {
-    myAddress = savedAddress;
-    if (savedUsername) {
-      setUserData(savedUsername, savedAddress);
-    } else {
-      fetchUserBalanceAndLeaderboard(savedAddress);
+  if (MiniKit.isInstalled()) {
+    $('landingHint').textContent = 'World App detected — signing you in...';
+    // STEP 1 (auto): inside World App, sign the user in automatically via walletAuth
+    await performWalletAuth(true);
+  } else {
+    $('landingHint').textContent = 'Desktop Mode (Simulation active)';
+    let fakeAddress = localStorage.getItem("myAddress");
+    let fakeUsername = localStorage.getItem("myUsername");
+    if (!fakeAddress || !fakeAddress.startsWith('0xDEV')) {
+      const randomHex = Math.floor(Math.random() * 10000).toString(16);
+      fakeAddress = '0xDEV000000000000000000000000000' + randomHex;
+      fakeUsername = '@TestPC_' + randomHex;
+      localStorage.setItem("myAddress", fakeAddress);
+      localStorage.setItem("myUsername", fakeUsername);
     }
+    setUserData(fakeUsername, fakeAddress);
+    realWorldIdUser = true;
   }
 
   if (myAddress) {
@@ -55,15 +58,6 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (stuckMatches && stuckMatches.length > 0) {
         for (let match of stuckMatches) {
           if (!match.game_started) {
-            let feeToRefund = Number(match.fee || 0.5);
-            const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
-            let curBal = Number(usrData?.wld_balance || 100);
-            let refundBal = Number((curBal + feeToRefund).toFixed(2));
-            await supabaseClient.from('user_rewards').update({ wld_balance: refundBal }).eq('wallet_address', myAddress);
-            
-            if (myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) {
-              await logMatchHistory(myAddress, 'REFUND', feeToRefund, `Search timeout refund (${feeToRefund} WLD)`);
-            }
             await supabaseClient.from('matches').delete().eq('id', match.id);
           }
         }
@@ -77,7 +71,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     cancelBtn.id = 'cancel-search-btn';
     cancelBtn.className = 'btn btn-ghost';
     cancelBtn.style.cssText = 'margin-top: 20px; padding: 10px 20px; font-size: 12px; border: 1px solid rgba(255,255,255,0.2);';
-    cancelBtn.innerText = 'CANCEL SEARCH & REFUND';
+    cancelBtn.innerText = 'CANCEL SEARCH';
     cancelBtn.onclick = () => cancelMatchmaking(true);
     waitingOverlay.appendChild(cancelBtn);
   }
@@ -150,16 +144,13 @@ function loadAndCleanChatHistory() {
   try {
     const raw = localStorage.getItem(CHAT_STORAGE_KEY);
     if (!raw) return;
-
     let history = JSON.parse(raw);
     const now = Date.now();
-
     history = history.filter(item => (now - item.timestamp) < CHAT_EXPIRY_MS);
     localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(history));
 
     const container = $('chat-messages-container');
     container.innerHTML = `<div style="text-align:center; color:var(--slate); font-size:11px;">Messages are saved for 24 hours. Chat freely!</div>`;
-
     history.forEach(item => {
       renderChatMessageUI(item.sender, item.message, item.address, item.timestamp);
     });
@@ -170,12 +161,10 @@ function saveAndAppendChatMessage(sender, message, senderAddress, timestamp) {
   try {
     const raw = localStorage.getItem(CHAT_STORAGE_KEY);
     let history = raw ? JSON.parse(raw) : [];
-
     history.push({ sender, message, address: senderAddress, timestamp });
     const now = Date.now();
     history = history.filter(item => (now - item.timestamp) < CHAT_EXPIRY_MS);
     localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(history));
-
     renderChatMessageUI(sender, message, senderAddress, timestamp);
   } catch (e) {}
 }
@@ -202,9 +191,7 @@ window.openChatModal = function() {
   container.scrollTop = container.scrollHeight;
 };
 
-window.closeChatModal = function() {
-  $('chat-modal').style.display = 'none';
-};
+window.closeChatModal = function() { $('chat-modal').style.display = 'none'; };
 
 window.sendChatMessage = function() {
   const input = $('chat-input-field');
@@ -248,24 +235,13 @@ window.toggleSupportDropdown = function(event) {
 
 window.addEventListener('click', () => {
   const dropdown = $('support-dropdown');
-  if (dropdown && dropdown.classList.contains('show')) {
-    dropdown.classList.remove('show');
-  }
+  if (dropdown && dropdown.classList.contains('show')) dropdown.classList.remove('show');
 });
 
 function calculatePayout(fee) {
   const exactPayouts = {
-    0.1: 0.17,
-    0.2: 0.34,
-    0.5: 0.80,
-    1: 1.60,
-    2: 3.20,
-    5: 8.80,
-    10: 17.8,
-    20: 36.0,
-    30: 54.0,
-    40: 72.0,
-    50: 90.0
+    0.1: 0.17, 0.2: 0.34, 0.5: 0.80, 1: 1.60, 2: 3.20,
+    5: 8.80, 10: 17.8, 20: 36.0, 30: 54.0, 40: 72.0, 50: 90.0
   };
   return exactPayouts[fee] || Number((fee * 1.6).toFixed(2));
 }
@@ -277,303 +253,92 @@ function getTnvRewardForFee(fee) {
 
 async function fetchUserBalanceAndLeaderboard(wallet) {
   if (!wallet) return;
-  
   if (wallet.toLowerCase() === ADMIN_WALLET.toLowerCase()) {
     $('admin-panel').style.display = 'block';
     $('admin-cheaters-panel').style.display = 'block';
     if ($('admin-history-nav-btn')) $('admin-history-nav-btn').style.display = 'inline-block';
     fetchAdminWithdrawRequests();
     fetchAdminCheaters();
-  } else {
-    $('admin-panel').style.display = 'none';
-    $('admin-cheaters-panel').style.display = 'none';
-    if ($('admin-history-nav-btn')) $('admin-history-nav-btn').style.display = 'none';
   }
 
   try {
-    const { data, error } = await supabaseClient
-      .from('user_rewards')
-      .select('tnv_balance, wld_balance, is_blocked')
-      .eq('wallet_address', wallet)
-      .maybeSingle();
-
+    const { data, error } = await supabaseClient.from('user_rewards').select('tnv_balance, wld_balance, is_blocked').eq('wallet_address', wallet).maybeSingle();
     if (!error && data) {
-      if (data.is_blocked) {
-        $('blocked-screen').style.display = 'flex';
-        return;
-      } else {
-        $('blocked-screen').style.display = 'none';
-      }
+      if (data.is_blocked) { $('blocked-screen').style.display = 'flex'; return; }
       currentTnvBalance = Number(data.tnv_balance || 0);
       currentWldBalance = Number(data.wld_balance || 100);
     } else {
       await supabaseClient.from('user_rewards').upsert({ wallet_address: wallet, tnv_balance: 0, wld_balance: 100, is_blocked: false });
-      currentTnvBalance = 0;
-      currentWldBalance = 100;
+      currentTnvBalance = 0; currentWldBalance = 100;
     }
-
     $('balance-num').innerText = currentTnvBalance;
     if ($('wld-balance-num')) $('wld-balance-num').innerText = currentWldBalance.toFixed(2);
-
     $('progress-text').innerText = `${currentTnvBalance.toLocaleString()} / 5,000 TNV`;
-    const progressPercent = Math.min(100, (currentTnvBalance / 5000) * 100);
-    $('p-fill').style.width = progressPercent + '%';
-
-    if (currentTnvBalance >= 5000) {
-      $('withdraw-btn').removeAttribute('disabled');
-    } else {
-      $('withdraw-btn').setAttribute('disabled', 'true');
-    }
+    $('p-fill').style.width = Math.min(100, (currentTnvBalance / 5000) * 100) + '%';
+    if (currentTnvBalance >= 5000) $('withdraw-btn').removeAttribute('disabled');
+    else $('withdraw-btn').setAttribute('disabled', 'true');
   } catch (e) {}
-
   fetchLeaderboard();
 }
 
 async function logMatchHistory(wallet, type, amount, details) {
-  if (wallet.toLowerCase() === ADMIN_WALLET.toLowerCase() && type !== 'ADMIN_FEE') {
-    return;
-  }
-
   try {
     await supabaseClient.from('match_history').insert({
-      wallet_address: wallet,
-      action_type: type,
-      amount: amount,
-      description: details,
-      created_at: new Date().toISOString()
+      wallet_address: wallet, action_type: type, amount: amount, description: details, created_at: new Date().toISOString()
     });
   } catch(e) {}
 }
 
 window.openUserHistoryModal = async function() {
-  if (!myAddress) { alert('Please connect wallet first!'); return; }
-
+  if (!myAddress) { alert('Please sign in first!'); return; }
   $('user-history-modal').style.display = 'flex';
   const container = $('user-history-list');
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading history...</div>`;
-
   try {
-    const { data, error } = await supabaseClient
-      .from('match_history')
-      .select('*')
-      .eq('wallet_address', myAddress)
-      .neq('action_type', 'ADMIN_FEE')
-      .order('created_at', { ascending: false })
-      .limit(20);
-
-    if (error || !data || data.length === 0) {
-      container.innerHTML = `<div style="text-align:center; color:var(--slate);">No match history found yet.</div>`;
-      return;
-    }
-
+    const { data } = await supabaseClient.from('match_history').select('*').eq('wallet_address', myAddress).neq('action_type', 'ADMIN_FEE').order('created_at', { ascending: false }).limit(20);
+    if (!data || data.length === 0) { container.innerHTML = `<div style="text-align:center; color:var(--slate);">No match history found.</div>`; return; }
     let html = '';
     data.forEach(item => {
-      let timeStr = new Date(item.created_at).toLocaleString();
-      let color = 'var(--photon)';
-      if (item.action_type === 'DEFEAT') color = 'var(--signal)';
-      if (item.action_type === 'REFUND' || item.action_type === 'TIE') color = 'var(--gold)';
-
-      html += `
-        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); padding:8px 10px; border-radius:8px;">
-          <div style="display:flex; justify-content:space-between; font-weight:700; color:${color};">
-            <span>${item.action_type}</span>
-            <span>${item.amount > 0 ? '+' + item.amount : item.amount} WLD</span>
-          </div>
-          <div style="color:var(--slate); font-size:10.5px; margin-top:2px;">${item.description}</div>
-          <div style="color:#777; font-size:9.5px; text-align:right; margin-top:2px;">${timeStr}</div>
-        </div>
-      `;
+      let color = item.action_type === 'DEFEAT' ? 'var(--signal)' : 'var(--photon)';
+      html += `<div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); padding:8px 10px; border-radius:8px;"><div style="display:flex; justify-content:space-between; font-weight:700; color:${color};"><span>${item.action_type}</span><span>${item.amount} WLD</span></div><div style="color:var(--slate); font-size:10.5px;">${item.description}</div></div>`;
     });
     container.innerHTML = html;
-  } catch(e) {
-    container.innerHTML = `<div style="text-align:center; color:var(--signal);">Failed to load history.</div>`;
-  }
+  } catch(e) {}
 };
 
-window.closeUserHistoryModal = function() {
-  $('user-history-modal').style.display = 'none';
-};
-
+window.closeUserHistoryModal = function() { $('user-history-modal').style.display = 'none'; };
 window.openUserWithdrawalsModal = async function() {
-  if (!myAddress) { alert('Please connect wallet first!'); return; }
+  if (!myAddress) { alert('Please sign in first!'); return; }
   $('user-withdrawals-modal').style.display = 'flex';
   const container = $('user-withdrawals-list');
-  container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading withdrawal requests...</div>`;
-
+  container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading requests...</div>`;
   try {
-    const { data, error } = await supabaseClient
-      .from('withdraw_requests')
-      .select('*')
-      .eq('wallet_address', myAddress)
-      .order('created_at', { ascending: false });
-
-    if (error || !data || data.length === 0) {
-      container.innerHTML = `<div style="text-align:center; color:var(--slate);">No withdrawal requests found.</div>`;
-      return;
-    }
-
+    const { data } = await supabaseClient.from('withdraw_requests').select('*').eq('wallet_address', myAddress).order('created_at', { ascending: false });
+    if (!data || data.length === 0) { container.innerHTML = `<div style="text-align:center; color:var(--slate);">No requests found.</div>`; return; }
     let html = '';
     data.forEach(req => {
-      let timeStr = new Date(req.created_at).toLocaleString();
-      let statusColor = 'var(--gold)';
-      let statusText = 'PENDING';
-
-      if (req.status === 'approved') {
-        statusColor = 'var(--photon)';
-        statusText = 'APPROVED ✅';
-      }
-
-      let proofHtml = '';
-      if (req.status === 'approved' && req.tx_hash) {
-        let isUrl = req.tx_hash.startsWith('http://') || req.tx_hash.startsWith('https://');
-        proofHtml = `
-          <div style="margin-top:6px; font-size:10.5px; background:rgba(0,0,0,0.2); padding:6px; border-radius:6px; word-break:break-all;">
-            <span>Proof/Tx: </span>
-            ${isUrl ? `<a href="${req.tx_hash}" target="_blank" style="color:var(--photon); text-decoration:underline;">View Link</a>` : `<span style="color:var(--gold);">${req.tx_hash}</span>`}
-            <button onclick="navigator.clipboard.writeText('${req.tx_hash}'); alert('Copied to clipboard!');" style="margin-left:8px; background:rgba(255,255,255,0.1); border:none; color:#fff; font-size:9px; padding:2px 6px; border-radius:4px; cursor:pointer;">Copy</button>
-          </div>
-        `;
-      }
-
-      html += `
-        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); padding:8px 10px; border-radius:8px;">
-          <div style="display:flex; justify-content:space-between; font-weight:700; color:${statusColor};">
-            <span>${req.amount} TNV</span>
-            <span>${statusText}</span>
-          </div>
-          <div style="color:var(--slate); font-size:10.5px; margin-top:2px;">Requested on: ${timeStr}</div>
-          ${proofHtml}
-        </div>
-      `;
+      let statusColor = req.status === 'approved' ? 'var(--photon)' : 'var(--gold)';
+      html += `<div style="background:rgba(255,255,255,0.03); padding:8px; border-radius:8px;"><div style="display:flex; justify-content:space-between; color:${statusColor};"><span>${req.amount} TNV</span><span>${req.status.toUpperCase()}</span></div></div>`;
     });
     container.innerHTML = html;
-  } catch(e) {
-    container.innerHTML = `<div style="text-align:center; color:var(--signal);">Failed to load requests.</div>`;
-  }
+  } catch(e) {}
 };
 
-window.closeUserWithdrawalsModal = function() {
-  $('user-withdrawals-modal').style.display = 'none';
-};
-
+window.closeUserWithdrawalsModal = function() { $('user-withdrawals-modal').style.display = 'none'; };
 window.openAdminEarningsModal = async function() {
   $('admin-earnings-modal').style.display = 'flex';
   const container = $('admin-earnings-list');
-  container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading admin revenue...</div>`;
-
+  container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading revenue...</div>`;
   try {
-    const { data, error } = await supabaseClient
-      .from('match_history')
-      .select('*')
-      .eq('wallet_address', ADMIN_WALLET)
-      .eq('action_type', 'ADMIN_FEE')
-      .order('created_at', { ascending: false })
-      .limit(50);
-
-    if (error || !data || data.length === 0) {
-      container.innerHTML = `<div style="text-align:center; color:var(--slate);">No admin fees collected yet.</div>`;
-      return;
-    }
-
-    let totalRevenue = 0;
-    let html = '';
-    data.forEach(item => {
-      totalRevenue += Number(item.amount || 0);
-      let timeStr = new Date(item.created_at).toLocaleString();
-      html += `
-        <div style="background:rgba(243,156,18,0.05); border:1px solid rgba(243,156,18,0.2); padding:8px 10px; border-radius:8px;">
-          <div style="display:flex; justify-content:space-between; font-weight:700; color:var(--gold);">
-            <span>Fee Collected</span>
-            <span>+${item.amount} WLD</span>
-          </div>
-          <div style="color:var(--slate); font-size:10.5px; margin-top:2px;">${item.description}</div>
-          <div style="color:#777; font-size:9.5px; text-align:right; margin-top:2px;">${timeStr}</div>
-        </div>
-      `;
-    });
-    container.innerHTML = `<div style="font-weight:700; color:var(--gold); margin-bottom:8px; font-size:12px;">Total Revenue: ${totalRevenue.toFixed(2)} WLD</div>` + html;
-  } catch(e) {
-    container.innerHTML = `<div style="text-align:center; color:var(--signal);">Failed to load revenue.</div>`;
-  }
+    const { data } = await supabaseClient.from('match_history').select('*').eq('wallet_address', ADMIN_WALLET).eq('action_type', 'ADMIN_FEE').order('created_at', { ascending: false }).limit(50);
+    if (!data || data.length === 0) { container.innerHTML = `<div style="text-align:center; color:var(--slate);">No fees collected.</div>`; return; }
+    let total = 0, html = '';
+    data.forEach(i => { total += Number(i.amount || 0); html += `<div style="background:rgba(243,156,18,0.05); padding:8px; border-radius:8px;"><span style="color:var(--gold);">+${i.amount} WLD</span></div>`; });
+    container.innerHTML = `<div style="color:var(--gold); font-weight:700; margin-bottom:8px;">Total: ${total.toFixed(2)} WLD</div>` + html;
+  } catch(e) {}
 };
 
-window.closeAdminEarningsModal = function() {
-  $('admin-earnings-modal').style.display = 'none';
-};
-
-async function fetchAdminWithdrawRequests() {
-  try {
-    const { data, error } = await supabaseClient.from('withdraw_requests').select('*').eq('status', 'pending').order('created_at', { ascending: false });
-    const container = $('admin-req-container');
-    if (error || !data || data.length === 0) {
-      container.innerHTML = `<div style="font-size:11px; color:var(--slate); text-align:center;">No pending requests</div>`;
-      return;
-    }
-    let html = '';
-    data.forEach(req => {
-      let shortAddr = req.wallet_address.slice(0, 6) + '...' + req.wallet_address.slice(-4);
-      html += `
-        <div class="admin-req-item">
-          <div class="admin-req-row">
-            <span style="color:var(--photon); font-family:'JetBrains Mono', monospace;" title="${req.wallet_address}">${shortAddr}</span>
-            <button onclick="navigator.clipboard.writeText('${req.wallet_address}'); alert('User address copied!');" style="background:rgba(255,255,255,0.1); border:none; color:#fff; font-size:9px; padding:2px 6px; border-radius:4px; cursor:pointer;">Copy Addr</button>
-            <span style="color:var(--gold); font-family:'JetBrains Mono', monospace; font-weight:700;">${req.amount} TNV</span>
-          </div>
-          <div class="admin-req-row"><span style="font-size:10px; color:var(--slate);">${new Date(req.created_at).toLocaleString()}</span><button class="approve-btn" onclick="openAdminModal('${req.id}', '${req.wallet_address}', ${req.amount})">APPROVE / PAY</button></div>
-        </div>
-      `;
-    });
-    container.innerHTML = html;
-  } catch (e) {}
-}
-
-async function fetchAdminCheaters() {
-  try {
-    const { data, error } = await supabaseClient.from('cheater_logs').select('*').order('detected_at', { ascending: false }).limit(20);
-    const container = $('admin-cheaters-container');
-    if (error || !data || data.length === 0) {
-      container.innerHTML = `<div style="font-size:11px; color:var(--slate); text-align:center;">No suspicious activity</div>`;
-      return;
-    }
-    let html = '';
-    data.forEach(log => {
-      let shortAddr = log.wallet_address.slice(0, 6) + '...' + log.wallet_address.slice(-4);
-      html += `
-        <div class="admin-req-item">
-          <div class="admin-req-row"><span style="color:var(--signal); font-family:'JetBrains Mono', monospace;">${shortAddr}</span><span style="font-size:10px; color:var(--slate);">${new Date(log.detected_at).toLocaleString()}</span></div>
-          <div class="admin-req-row"><span style="font-size:11px; color:var(--gold); font-weight:600;">Attempts: ${log.click_count}x</span><button class="block-btn" onclick="promptBlockUser('${log.wallet_address}')">BLOCK</button></div>
-        </div>
-      `;
-    });
-    container.innerHTML = html;
-  } catch (e) {}
-}
-
-window.promptBlockUser = async function(walletToBlock) {
-  if (confirm(`⚠️ Block user: ${walletToBlock}?`)) {
-    await supabaseClient.from('user_rewards').update({ is_blocked: true }).eq('wallet_address', walletToBlock);
-    alert('User blocked.');
-    fetchAdminCheaters();
-  }
-};
-
-window.openAdminModal = function(reqId, userWallet, amount) {
-  activeAdminReqId = reqId;
-  $('admin-modal-info').innerText = `Paying ${amount} TNV to ${userWallet.slice(0,6)}...${userWallet.slice(-4)}`;
-  $('admin-tx-input').value = "";
-  $('admin-approve-modal').style.display = 'flex';
-};
-
-window.closeAdminModal = function() { $('admin-approve-modal').style.display = 'none'; };
-
-window.confirmAdminApproval = async function() {
-  let txProof = $('admin-tx-input').value.trim();
-  if (!txProof) { alert('Enter Tx Hash'); return; }
-  await supabaseClient.from('withdraw_requests').update({ status: 'approved', tx_hash: txProof }).eq('id', activeAdminReqId);
-  alert('Approved successfully!');
-  closeAdminModal();
-  fetchAdminWithdrawRequests();
-};
+window.closeAdminEarningsModal = function() { $('admin-earnings-modal').style.display = 'none'; };
 
 async function fetchLeaderboard() {
   try {
@@ -593,7 +358,7 @@ async function fetchLeaderboard() {
 window.openWithdrawModal = function() {
   if (currentTnvBalance < 5000) { alert('Min 5,000 TNV required!'); return; }
   $('modal-bal').innerText = currentTnvBalance;
-  $('withdraw-input-container').style.display = currentTnvBalance > 5000 ? 'block' : 'none';
+  $('withdraw-input-container').style.display = 'block';
   $('withdraw-amount-input').value = currentTnvBalance;
   $('withdraw-modal').style.display = 'flex';
 };
@@ -612,18 +377,9 @@ window.submitWithdrawRequest = async function() {
 
 async function resumeGameIfActive() {
   let savedMatchId = localStorage.getItem("currentMatchId");
-  
   if (!savedMatchId && myAddress) {
     try {
-      const { data: activeMatch } = await supabaseClient
-        .from('matches')
-        .select('*')
-        .or(`p1_address.eq.${myAddress},p2_address.eq.${myAddress}`)
-        .eq('status', 'playing')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
+      const { data: activeMatch } = await supabaseClient.from('matches').select('*').or(`p1_address.eq.${myAddress},p2_address.eq.${myAddress}`).eq('status', 'playing').order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (activeMatch) {
         savedMatchId = activeMatch.id;
         localStorage.setItem("currentMatchId", savedMatchId);
@@ -631,48 +387,30 @@ async function resumeGameIfActive() {
       }
     } catch (e) {}
   }
-
   if (!savedMatchId) return;
 
   try {
-    const { data, error } = await supabaseClient.from('matches').select('*').eq('id', savedMatchId).single();
-    if (!error && data && data.status === 'playing') {
+    const { data } = await supabaseClient.from('matches').select('*').eq('id', savedMatchId).single();
+    if (data && data.status === 'playing') {
       matchId = savedMatchId;
       isP1 = localStorage.getItem("isP1") === "true";
-      myAddress = localStorage.getItem("myAddress") || "";
-      myUsername = localStorage.getItem("myUsername") || "";
       selectedFee = Number(data.fee || 0.5);
-      realWorldIdUser = true;
       gameActive = true;
-
       myScore = isP1 ? data.p1_score : data.p2_score;
       oppScore = isP1 ? data.p2_score : data.p1_score;
-
-      const tapsUsed = (isP1 ? data.p1_taps_used : data.p2_taps_used) || 0;
-      myTurnsLeft = Math.max(0, 15 - tapsUsed);
+      myTurnsLeft = Math.max(0, 15 - ((isP1 ? data.p1_taps_used : data.p2_taps_used) || 0));
 
       setUserData(myUsername, myAddress);
       $('opp-name-tag').innerText = (isP1 ? data.p2_username : data.p1_username) || 'OPP';
-
       $('setup-screen').style.display = 'none';
       $('waiting-overlay').style.display = 'none';
       $('game-screen').style.display = 'block';
       $('my-score').innerText = myScore || 0;
       $('opp-score').innerText = oppScore || 0;
-      $('turn-indicator').innerText = myTurnsLeft > 0
-        ? `tap the die to roll (${myTurnsLeft} turns left)`
-        : 'No turns left — waiting for result...';
-
       setupChannel();
       runTimer(data.start_time);
-    } else {
-      localStorage.removeItem("currentMatchId");
-      localStorage.removeItem("isP1");
     }
-  } catch (e) {
-    localStorage.removeItem("currentMatchId");
-    localStorage.removeItem("isP1");
-  }
+  } catch (e) {}
 }
 
 function setUserData(username, address){
@@ -701,47 +439,118 @@ async function resolveUsername(address){
   return '@WLD_' + address.substring(2, 8);
 }
 
+// ----------------------------------------------------
+// STEP 1: WALLET SIGN-IN (auto on load inside World App, or manual before PLAY NOW)
+// Returns true only if the user is actually signed in with a real wallet address.
+// ----------------------------------------------------
+function showAuthBanner(msg){
+  const el = $('auth-banner');
+  if (!el) return;
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+
+async function performWalletAuth(silent = false){
+  if (!MiniKit.isInstalled()) return false;
+  if (myAddress && realWorldIdUser) return true; // already signed in
+
+  try {
+    const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
+      nonce: randomAlphaNumeric(24),
+      requestId: 'req_login_' + Date.now(),
+      expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      notBefore: new Date(Date.now() - 60 * 1000),
+      statement: 'Sign in to TNV Duel Arena.',
+    });
+
+    if (finalPayload?.status === 'success' && finalPayload?.address){
+      realWorldIdUser = true;
+      const username = await resolveUsername(finalPayload.address);
+      setUserData(username, finalPayload.address);
+      localStorage.setItem("myAddress", finalPayload.address);
+      localStorage.setItem("myUsername", username);
+      return true;
+    }
+
+    showAuthBanner(`Sign-in did not complete (status: ${finalPayload?.status || 'unknown'})`);
+    if (!silent) alert("Sign-in cancelled or failed.");
+    return false;
+  } catch (err) {
+    showAuthBanner(`Wallet auth error: ${err?.message || String(err)}`);
+    if (!silent) alert("Wallet authentication error.");
+    return false;
+  }
+}
+
+// ----------------------------------------------------
+// PLAY BUTTON: 1) SIGN IN (if needed) -> 2) MINIKIT.PAY -> 3) MATCHMAKING (only on success)
+// ----------------------------------------------------
 async function handlePlayButtonClick(){
   if (matchmakingActive) return;
 
-  if (!realWorldIdUser){
-    if (!MiniKit.isInstalled()){
-      realWorldIdUser = true;
-      let fakeAddress = localStorage.getItem("myAddress");
-      let fakeUsername = localStorage.getItem("myUsername");
-      if (!fakeAddress || !fakeAddress.startsWith('0xDEV')) {
-        const randomHex = Math.floor(Math.random() * 10000).toString(16);
-        fakeAddress = '0xDEV000000000000000000000000000' + randomHex;
-        fakeUsername = '@TestPC_' + randomHex;
-        localStorage.setItem("myAddress", fakeAddress);
-        localStorage.setItem("myUsername", fakeUsername);
-      }
-      setUserData(fakeUsername, fakeAddress);
-      initMatchmaking();
+  // STEP 1: Ensure wallet is signed in before anything else
+  if (MiniKit.isInstalled()) {
+    if (!myAddress || !realWorldIdUser) {
+      const signedIn = await performWalletAuth(false);
+      if (!signedIn) return; // user cancelled sign-in / failed — stop here, nothing else happens
+    }
+  } else if (!myAddress) {
+    // Desktop simulation has no wallet to sign in with; nothing to do here,
+    // DOMContentLoaded already assigned a fake dev address.
+    return;
+  }
+
+  // STEP 2: Trigger the official MiniKit payment request (Allow / Cancel prompt)
+  if (MiniKit.isInstalled()) {
+    $('start-btn').disabled = true;
+
+    let paymentSuccessful = false;
+    try {
+      const paymentPayload = {
+        reference: 'ref_' + randomAlphaNumeric(16),
+        to: ADMIN_WALLET,
+        tokens: [
+          {
+            symbol: Tokens.WLD,
+            token_amount: tokenToDecimals(selectedFee, Tokens.WLD).toString(),
+          },
+        ],
+        description: `TNV Duel Arena Bet: ${selectedFee} WLD`,
+      };
+
+      const { finalPayload } = await MiniKit.commandsAsync.pay(paymentPayload);
+      paymentSuccessful = (finalPayload?.status === 'success');
+
+    } catch (err) {
+      console.warn("Payment error:", err);
+      paymentSuccessful = false;
+    }
+
+    // STEP 3: Only proceed if payment was genuinely successful
+    if (!paymentSuccessful) {
+      alert("Payment was cancelled or failed.");
+      $('start-btn').disabled = false;
       return;
     }
-    
-    try{
-      const result = await MiniKit.walletAuth({
-        nonce: randomAlphaNumeric(24),
-        requestId: 'req_login_' + Date.now(),
-        expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        notBefore: new Date(Date.now() - 60 * 1000),
-        statement: 'Sign in to TNV Duel Arena.',
-      });
-      const data = result?.data;
-      if (result?.executedWith !== 'fallback' && data?.address && data?.signature){
-        realWorldIdUser = true;
-        const username = await resolveUsername(data.address);
-        setUserData(username, data.address);
-        localStorage.setItem("myAddress", data.address);
-        localStorage.setItem("myUsername", username);
-      } else {
-        return;
-      }
-    }catch(err){ return; }
+
+    await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', selectedFee, `Entry fee payment from ${myUsername || myAddress}`);
+
+  } else {
+    // Desktop simulation fallback (no MiniKit / no real payment prompt available)
+    const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
+    let currentWld = Number(usrData?.wld_balance || 100);
+    if (currentWld < selectedFee) {
+      alert(`Insufficient WLD Balance: ${currentWld.toFixed(2)}, Required: ${selectedFee}`);
+      return;
+    }
+    if (!confirm(`Confirm payment of ${selectedFee} WLD to start match?`)) {
+      return; // simulated cancel
+    }
+    await supabaseClient.from('user_rewards').update({ wld_balance: Number((currentWld - selectedFee).toFixed(2)) }).eq('wallet_address', myAddress);
   }
-  initMatchmaking();
+
+  // STEP 3 (continued): Start matchmaking only after a successful payment
+  initMatchmakingAfterPayment();
 }
 
 function selectFee(amount, element){
@@ -773,21 +582,7 @@ function setupChannel() {
     .subscribe();
 }
 
-async function initMatchmaking(){
-  const { data: wldData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
-  let currentWld = Number(wldData ? wldData.wld_balance : 100);
-
-  if (currentWld < selectedFee) {
-      alert(`Insufficient Test WLD! Aapke paas ${currentWld.toFixed(2)} WLD hain, aur entry fee ${selectedFee} WLD hai.`);
-      resetToHome();
-      return;
-  }
-  
-  let newWld = Number((currentWld - selectedFee).toFixed(2));
-  await supabaseClient.from('user_rewards')
-      .update({ wld_balance: newWld })
-      .eq('wallet_address', myAddress);
-
+async function initMatchmakingAfterPayment(){
   matchmakingActive = true;
   $('start-btn').disabled = true;
   $('waiting-overlay').style.display = 'flex';
@@ -806,9 +601,7 @@ async function initMatchmaking(){
     timeLeft--;
     if (timeLeft <= 0){
       clearInterval(mTimer);
-      if (!gameActive){
-        await cancelMatchmaking(false);
-      }
+      if (!gameActive) await cancelMatchmaking(false);
     }
   }, 1000);
 
@@ -831,29 +624,12 @@ async function initMatchmaking(){
 
 async function cancelMatchmaking(showAlert = true) {
   if (!matchmakingActive || gameActive) return;
-
   if (matchId) {
     try {
-      const { data: matchCheck } = await supabaseClient.from('matches').select('status, game_started, fee').eq('id', matchId).single();
-      
-      if (matchCheck && !matchCheck.game_started && matchCheck.status === 'waiting') {
-        let matchFee = Number(matchCheck.fee || selectedFee);
-        const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
-        const currentBal = Number(usrData?.wld_balance || 0);
-        let refundBal = Number((currentBal + matchFee).toFixed(2));
-
-        await supabaseClient.from('user_rewards').update({ wld_balance: refundBal }).eq('wallet_address', myAddress);
-        await logMatchHistory(myAddress, 'REFUND', matchFee, `Search cancelled & fee refunded (${matchFee} WLD)`);
-        
-        await supabaseClient.from('matches').delete().eq('id', matchId).eq('status', 'waiting');
-        
-        if (showAlert) {
-          alert(`Search cancelled. ${matchFee} WLD entry fee has been refunded.`);
-        }
-      }
+      await supabaseClient.from('matches').delete().eq('id', matchId).eq('status', 'waiting');
+      if (showAlert) alert(`Search cancelled.`);
     } catch(e) {}
   }
-
   resetToHome();
 }
 
@@ -865,7 +641,6 @@ async function checkBothReady(){
   if (data.status === 'matched' || data.status === 'playing'){
     if (pollTimer) clearInterval(pollTimer);
     $('opp-name-tag').innerText = (isP1 ? data.p2_username : data.p1_username) || 'OPP';
-
     localStorage.setItem("currentMatchId", matchId);
     localStorage.setItem("isP1", isP1);
 
@@ -909,9 +684,7 @@ async function runTimer(startTime = null){
         const elapsed = Math.floor((Date.now() - new Date(startTime).getTime()) / 1000);
         const remaining = 32 - elapsed;
         $("game-timer").innerText = Math.max(remaining, 0) + "s";
-
         if (remaining <= 2) $('turn-indicator').innerText = 'Calculating winner...';
-
         if (remaining <= 0) {
             clearInterval(gameTimerInterval);
             if (isP1) channel.send({ type: "broadcast", event: "game_force_end" });
@@ -940,13 +713,11 @@ async function rollDice(){
   channel.send({ type: 'broadcast', event: 'score_update', payload: { sender: myAddress, score: myScore } });
   
   const { data: rpcRes, error: rpcErr } = await supabaseClient.rpc('secure_roll_dice', {
-    p_match_id: matchId,
-    p_wallet: myAddress,
-    p_roll: roll
+    p_match_id: matchId, p_wallet: myAddress, p_roll: roll
   });
 
   if (rpcErr || (rpcRes && !rpcRes.success)) {
-    console.warn("Roll rejected by secure server check");
+    console.warn("Roll rejected");
   } else if (rpcRes && rpcRes.taps_left !== undefined) {
     myTurnsLeft = rpcRes.taps_left;
   }
@@ -967,8 +738,8 @@ async function finalizeGame(){
   localStorage.removeItem("currentMatchId");
   localStorage.removeItem("isP1");
 
-  const { data: m, error: readError } = await supabaseClient.from('matches').select('*').eq('id', matchId).single();
-  if (readError || !m) { resetToHome(); return; }
+  const { data: m } = await supabaseClient.from('matches').select('*').eq('id', matchId).single();
+  if (!m) { resetToHome(); return; }
 
   let finalRow = m;
   let matchFee = Number(m.fee || selectedFee);
@@ -981,54 +752,31 @@ async function finalizeGame(){
     const { data: updated } = await supabaseClient
       .from('matches')
       .update({ status: 'completed', winner_address: winnerAddress, winner_username: winnerUsername, payout_amount: payout })
-      .eq('id', matchId)
-      .eq('status', 'playing')
-      .select()
-      .single();
-
-    if (updated) {
-      finalRow = updated;
-    } else {
-      const { data: latestM } = await supabaseClient.from('matches').select('*').eq('id', matchId).single();
-      if (latestM) finalRow = latestM;
-    }
+      .eq('id', matchId).eq('status', 'playing').select().single();
+    if (updated) finalRow = updated;
   }
 
   const myFinal = isP1 ? finalRow.p1_score : finalRow.p2_score;
   const opFinal = isP1 ? finalRow.p2_score : finalRow.p1_score;
-
   const isWin = myFinal > opFinal;
-  const isLoss = myFinal < opFinal;
-  const isTie = myFinal === opFinal;
 
   const exactChipEarn = calculatePayout(matchFee); 
   const totalPool = Number((matchFee * 2).toFixed(2)); 
   const adminFeeAmount = Number(Math.max(0, totalPool - exactChipEarn).toFixed(2)); 
 
-  const settlementKey = `settled_${matchId}_${myAddress}`;
-  const alreadySettled = sessionStorage.getItem(settlementKey);
-
-  if (myAddress && !alreadySettled) {
-      sessionStorage.setItem(settlementKey, "true");
+  if (myAddress && !sessionStorage.getItem(`settled_${matchId}_${myAddress}`)) {
+      sessionStorage.setItem(`settled_${matchId}_${myAddress}`, "true");
       try {
           const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
           const currentWld = Number(usrData?.wld_balance || 0);
 
           if (isWin) {
-              let newWinnerWld = Number((currentWld + exactChipEarn).toFixed(2));
-              await supabaseClient.from('user_rewards').update({ wld_balance: newWinnerWld }).eq('wallet_address', myAddress);
+              await supabaseClient.from('user_rewards').update({ wld_balance: Number((currentWld + exactChipEarn).toFixed(2)) }).eq('wallet_address', myAddress);
               await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match (${matchFee} WLD duel)`);
 
               const { data: adminData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', ADMIN_WALLET).maybeSingle();
-              const adminBal = Number(adminData?.wld_balance || 0);
-              let newAdminWld = Number((adminBal + adminFeeAmount).toFixed(2));
-              await supabaseClient.from('user_rewards').update({ wld_balance: newAdminWld }).eq('wallet_address', ADMIN_WALLET);
-              
-              await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', adminFeeAmount, `Platform fee from match (${matchFee} WLD fee)`);
-          } else if (isTie) {
-              let refundedWld = Number((currentWld + matchFee).toFixed(2));
-              await supabaseClient.from('user_rewards').update({ wld_balance: refundedWld }).eq('wallet_address', myAddress);
-              await logMatchHistory(myAddress, 'REFUND', matchFee, `Match tied & fee refunded (${matchFee} WLD)`);
+              await supabaseClient.from('user_rewards').update({ wld_balance: Number((Number(adminData?.wld_balance || 0) + adminFeeAmount).toFixed(2)) }).eq('wallet_address', ADMIN_WALLET);
+              await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', adminFeeAmount, `Platform fee from match`);
           } else {
               await logMatchHistory(myAddress, 'DEFEAT', -matchFee, `Lost match (${matchFee} WLD duel)`);
           }
@@ -1036,26 +784,18 @@ async function finalizeGame(){
   }
 
   let winTnv = getTnvRewardForFee(matchFee);
-  let loseTnv = Math.floor(winTnv / 3);
-  let earnedTnv = isWin ? winTnv : (isLoss ? loseTnv : 0);
+  let earnedTnv = isWin ? winTnv : Math.floor(winTnv / 3);
 
-  const tnvKey = `tnv_settled_${matchId}_${myAddress}`;
-  const tnvAlreadySettled = sessionStorage.getItem(tnvKey);
-
-  if (myAddress && !tnvAlreadySettled) {
-    sessionStorage.setItem(tnvKey, "true");
+  if (myAddress && !sessionStorage.getItem(`tnv_settled_${matchId}_${myAddress}`)) {
+    sessionStorage.setItem(`tnv_settled_${matchId}_${myAddress}`, "true");
     try {
       const { data: usrData } = await supabaseClient.from('user_rewards').select('tnv_balance, total_games, games_played, games_won').eq('wallet_address', myAddress).maybeSingle();
       if (usrData) {
-        const newTotalGames = Number(usrData.total_games || 0) + 1;
-        const newGamesPlayed = Number(usrData.games_played || 0) + 1;
-        const newGamesWon = Number(usrData.games_won || 0) + (isWin ? 1 : 0);
-
         await supabaseClient.from('user_rewards').update({ 
           tnv_balance: Number(usrData.tnv_balance || 0) + earnedTnv,
-          total_games: newTotalGames,
-          games_played: newGamesPlayed,
-          games_won: newGamesWon
+          total_games: Number(usrData.total_games || 0) + 1,
+          games_played: Number(usrData.games_played || 0) + 1,
+          games_won: Number(usrData.games_won || 0) + (isWin ? 1 : 0)
         }).eq('wallet_address', myAddress);
       }
     } catch(e) {}
@@ -1067,16 +807,11 @@ async function finalizeGame(){
     $('result-msg').innerText = `+${exactChipEarn} WLD & +${earnedTnv} TNV`;
     $('result-card').className = 'result-card result-victory';
     playVictorySound();
-  } else if (isLoss){
+  } else {
     $('result-icon').innerText = '💀';
     $('result-title').innerText = 'DEFEAT!';
-    $('result-msg').innerText = `Entry fee deducted & +${earnedTnv} TNV (Consolation)`;
+    $('result-msg').innerText = `Fee deducted & +${earnedTnv} TNV (Consolation)`;
     $('result-card').className = 'result-card result-defeat';
-  } else {
-    $('result-icon').innerText = '🤝';
-    $('result-title').innerText = 'TIE!';
-    $('result-msg').innerText = `Match Tie & 0 TNV (Fee Refunded)`;
-    $('result-card').className = 'result-card result-tie';
   }
 
   $('result-overlay').style.display = 'flex';
