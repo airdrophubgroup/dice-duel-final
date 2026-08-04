@@ -61,7 +61,9 @@ window.addEventListener('DOMContentLoaded', async () => {
             let refundBal = Number((curBal + feeToRefund).toFixed(2));
             await supabaseClient.from('user_rewards').update({ wld_balance: refundBal }).eq('wallet_address', myAddress);
             
-            await logMatchHistory(myAddress, 'REFUND', feeToRefund, `Search timeout refund (${feeToRefund} WLD)`, match.id);
+            if (myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) {
+              await logMatchHistory(myAddress, 'REFUND', feeToRefund, `Search timeout refund (${feeToRefund} WLD)`);
+            }
             await supabaseClient.from('matches').delete().eq('id', match.id);
           }
         }
@@ -351,20 +353,13 @@ window.openUserHistoryModal = async function() {
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading history...</div>`;
 
   try {
-    // Admin ke liye aur sabhi users ke liye query ko flexible banaya gaya hai
-    let query = supabaseClient
+    const { data, error } = await supabaseClient
       .from('match_history')
       .select('*')
       .eq('wallet_address', myAddress)
+      .neq('action_type', 'ADMIN_FEE')
       .order('created_at', { ascending: false })
-      .limit(30);
-
-    // Agar non-admin hai toh ADMIN_FEE hata sakte hain, par admin ke liye sab dikhega
-    if (myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) {
-      query = query.neq('action_type', 'ADMIN_FEE');
-    }
-
-    const { data, error } = await query;
+      .limit(20);
 
     if (error || !data || data.length === 0) {
       container.innerHTML = `<div style="text-align:center; color:var(--slate);">No match history found yet.</div>`;
@@ -377,22 +372,20 @@ window.openUserHistoryModal = async function() {
       let color = 'var(--photon)';
       if (item.action_type === 'DEFEAT') color = 'var(--signal)';
       if (item.action_type === 'REFUND' || item.action_type === 'TIE') color = 'var(--gold)';
-      if (item.action_type === 'ADMIN_FEE') color = '#e056fd';
 
       html += `
-        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); padding:8px 10px; border-radius:8px; margin-bottom: 6px;">
+        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); padding:8px 10px; border-radius:8px;">
           <div style="display:flex; justify-content:space-between; font-weight:700; color:${color};">
             <span>${item.action_type}</span>
             <span>${item.amount > 0 ? '+' + item.amount : item.amount} WLD</span>
           </div>
-          <div style="color:var(--slate); font-size:10.5px; margin-top:2px;">${item.description || 'Match completed'}</div>
+          <div style="color:var(--slate); font-size:10.5px; margin-top:2px;">${item.description}</div>
           <div style="color:#777; font-size:9.5px; text-align:right; margin-top:2px;">${timeStr}</div>
         </div>
       `;
     });
     container.innerHTML = html;
   } catch(e) {
-    console.error(e);
     container.innerHTML = `<div style="text-align:center; color:var(--signal);">Failed to load history.</div>`;
   }
 };
@@ -406,7 +399,7 @@ window.openUserWithdrawalsModal = async function() {
   $('user-withdrawals-modal').style.display = 'flex';
   const container = $('user-withdrawals-list');
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading withdrawal requests...</div>`;
-}
+
   try {
     const { data, error } = await supabaseClient
       .from('withdraw_requests')
@@ -457,6 +450,7 @@ window.openUserWithdrawalsModal = async function() {
   } catch(e) {
     container.innerHTML = `<div style="text-align:center; color:var(--signal);">Failed to load requests.</div>`;
   }
+};
 
 window.closeUserWithdrawalsModal = function() {
   $('user-withdrawals-modal').style.display = 'none';
