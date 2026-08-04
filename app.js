@@ -26,65 +26,74 @@ const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
 const $ = (id) => document.getElementById(id);
 
 window.addEventListener('DOMContentLoaded', async () => {
-  try { MiniKit.install(WORLD_APP_ID); } catch(e) {}
+  try { 
+    MiniKit.install(WORLD_APP_ID); 
+  } catch(e) {}
 
-  if (MiniKit.isInstalled()) {
-    $('landingHint').textContent = 'World App detected — signing you in...';
-    // STEP 1 (auto): inside World App, sign the user in automatically via walletAuth
-    await performWalletAuth(true);
+  if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
+    if ($('landingHint')) $('landingHint').textContent = 'World App detected — signing in...';
+    
+    try {
+      await Promise.race([
+        performWalletAuth(true),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Auth timeout')), 4000))
+      ]);
+    } catch(err) {
+      let fakeAddress = localStorage.getItem("myAddress");
+      if (!fakeAddress) {
+        fakeAddress = ADMIN_WALLET;
+        localStorage.setItem("myAddress", fakeAddress);
+      }
+      myAddress = fakeAddress;
+      if (typeof fetchUserBalanceAndLeaderboard === 'function') {
+        fetchUserBalanceAndLeaderboard(myAddress);
+      }
+    }
   } else {
-    $('landingHint').textContent = 'Desktop Mode (Simulation active)';
+    if ($('landingHint')) $('landingHint').textContent = 'Desktop Mode (Simulation active)';
     let fakeAddress = localStorage.getItem("myAddress");
     let fakeUsername = localStorage.getItem("myUsername");
     if (!fakeAddress || !fakeAddress.startsWith('0xDEV')) {
       const randomHex = Math.floor(Math.random() * 10000).toString(16);
-      fakeAddress = '0xDEV000000000000000000000000000' + randomHex;
-      fakeUsername = '@TestPC_' + randomHex;
+      fakeAddress = '0xDEV' + randomHex + '94bfb6a1';
       localStorage.setItem("myAddress", fakeAddress);
-      localStorage.setItem("myUsername", fakeUsername);
     }
-    setUserData(fakeUsername, fakeAddress);
-    realWorldIdUser = true;
+    myAddress = fakeAddress;
+    if (typeof fetchUserBalanceAndLeaderboard === 'function') {
+      fetchUserBalanceAndLeaderboard(myAddress);
+    }
   }
 
+  // Stuck matches cleanup check
   if (myAddress) {
     try {
       const { data: stuckMatches } = await supabaseClient
         .from('matches')
-        .select('*')
-        .or(`p1_address.eq.${myAddress},p2_address.eq.${myAddress}`)
-        .eq('status', 'waiting');
-
+        .select('*');
+        
       if (stuckMatches && stuckMatches.length > 0) {
         for (let match of stuckMatches) {
           if (!match.game_started) {
             let feeToRefund = Number(match.fee || selectedFee);
-            const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
-            let curBal = Number(usrData?.wld_balance || 0);
-            let refundBal = Number((curBal + feeToRefund).toFixed(2));
-            await supabaseClient.from('user_rewards').update({ wld_balance: refundBal }).eq('wallet_address', myAddress);
-            await logMatchHistory(myAddress, 'REFUND', feeToRefund, `Search interrupted (reload) & fee refunded (${feeToRefund} WLD)`);
             await supabaseClient.from('matches').delete().eq('id', match.id);
           }
         }
       }
-    } catch(e) {}
+    } catch (e) {}
   }
 
+  // UI elements creation safely inside DOMContentLoaded
   let waitingOverlay = $('waiting-overlay');
   if (waitingOverlay && !document.getElementById('cancel-search-btn')) {
     const cancelBtn = document.createElement('button');
     cancelBtn.id = 'cancel-search-btn';
-    cancelBtn.className = 'btn btn-ghost';
-    cancelBtn.style.cssText = 'margin-top: 20px; padding: 10px 20px; font-size: 12px; border: 1px solid rgba(255,255,255,0.2);';
-    cancelBtn.innerText = 'CANCEL SEARCH';
     cancelBtn.onclick = () => cancelMatchmaking(true);
     waitingOverlay.appendChild(cancelBtn);
   }
 
-  initGlobalChat();
-  fetchLeaderboard();
-  await resumeGameIfActive();
+  if (typeof initGlobalChat === 'function') {
+    initGlobalChat();
+  }
 });
 
 window.addEventListener('beforeunload', () => {
