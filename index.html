@@ -202,4 +202,40 @@
         <h3 style="margin:0; color:var(--photon);">📜 Match & Refund History</h3>
         <button class="chat-close-btn" onclick="closeUserHistoryModal()">✕</button>
       </div>
-      <div id="205 | user-history-list" style="max-height: 300px;
+      <div id="user-history-list" style="max-height:300px; overflow-y:auto; border:1px solid var(--slate); border-radius: 8px; padding:8px;">
+        Loading history...
+      </div>
+    </div>
+  </div>
+
+  <!-- USER WITHDRAWALS MODAL -->
+  <div id="user-withdrawals-modal" class="custom-modal">
+    <div class="modal-card" style="max-width:420px; width:92%;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 style="margin:0; color:var(--photon);">💸 My Withdrawals</h3>
+        <button class="chat-close-btn" onclick="closeUserWithdrawalsModal()">✕</button>
+      </div>
+      <div id="user-withdrawals-list" style="max-height:300px; overflow-y:auto; border:1px solid var(--slate); border-radius: 8px; padding:8px;">
+        Loading withdrawals...
+      </div>
+    </div>
+  </div>
+
+  <!-- WITHDRAW MODAL -->
+  <div id="withdraw-modal" class="custom-modal">
+    <div class="modal-card" style="max-width:360px; width:90%; text-align:center;">
+      <h3 style="color:var(--gold); margin-top:0;">Request Withdrawal</h3>
+      <p style="font-size:12px; color:var(--slate);">Available: <span id="modal-bal" style="color:var(--gold);">0</span> TNV (Min: 5,000 TNV)</p>
+      <input type="number" id="withdraw-amount-input" class="chat-input" placeholder="Enter TNV amount" style="width:100%; margin-bottom:12px;" />
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-primary" onclick="submitWithdrawRequest()" style="padding:10px;">Submit</button>
+        <button class="btn btn-ghost" onclick="closeWithdrawModal()" style="padding:10px; margin-top:0;">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
