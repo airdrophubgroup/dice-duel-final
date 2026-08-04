@@ -96,16 +96,6 @@
         </div>
       </div>
 
-      <!-- --- AIRDROP BOX --- -->
-      <div class="airdrop-card" style="background: var(--void-2); border: 1px solid var(--photon); border-radius: var(--radius); padding: 14px; margin-top: 16px; text-align: center;">
-        <h3 style="margin: 0 0 8px; color: var(--photon); font-size: 13px; text-transform: uppercase; letter-spacing: 0.8px;">🎁 EXCLUSIVE AIRDROP</h3>
-        <p style="margin: 0 0 8px; color: var(--slate); font-size: 11.5px; line-height: 1.5;">
-          Join our partner airdrops to earn extra TNV Tokens. Complete simple tasks and get rewarded directly.
-        </p>
-        <button class="btn-ghost" style="border: 1px solid var(--gold); color: var(--gold); font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 11px; padding: 4px 10px; border-radius: 6px; cursor: not-allowed; opacity: 0.6;">COMING SOON</button>
-      </div>
-      <!-- --- END AIRDROP BOX --- -->
-
       <!-- ADMIN WITHDRAWAL PANEL -->
       <div id="admin-panel">
         <div class="admin-header">
@@ -202,38 +192,107 @@
         <h3 style="margin:0; color:var(--photon);">📜 Match & Refund History</h3>
         <button class="chat-close-btn" onclick="closeUserHistoryModal()">✕</button>
       </div>
-      <div id="user-history-list" style="max-height:300px; overflow-y:auto; border:1px solid var(--slate); border-radius: 8px; padding:8px;">
-        Loading history...
+      <div id="user-history-list" style="max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; text-align:left; font-size:11.5px; padding-right:4px;">
+        <div style="text-align:center; color:var(--slate);">Loading history...</div>
       </div>
+      <button class="btn btn-ghost" style="margin-top:16px; width:100%;" onclick="closeUserHistoryModal()">CLOSE</button>
     </div>
   </div>
 
-  <!-- USER WITHDRAWALS MODAL -->
+  <!-- USER WITHDRAWAL REQUESTS MODAL -->
   <div id="user-withdrawals-modal" class="custom-modal">
     <div class="modal-card" style="max-width:420px; width:92%;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h3 style="margin:0; color:var(--photon);">💸 My Withdrawals</h3>
+        <h3 style="margin:0; color:var(--photon);">💸 Withdrawal Requests</h3>
         <button class="chat-close-btn" onclick="closeUserWithdrawalsModal()">✕</button>
       </div>
-      <div id="user-withdrawals-list" style="max-height:300px; overflow-y:auto; border:1px solid var(--slate); border-radius: 8px; padding:8px;">
-        Loading withdrawals...
+      <div id="user-withdrawals-list" style="max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; text-align:left; font-size:11.5px; padding-right:4px;">
+        <div style="text-align:center; color:var(--slate);">Loading requests...</div>
       </div>
+      <button class="btn btn-ghost" style="margin-top:16px; width:100%;" onclick="closeUserWithdrawalsModal()">CLOSE</button>
     </div>
   </div>
 
-  <!-- WITHDRAW MODAL -->
+  <!-- ADMIN EARNINGS REVENUE MODAL -->
+  <div id="admin-earnings-modal" class="custom-modal">
+    <div class="modal-card" style="max-width:450px; width:92%;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 style="margin:0; color:var(--gold);">🛡️ Admin Revenue Ledger</h3>
+        <button class="chat-close-btn" onclick="closeAdminEarningsModal()">✕</button>
+      </div>
+      <div style="font-size:11px; color:var(--slate); margin-bottom:10px;">Total collected fees from all user matches:</div>
+      <div id="admin-earnings-list" style="max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; text-align:left; font-size:11.5px; padding-right:4px;">
+        <div style="text-align:center; color:var(--slate);">Loading admin revenue...</div>
+      </div>
+      <button class="btn btn-ghost" style="margin-top:16px; width:100%;" onclick="closeAdminEarningsModal()">CLOSE</button>
+    </div>
+  </div>
+
+  <!-- BLOCKED / SUSPENDED USER SCREEN -->
+  <div id="blocked-screen">
+    <div class="blocked-card">
+      <div style="font-size: 52px; margin-bottom: 12px;">🚫</div>
+      <h2 style="font-family:'Space Grotesk', sans-serif; color:var(--signal); margin:0 0 8px; font-size:22px;">ACCOUNT SUSPENDED</h2>
+      <p style="font-size:12.5px; color:var(--slate); margin:0 0 24px; line-height: 1.5;">Your account has been restricted due to automated tapping or policy violation.</p>
+      <a href="https://t.me/TNVTEAMWLD" target="_blank" class="btn btn-primary" style="text-decoration:none; display:flex; justify-content:center; align-items:center; gap:8px;">
+        💬 Contact Support on Telegram
+      </a>
+    </div>
+  </div>
+
+  <!-- WITHDRAW POPUP MODAL (USER) -->
   <div id="withdraw-modal" class="custom-modal">
-    <div class="modal-card" style="max-width:360px; width:90%; text-align:center;">
-      <h3 style="color:var(--gold); margin-top:0;">Request Withdrawal</h3>
-      <p style="font-size:12px; color:var(--slate);">Available: <span id="modal-bal" style="color:var(--gold);">0</span> TNV (Min: 5,000 TNV)</p>
-      <input type="number" id="withdraw-amount-input" class="chat-input" placeholder="Enter TNV amount" style="width:100%; margin-bottom:12px;" />
-      <div style="display:flex; gap:8px;">
-        <button class="btn btn-primary" onclick="submitWithdrawRequest()" style="padding:10px;">Submit</button>
-        <button class="btn btn-ghost" onclick="closeWithdrawModal()" style="padding:10px; margin-top:0;">Cancel</button>
+    <div class="modal-card">
+      <h3>⚡ WITHDRAW TNV</h3>
+      <p style="font-size:12px; color:var(--slate); margin:4px 0 16px;">Available: <span id="modal-bal" style="color:var(--gold);">0</span> TNV</p>
+      
+      <div id="withdraw-input-container" style="display:none;">
+        <input type="number" id="withdraw-amount-input" class="modal-input" placeholder="Enter amount (Min 5000)" min="5000" />
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-ghost" style="margin-top:0;" onclick="closeWithdrawModal()">CANCEL</button>
+        <button class="btn btn-primary" style="padding:12px;" onclick="submitWithdrawRequest()">CONFIRM</button>
       </div>
     </div>
   </div>
 
+  <!-- ADMIN APPROVAL MODAL -->
+  <div id="admin-approve-modal" class="custom-modal">
+    <div class="modal-card">
+      <h3>🛡️ APPROVE WITHDRAWAL</h3>
+      <p id="admin-modal-info" style="font-size:12px; color:var(--slate); margin:4px 0 12px;"></p>
+      
+      <input type="text" id="admin-tx-input" class="modal-input" placeholder="Enter Tx Hash or Proof URL" />
+
+      <div class="modal-actions">
+        <button class="btn btn-ghost" style="margin-top:0;" onclick="closeAdminModal()">CANCEL</button>
+        <button class="btn btn-primary" style="padding:12px;" onclick="confirmAdminApproval()">SUBMIT & COMPLETE</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="waiting-overlay">
+    <div class="scanner" id="searchScanner">
+      <div class="rules-card" style="display:none"></div>
+      <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div>
+      <div class="sweep"></div><div class="core"></div>
+      <div class="radar-dot dot-1"></div>
+      <div class="radar-dot dot-2"></div>
+      <div class="radar-dot dot-target" id="target-dot"></div>
+    </div>
+    <h2 id="wait-status">SEARCHING...</h2>
+  </div>
+
+  <div id="result-overlay">
+    <div class="result-card" id="result-card">
+      <div id="result-icon">🏆</div>
+      <h2 id="result-title">VICTORY!</h2>
+      <p id="result-msg">Rewards credited</p>
+      <p id="result-debug" style="display:none; font-family:'JetBrains Mono', monospace; font-size: 10.5px; color: var(--signal); text-align:left; background: rgba(255,95,109,0.08); border: 1px solid rgba(255,95,109,0.3); border-radius: 10px; padding: 8px 10px; margin: -18px 0 22px; word-break: break-word;"></p>
+      <button class="btn btn-primary" onclick="location.reload()">PLAY AGAIN</button>
+    </div>
+  </div>
 </div>
 
 <script type="module" src="app.js"></script>
