@@ -1,245 +1,205 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="hi">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>TNV Duel Arena</title>
-  <link rel="stylesheet" href="style.css">
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="world-app-id" content="app_74bd2499a35b025efb62d99125df7883" />
+<title>TNV Duel Arena</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- Main Game Container -->
-  <main class="main-container">
+<div id="app">
+  <!-- SUPPORT (LEFT) & GLOBAL CHAT (RIGHT) CORNER BUTTONS -->
+  <div class="support-container">
+    <button class="support-btn-main" onclick="toggleSupportDropdown(event)">💬 Support ▼</button>
+    <div id="support-dropdown" class="support-dropdown">
+      <a href="https://t.me/TNVTEAMWLD" target="_blank" class="support-link">Telegram</a>
+      <div class="support-link">Discord <span class="coming-soon">Soon</span></div>
+      <div class="support-link">Twitter <span class="coming-soon">Soon</span></div>
+      <div class="support-link">Instagram <span class="coming-soon">Soon</span></div>
+    </div>
+  </div>
+
+  <div class="chat-toggle-container">
+    <button class="chat-btn-main" onclick="openChatModal()">🌐 Global Chat (<span id="online-count">1</span>)</button>
+  </div>
+
+  <header class="topbar">
+    <h1 class="brand">TNV Duel Arena 🎲</h1>
+    <div class="user-card">Logged in as: <span id="display-username">Tap Play Now to Connect</span></div>
     
-    <!-- Top Header Bar (Support & Global Chat) -->
-    <div class="header-top-bar">
-      <!-- Support Dropdown -->
-      <div class="support-dropdown-container">
-        <button class="btn btn-ghost btn-sm support-btn" onclick="toggleSupportDropdown(event)">Support ▼</button>
-        <div id="support-dropdown" class="dropdown-content">
-          <a href="#" onclick="openUserHistoryModal()">Match History</a>
-          <a href="#" onclick="openUserWithdrawalsModal()">My Withdrawals</a>
-        </div>
+    <div style="font-family:'JetBrains Mono', monospace; font-size: 11px; color: var(--slate); margin-top: 6px;">
+      Progress to Withdraw: <span id="progress-text" style="color: var(--photon); font-weight:600;">0 / 5,000 TNV</span>
+    </div>
+    <div class="progress-bar"><div id="p-fill" class="progress-fill"></div></div>
+    
+    <!-- WITHDRAW BUTTON TNV KE PAAS & WLD ALAG CLEAN DISPLAY -->
+    <div id="balance-area" style="display:flex; flex-direction:column; gap:6px; align-items:center; margin-top:8px;">
+      <div>
+        <span>Balance: <span id="balance-num">0</span> TNV</span>
+        <button id="withdraw-btn" class="withdraw-btn" disabled onclick="openWithdrawModal()">WITHDRAW</button>
       </div>
-      <!-- Global Chat Button -->
-      <button onclick="openChatModal()" class="btn btn-ghost btn-sm chat-btn">
-        <span class="status-dot online"></span> Global Chat ( <span id="online-count">2</span> )
-      </button>
+      <div style="font-size: 12px; color: var(--gold); font-weight: 600;">
+        Test WLD Balance: <span id="wld-balance-num">100.00</span> WLD
+      </div>
     </div>
 
-    <!-- Setup Screen (Pre-Game Lobby) -->
-    <section id="setup-screen" class="screen-card">
+    <!-- STYLISH HISTORY, WITHDRAWALS & ADMIN REVENUE BUTTONS -->
+    <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:10px;">
+      <button class="btn btn-ghost" style="font-size:10.5px; padding:6px 12px; border:1px solid rgba(41,217,194,0.4); color:var(--photon);" onclick="openUserHistoryModal()">📜 Match History</button>
+      <button class="btn btn-ghost" style="font-size:10.5px; padding:6px 12px; border:1px solid rgba(41,217,194,0.4); color:var(--photon);" onclick="openUserWithdrawalsModal()">💸 My Withdrawals</button>
+      <button id="admin-history-nav-btn" class="btn btn-ghost" style="font-size:10.5px; padding:6px 12px; border:1px solid rgba(243,156,18,0.4); color:var(--gold); display:none;" onclick="openAdminEarningsModal()">🛡️ Admin Revenue</button>
+    </div>
+
+    <div id="auth-banner"></div>
+  </header>
+
+  <main>
+    <section id="setup-screen">
+      <div class="scanner idle" id="idleScanner" style="opacity:0.5;">
+        <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div>
+        <div class="sweep"></div><div class="core"></div>
+      </div>
+
+      <div class="fee-title">Select Entry Amount</div>
+      <div class="fee-container">
+        <div class="fee-chip" data-fee="0.1">0.1 WLD<span class="chip-earn">+0.17</span></div>
+        <div class="fee-chip" data-fee="0.2">0.2 WLD<span class="chip-earn">+0.34</span></div>
+        <div class="fee-chip active" data-fee="0.5">0.5 WLD<span class="chip-earn">+0.80</span></div>
+        <div class="fee-chip" data-fee="1">1 WLD<span class="chip-earn">+1.60</span></div>
+        <div class="fee-chip" data-fee="2">2 WLD<span class="chip-earn">+3.20</span></div>
+        <div class="fee-chip" data-fee="5">5 WLD<span class="chip-earn">+8.80</span></div>
+        <div class="fee-chip" data-fee="10">10 WLD<span class="chip-earn">+17.8</span></div>
+        <div class="fee-chip" data-fee="20">20 WLD<span class="chip-earn">+36.0</span></div>
+        <div class="fee-chip" data-fee="30">30 WLD<span class="chip-earn">+54.0</span></div>
+        <div class="fee-chip" data-fee="40">40 WLD<span class="chip-earn">+72.0</span></div>
+        <div class="fee-chip" data-fee="50">50 WLD<span class="chip-earn">+90.0</span></div>
+      </div>
+
+      <button class="btn btn-primary" id="start-btn">PLAY NOW (0.5 WLD)</button>
       
-      <!-- Title & Connection Status -->
-      <div class="card-header text-center">
-        <h2 class="game-title">TNV Duel Arena 🎲</h2>
-        <div id="display-username" class="user-status-text">Logged in as: Tap Play Now to Connect</div>
-        <div class="progress-text" id="landingHint">Preparing game...</div>
-        <div class="progress-text mt-2">Progress to Withdraw: <span id="progress-text">0 / 5,000 TNV</span></div>
-        <div class="progress-bar-container mt-2"><div class="progress-bar-fill" id="p-fill"></div></div>
-      </div>
-
-      <!-- Balance Card -->
-      <div class="balance-card text-center">
-        <div class="balance-row">
-          <span>Balance: <span id="balance-num" class="gold-text">0 TNV</span></span> 
-          <button id="withdraw-btn" class="btn btn-sm withdraw-btn" onclick="openWithdrawModal()" disabled>WITHDRAW</button>
-        </div>
-        <div class="balance-row mt-4">
-          <span>Test WLD Balance: <span id="wld-balance-num" class="photon-text">100.00 WLD</span></span>
+      <!-- GAME RULES & REWARDS INFO CARD -->
+      <div class="rules-card">
+        <h3>📖 Game Rules & Rewards</h3>
+        <div class="rules-grid">
+          <div class="rule-item">• <span>Match Duration:</span> 32 seconds total (30s gameplay + 2s result display).</div>
+          <div class="rule-item">• <span>Turn Timing Mechanic:</span> Strictly 2-second alternating cooldown per tap. Total 15 taps per user limit.</div>
+          <div class="rule-item">• <span>Winner & Defeat:</span> Higher score wins the WLD pool and TNV coins.</div>
+          <div class="rule-item">• <span>Auto-Clicker Block:</span> Protected via built-in 2-second per-tap timing lock.</div>
+          <div class="rule-item">• <span>WLD to TNV Earnings:</span> 0.1 WLD (+5 TNV) | 0.2 WLD (+10 TNV) | 0.5 WLD (+15 TNV) | 1 WLD (+25 TNV) | 2 WLD (+50 TNV) | 5 WLD (+125 TNV) | 10 WLD (+250 TNV) | 20 WLD (+500 TNV) | 30 WLD (+750 TNV) | 40 WLD (+1,000 TNV) | 50 WLD (+1,250 TNV).</div>
+          <div class="rule-item">• <span>Defeat / Consolation Reward:</span> Even on defeat, you receive consolation TNV coins (1/3rd of winning rewards) so you never leave empty-handed.</div>
+          <div class="rule-item">• <span>Support & Community:</span> Connect via Telegram or Global Chat.</div>
         </div>
       </div>
 
-      <!-- Big Radar / Sonar Matchmaking Visualizer -->
-      <div class="radar-container">
-        <div class="radar-circle">
-          <div class="sonar-sweep"></div>
-          <div class="radar-target"></div>
+      <!-- --- AIRDROP BOX (FIXED POSITION) --- -->
+      <div class="airdrop-card" style="background: var(--void-2); border: 1px solid var(--photon); border-radius: var(--radius); padding: 14px; margin-top: 16px; text-align: center;">
+        <h3 style="margin: 0 0 8px; color: var(--photon); font-size: 13px; text-transform: uppercase; letter-spacing: 0.8px;">🎁 EXCLUSIVE AIRDROP</h3>
+        <p style="margin: 0 0 8px; color: var(--slate); font-size: 11.5px; line-height: 1.5;">
+          Join our partner airdrops to earn extra TNV Tokens. Complete simple tasks and get rewarded directly.
+        </p>
+        <button class="btn-ghost" style="border: 1px solid var(--gold); color: var(--gold); font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 11px; padding: 4px 10px; border-radius: 6px; cursor: not-allowed; opacity: 0.6;">COMING SOON</button>
+      </div>
+      <!-- --- END AIRDROP BOX --- -->
+
+      <!-- ADMIN WITHDRAWAL PANEL -->
+      <div id="admin-panel">
+        <div class="admin-header">
+          <span>🛡️ ADMIN WITHDRAWAL REQUESTS</span>
+          <span style="font-size:10px; color:var(--signal);">Live Panel</span>
+        </div>
+        <div class="admin-list" id="admin-req-container">
+          <div style="font-size:11px; color:var(--slate); text-align:center;">Checking requests...</div>
         </div>
       </div>
 
-      <!-- Fee Selector Section with TNV Rewards -->
-      <div class="fee-selector-section">
-        <label class="section-label text-center">SELECT ENTRY AMOUNT</label>
-        <div class="fee-grid">
-          <button class="fee-chip" data-fee="0.1">0.1 WLD<br><small>+5 TNV</small></button>
-          <button class="fee-chip" data-fee="0.2">0.2 WLD<br><small>+10 TNV</small></button>
-          <button class="fee-chip active" data-fee="0.5">0.5 WLD<br><small>+15 TNV</small></button>
-          <button class="fee-chip" data-fee="1">1 WLD<br><small>+25 TNV</small></button>
-          <button class="fee-chip" data-fee="2">2 WLD<br><small>+50 TNV</small></button>
-          <button class="fee-chip" data-fee="5">5 WLD<br><small>+125 TNV</small></button>
-          <button class="fee-chip" data-fee="10">10 WLD<br><small>+250 TNV</small></button>
-          <button class="fee-chip" data-fee="20">20 WLD<br><small>+500 TNV</small></button>
-          <button class="fee-chip" data-fee="30">30 WLD<br><small>+750 TNV</small></button>
-          <button class="fee-chip" data-fee="40">40 WLD<br><small>+1,000 TNV</small></button>
+      <!-- ADMIN AUTO-CLICKER DETECTOR PANEL -->
+      <div id="admin-cheaters-panel">
+        <div class="admin-header">
+          <span>⚠️ AUTO-CLICKER DETECTIONS</span>
+          <span style="font-size:10px; color:var(--signal);">Security Log</span>
         </div>
-        <div class="fee-grid-single">
-          <button class="fee-chip" data-fee="50">50 WLD<br><small>+1,250 TNV</small></button>
+        <div class="admin-list" id="admin-cheaters-container">
+          <div style="font-size:11px; color:var(--slate); text-align:center;">No suspicious activity</div>
         </div>
       </div>
 
-      <!-- Play Button -->
-      <button id="start-btn" class="btn btn-primary btn-block play-now-btn">PLAY NOW (0.5 WLD)</button>
-
-      <!-- Game Rules & Rewards Box -->
-      <div class="rules-box">
-        <div class="rules-title">📖 GAME RULES & REWARDS</div>
-        <p>• <b>Match Duration:</b> 32 seconds total (30s gameplay + 2s result display).</p>
-        <p>• <b>Turn Timing:</b> Strictly 2-second timing lock per tap (15 total taps per match).</p>
-        <p>• <b>Winner:</b> Higher score wins the WLD pool & TNV.</p>
+      <!-- LEADERBOARD SECTION -->
+      <div class="leaderboard-section">
+        <div class="lb-header">
+          <span>⚡ TNV ELITE LEADERBOARD</span>
+          <span style="font-size:10px; color:var(--slate);">Top 10</span>
+        </div>
+        <div class="lb-list" id="lb-container">
+          <div class="lb-item" style="justify-content:center; color:var(--slate);">Loading leaders...</div>
+        </div>
       </div>
 
-      <!-- Leaderboard Link (Optional, for UI balance) -->
-      <div class="text-center mt-4" style="font-size: 11px; color: var(--slate);">
-        <a href="#leaderboard" style="color: var(--photon); text-decoration: none;">View Full Leaderboard</a>
+      <!-- TNV COIN LEADERSHIP DISTRIBUTION -->
+      <div class="rules-card" style="margin-top: 18px; text-align: left;">
+        <h3>💎 TNV COIN LEADERSHIP DISTRIBUTION</h3>
+        <div class="rules-grid" style="margin-bottom: 14px;">
+          <div class="rule-item">• <span>Rank 1st:</span> Coming Soon</div>
+          <div class="rule-item">• <span>Rank 2nd - 5th:</span> Coming Soon</div>
+          <div class="rule-item">• <span>Rank 6th - 10th:</span> Coming Soon</div>
+          <div class="rule-item">• <span>Active Holders:</span> Coming Soon</div>
+        </div>
+        
+        <div class="neon-coming-soon-box">
+          <span class="neon-text">🚀 COMING SOON: TNV STAKING & MAINNET LAUNCH</span>
+        </div>
       </div>
+
+      <div class="fineprint" id="landingHint" style="text-align:center; margin-top:14px; font-size:11px; color:#8b8ba3;">requires World App</div>
     </section>
 
-    <!-- Game Screen (Active Duel) -->
-    <section id="game-screen" class="screen-card" style="display:none;">
-      <div class="game-header-info">
-        <div class="player-tag"><span id="my-name-tag">You</span>: <span id="my-score" class="gold-text">0</span></div>
-        <div class="vs-badge">VS</div>
-        <div class="player-tag"><span id="opp-name-tag">Opponent</span>: <span id="opp-score" class="photon-text">0</span></div>
+    <section id="game-screen" style="display:none;">
+      <div class="stats-box">
+        <div><div class="who" id="my-name-tag">ME</div><div class="score" id="my-score">0</div></div>
+        <div id="game-timer">32s</div>
+        <div><div class="who" id="opp-name-tag">OPP</div><div class="score" id="opp-score">0</div></div>
       </div>
 
-      <div class="timer-display-box">
-        Time Left: <span id="game-timer" class="gold-text">32s</span>
-      </div>
-
-      <!-- Dice Arena -->
-      <div class="dice-arena-container" id="dice-scene">
-        <div class="dice-cube" id="dice-cube">
-          <div class="dice-face front">1</div>
-          <div class="dice-face back">2</div>
-          <div class="dice-face right">3</div>
-          <div class="dice-face left">4</div>
-          <div class="dice-face top">5</div>
-          <div class="dice-face bottom">6</div>
+      <div class="scene" id="dice-scene">
+        <div class="cube" id="dice-cube">
+          <div class="cube__face front"><span class="pip red"></span></div>
+          <div class="cube__face back"><div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;"><span class="pip"></span><span class="pip"></span></div></div>
+          <div class="cube__face right"><div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;"><span class="pip"></span><span class="pip"></span><span class="pip" style="grid-column:span 2; justify-self:center;"></span></div></div>
+          <div class="cube__face left"><div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;"><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span></div></div>
+          <div class="cube__face top"><div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;"><span class="pip"></span><span class="pip"></span><span class="pip" style="grid-column:span 2; justify-self:center;"></span><span class="pip"></span><span class="pip"></span></div></div>
+          <div class="cube__face bottom"><div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;"><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span></div></div>
         </div>
       </div>
-
-      <div id="turn-indicator" class="turn-status-text text-center">tap the die to roll (15 turns left)</div>
+      <div class="tap-hint" id="turn-indicator">tap the die to roll (2s Timing Lock per Tap)</div>
     </section>
-
   </main>
 
-  <!-- =========================================
-       MODALS & OVERLAYS (Chat, History, Withdraw)
-       ========================================= -->
-
-  <!-- Global Chat Modal -->
-  <div id="chat-modal" class="modal-overlay" style="display:none;">
-    <div class="modal-content chat-modal-dialog">
-      <div class="modal-header">
-        <h3 style="margin:0;">💬 Global Community Chat</h3>
-        <button class="btn btn-ghost btn-sm" onclick="closeChatModal()">✕</button>
+  <!-- GLOBAL CHAT MODAL -->
+  <div id="chat-modal" class="custom-modal">
+    <div class="modal-card chat-card">
+      <div class="chat-header">
+        <span>💬 Community Global Chat</span>
+        <button class="chat-close-btn" onclick="closeChatModal()">✕</button>
       </div>
-      <div id="chat-messages-container" class="chat-messages-body">
-        <!-- Chat history loads here -->
+      <div id="chat-messages-container" class="chat-messages">
+        <div style="text-align:center; color:var(--slate); font-size:11px;">Messages are saved for 24 hours. Chat freely!</div>
       </div>
-      <div class="chat-input-group">
-        <input type="text" id="chat-input-field" placeholder="Type message..." class="chat-input-field">
-        <button class="btn btn-primary" onclick="sendChatMessage()">Send</button>
+      <div class="chat-input-area">
+        <input type="text" id="chat-input-field" class="chat-input" placeholder="Type a message..." maxlength="150" />
+        <button class="chat-send-btn" onclick="sendChatMessage()">Send</button>
       </div>
     </div>
   </div>
 
-  <!-- Matchmaking Waiting Overlay -->
-  <div id="waiting-overlay" class="modal-overlay" style="display:none;">
-    <div class="modal-content text-center waiting-dialog">
-      <div class="spinner-ring" id="target-dot"></div>
-      <h3 id="wait-status" style="margin-top: 15px; font-size: 16px;">SEARCHING...</h3>
-      <div id="cancel-search-btn">
-        <!-- Cancel button injected here by JS -->
+  <!-- USER MATCH HISTORY MODAL -->
+  <div id="user-history-modal" class="custom-modal">
+    <div class="modal-card" style="max-width:420px; width:92%;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 style="margin:0; color:var(--photon);">📜 Match & Refund History</h3>
+        <button class="chat-close-btn" onclick="closeUserHistoryModal()">✕</button>
       </div>
-    </div>
-  </div>
-
-  <!-- Game Result Overlay -->
-  <div id="result-overlay" class="modal-overlay" style="display:none;">
-    <div class="modal-content text-center result-dialog">
-      <div id="result-card" class="result-card">
-        <div id="result-icon" style="font-size:48px;">🏆</div>
-        <h2 id="result-title" style="margin:10px 0;">VICTORY!</h2>
-        <p id="result-msg" style="color:var(--slate); margin-bottom:20px;"></p>
-        <button class="btn btn-primary btn-block" onclick="location.reload()">CONTINUE</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Custom Payment Confirmation Modal -->
-  <div id="custom-pay-modal" class="modal-overlay" style="display:none;">
-    <div class="modal-content text-center pay-dialog">
-      <h3>Confirm Duel Fee</h3>
-      <p style="color:var(--slate); margin:10px 0;">Pay <span id="pay-modal-amount" class="gold-text">0.50 WLD</span> to enter duel.</p>
-      <div style="display:flex; gap:10px; margin-top:20px;">
-        <button class="btn btn-ghost" style="flex:1;" onclick="closeCustomPayModal(false)">Cancel</button>
-        <button class="btn btn-primary" style="flex:1;" onclick="closeCustomPayModal(true)">Pay & Play</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- History Modal -->
-  <div id="user-history-modal" class="modal-overlay" style="display:none;">
-    <div class="modal-content history-dialog">
-      <div class="modal-header">
-        <h3 style="margin:0;">📜 Match History</h3>
-        <button class="btn btn-ghost btn-sm" onclick="closeUserHistoryModal()">✕</button>
-      </div>
-      <div id="user-history-list" class="modal-body-list"></div>
-    </div>
-  </div>
-
-  <!-- Withdrawal Request Modal -->
-  <div id="user-withdrawals-modal" class="modal-overlay" style="display:none;">
-    <div class="modal-content history-dialog">
-      <div class="modal-header">
-        <h3 style="margin:0;">💸 Withdrawals</h3>
-        <button class="btn btn-ghost btn-sm" onclick="closeUserWithdrawalsModal()">✕</button>
-      </div>
-      <div id="user-withdrawals-list" class="modal-body-list"></div>
-    </div>
-  </div>
-
-  <!-- Request Withdrawal Input Modal -->
-  <div id="withdraw-modal" class="modal-overlay" style="display:none;">
-    <div class="modal-content text-center pay-dialog">
-      <h3>Request TNV Withdrawal</h3>
-      <p style="color:var(--slate); margin:10px 0;">Available: <span id="modal-bal" class="gold-text">0</span> TNV</p>
-      <div id="withdraw-input-container" style="margin:15px 0;">
-        <input type="number" id="withdraw-amount-input" class="chat-input-field text-center" placeholder="Enter amount">
-      </div>
-      <div style="display:flex; gap:10px; margin-top:20px;">
-        <button class="btn btn-ghost" style="flex:1;" onclick="closeWithdrawModal()">Cancel</button>
-        <button class="btn btn-primary" style="flex:1;" onclick="submitWithdrawRequest()">Submit</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Blocked/Error Screen -->
-  <div id="blocked-screen" class="modal-overlay" style="display:none;">
-    <div class="modal-content text-center pay-dialog" style="border-color:var(--signal);">
-      <h3 style="color:var(--signal);">ACCESS DENIED</h3>
-      <p style="color:var(--text-main); margin:15px 0;">Your account has been flagged for suspicious activity. Please contact Support.</p>
-    </div>
-  </div>
-
-  <!-- ============ ADMIN PANELS ============ -->
-  <div id="admin-panel" class="screen-card" style="display:none; margin-top:20px; border-color:var(--gold);">
-    <div class="modal-header">
-      <h3 style="color:var(--gold);">⚡ Admin Panel</h3>
-      <button class="btn btn-ghost btn-sm" onclick="openAdminEarningsModal()">Show Revenue</button>
-    </div>
-    <div id="admin-requests-list" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
-  </div>
-
-  <div id="admin-cheaters-panel" class="screen-card" style="display:none; margin-top:20px; border-color:var(--signal);">
-    <h3 style="color:var(--signal);">⚠️ Potential Cheaters</h3>
-    <div id="admin-cheaters-list" style="margin-top:10px;"></div>
-  </div>
-
-  <script type="module" src="app.js"></script>
-</body>
-</html>
+      <div style="max-height:300px; overflow-y:auto; border:1px solid var(--slate); border-radius: 8px;">
