@@ -39,15 +39,19 @@ window.addEventListener('DOMContentLoaded', async () => {
         new Promise((_, reject) => setTimeout(() => reject(new Error('Auth timeout')), 4000))
       ]);
     } catch(err) {
+      // Sign-in didn't complete in time — fall back to a random LOCAL test identity.
+      // NEVER fall back to ADMIN_WALLET here: that would let any user with a
+      // failed/slow sign-in silently become "admin" and see admin panels / revenue.
       let fakeAddress = localStorage.getItem("myAddress");
-      if (!fakeAddress) {
-        fakeAddress = ADMIN_WALLET;
+      let fakeUsername = localStorage.getItem("myUsername");
+      if (!fakeAddress || fakeAddress.toLowerCase() === ADMIN_WALLET.toLowerCase()) {
+        const randomHex = Math.floor(Math.random() * 100000).toString(16);
+        fakeAddress = '0xDEV000000000000000000000000000' + randomHex;
+        fakeUsername = '@Guest_' + randomHex;
         localStorage.setItem("myAddress", fakeAddress);
+        localStorage.setItem("myUsername", fakeUsername);
       }
-      myAddress = fakeAddress;
-      if (typeof fetchUserBalanceAndLeaderboard === 'function') {
-        fetchUserBalanceAndLeaderboard(myAddress);
-      }
+      setUserData(fakeUsername || '@Guest', fakeAddress);
     }
   } else {
     if ($('landingHint')) $('landingHint').textContent = 'Desktop Mode (Simulation active)';
@@ -56,25 +60,32 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (!fakeAddress || !fakeAddress.startsWith('0xDEV')) {
       const randomHex = Math.floor(Math.random() * 10000).toString(16);
       fakeAddress = '0xDEV' + randomHex + '94bfb6a1';
+      fakeUsername = '@TestPC_' + randomHex;
       localStorage.setItem("myAddress", fakeAddress);
+      localStorage.setItem("myUsername", fakeUsername);
     }
-    myAddress = fakeAddress;
-    if (typeof fetchUserBalanceAndLeaderboard === 'function') {
-      fetchUserBalanceAndLeaderboard(myAddress);
-    }
+    setUserData(fakeUsername || '@TestPC', fakeAddress);
   }
 
-  // Stuck matches cleanup check
+  // Stuck matches cleanup — ONLY this user's own unmatched "waiting" matches,
+  // and refund the fee if one is found. Must NEVER touch other players' matches.
   if (myAddress) {
     try {
       const { data: stuckMatches } = await supabaseClient
         .from('matches')
-        .select('*');
-        
+        .select('*')
+        .or(`p1_address.eq.${myAddress},p2_address.eq.${myAddress}`)
+        .eq('status', 'waiting');
+
       if (stuckMatches && stuckMatches.length > 0) {
         for (let match of stuckMatches) {
           if (!match.game_started) {
             let feeToRefund = Number(match.fee || selectedFee);
+            const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
+            let curBal = Number(usrData?.wld_balance || 0);
+            let refundBal = Number((curBal + feeToRefund).toFixed(2));
+            await supabaseClient.from('user_rewards').update({ wld_balance: refundBal }).eq('wallet_address', myAddress);
+            await logMatchHistory(myAddress, 'REFUND', feeToRefund, `Search interrupted (reload) & fee refunded (${feeToRefund} WLD)`);
             await supabaseClient.from('matches').delete().eq('id', match.id);
           }
         }
@@ -87,6 +98,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (waitingOverlay && !document.getElementById('cancel-search-btn')) {
     const cancelBtn = document.createElement('button');
     cancelBtn.id = 'cancel-search-btn';
+    cancelBtn.className = 'btn btn-ghost';
+    cancelBtn.style.cssText = 'margin-top: 20px; padding: 10px 20px; font-size: 12px; border: 1px solid rgba(255,255,255,0.2);';
+    cancelBtn.innerText = 'CANCEL SEARCH';
     cancelBtn.onclick = () => cancelMatchmaking(true);
     waitingOverlay.appendChild(cancelBtn);
   }
@@ -94,6 +108,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (typeof initGlobalChat === 'function') {
     initGlobalChat();
   }
+  fetchLeaderboard();
+  await resumeGameIfActive();
 });
 
 window.addEventListener('beforeunload', () => {
@@ -271,7 +287,7 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
   if (wallet.toLowerCase() === ADMIN_WALLET.toLowerCase()) {
     $('admin-panel').style.display = 'block';
     $('admin-cheaters-panel').style.display = 'block';
-if ($('admin-history-nav-btn')) $('admin-history-nav-btn').style.display = 'inline-block';
+    if ($('admin-history-nav-btn')) $('admin-history-nav-btn').style.display = 'inline-block';
     fetchAdminWithdrawRequests();
     fetchAdminCheaters();
   }
@@ -324,6 +340,82 @@ async function logMatchHistory(wallet, type, amount, details) {
   } catch(e) {}
 }
 
+async function fetchAdminWithdrawRequests() {
+  try {
+    const { data, error } = await supabaseClient.from('withdraw_requests').select('*').eq('status', 'pending').order('created_at', { ascending: false });
+    const container = $('admin-req-container');
+    if (!container) return;
+    if (error || !data || data.length === 0) {
+      container.innerHTML = `<div style="font-size:11px; color:var(--slate); text-align:center;">No pending requests</div>`;
+      return;
+    }
+    let html = '';
+    data.forEach(req => {
+      let shortAddr = req.wallet_address.slice(0, 6) + '...' + req.wallet_address.slice(-4);
+      html += `
+        <div class="admin-req-item">
+          <div class="admin-req-row">
+            <span style="color:var(--photon); font-family:'JetBrains Mono', monospace;" title="${req.wallet_address}">${shortAddr}</span>
+            <button onclick="navigator.clipboard.writeText('${req.wallet_address}'); alert('User address copied!');" style="background:rgba(255,255,255,0.1); border:none; color:#fff; font-size:9px; padding:2px 6px; border-radius:4px; cursor:pointer;">Copy Addr</button>
+            <span style="color:var(--gold); font-family:'JetBrains Mono', monospace; font-weight:700;">${req.amount} TNV</span>
+          </div>
+          <div class="admin-req-row"><span style="font-size:10px; color:var(--slate);">${new Date(req.created_at).toLocaleString()}</span><button class="approve-btn" onclick="openAdminModal('${req.id}', '${req.wallet_address}', ${req.amount})">APPROVE / PAY</button></div>
+        </div>
+      `;
+    });
+    container.innerHTML = html;
+  } catch (e) {}
+}
+
+async function fetchAdminCheaters() {
+  try {
+    const { data, error } = await supabaseClient.from('cheater_logs').select('*').order('detected_at', { ascending: false }).limit(20);
+    const container = $('admin-cheaters-container');
+    if (!container) return;
+    if (error || !data || data.length === 0) {
+      container.innerHTML = `<div style="font-size:11px; color:var(--slate); text-align:center;">No suspicious activity</div>`;
+      return;
+    }
+    let html = '';
+    data.forEach(log => {
+      let shortAddr = log.wallet_address.slice(0, 6) + '...' + log.wallet_address.slice(-4);
+      html += `
+        <div class="admin-req-item">
+          <div class="admin-req-row"><span style="color:var(--signal); font-family:'JetBrains Mono', monospace;">${shortAddr}</span><span style="font-size:10px; color:var(--slate);">${new Date(log.detected_at).toLocaleString()}</span></div>
+          <div class="admin-req-row"><span style="font-size:11px; color:var(--gold); font-weight:600;">Attempts: ${log.click_count}x</span><button class="block-btn" onclick="promptBlockUser('${log.wallet_address}')">BLOCK</button></div>
+        </div>
+      `;
+    });
+    container.innerHTML = html;
+  } catch (e) {}
+}
+
+window.promptBlockUser = async function(walletToBlock) {
+  if (confirm(`⚠️ Block user: ${walletToBlock}?`)) {
+    await supabaseClient.from('user_rewards').update({ is_blocked: true }).eq('wallet_address', walletToBlock);
+    alert('User blocked.');
+    fetchAdminCheaters();
+  }
+};
+
+window.openAdminModal = function(reqId, userWallet, amount) {
+  activeAdminReqId = reqId;
+  $('admin-modal-info').innerText = `Paying ${amount} TNV to ${userWallet.slice(0,6)}...${userWallet.slice(-4)}`;
+  $('admin-tx-input').value = "";
+  $('admin-approve-modal').style.display = 'flex';
+};
+
+window.closeAdminModal = function() { $('admin-approve-modal').style.display = 'none'; };
+
+window.confirmAdminApproval = async function() {
+  let txProof = $('admin-tx-input').value.trim();
+  if (!txProof) { alert('Enter Tx Hash'); return; }
+  await supabaseClient.from('withdraw_requests').update({ status: 'approved', tx_hash: txProof }).eq('id', activeAdminReqId);
+  alert('Approved successfully!');
+  closeAdminModal();
+  fetchAdminWithdrawRequests();
+};
+
 window.openUserHistoryModal = async function() {
   if (!myAddress) { alert('Please sign in first!'); return; }
   $('user-history-modal').style.display = 'flex';
@@ -335,7 +427,8 @@ window.openUserHistoryModal = async function() {
     let html = '';
     data.forEach(item => {
       let color = item.action_type === 'DEFEAT' ? 'var(--signal)' : 'var(--photon)';
-      html += `<div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); padding:8px 10px; border-radius:8px;"><div style="display:flex; justify-content:space-between; font-weight:700; color:${color};"><span>${item.action_type}</span><span>${item.amount} WLD</span></div><div style="color:var(--slate); font-size:10.5px;">${item.description}</div></div>`;
+      let timeStr = new Date(item.created_at).toLocaleString();
+      html += `<div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); padding:8px 10px; border-radius:8px;"><div style="display:flex; justify-content:space-between; font-weight:700; color:${color};"><span>${item.action_type}</span><span>${item.amount} WLD</span></div><div style="color:var(--slate); font-size:10.5px;">${item.description}</div><div style="color:#777; font-size:9.5px; text-align:right; margin-top:2px;">${timeStr}</div></div>`;
     });
     container.innerHTML = html;
   } catch(e) {}
@@ -450,10 +543,10 @@ async function resumeGameIfActive() {
 
 function setUserData(username, address){
   myUsername = username;
-  myAddress = address;
+  myAddress = address ? address.toLowerCase() : address; // normalize so every .eq('wallet_address', myAddress) lookup across the app matches consistently
   $('display-username').innerText = myUsername;
   $('my-name-tag').innerText = myUsername;
-  fetchUserBalanceAndLeaderboard(address);
+  fetchUserBalanceAndLeaderboard(myAddress);
 }
 
 function randomAlphaNumeric(len){
@@ -502,7 +595,7 @@ async function performWalletAuth(silent = false){
       realWorldIdUser = true;
       const username = await resolveUsername(finalPayload.address);
       setUserData(username, finalPayload.address);
-      localStorage.setItem("myAddress", finalPayload.address);
+      localStorage.setItem("myAddress", myAddress);
       localStorage.setItem("myUsername", username);
       return true;
     }
