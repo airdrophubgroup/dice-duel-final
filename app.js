@@ -1181,3 +1181,20 @@ const testBalanceElement = document.getElementById('test-wld-balance'); // ya jo
 if (testBalanceElement) {
   testBalanceElement.innerText = currentWldBalance.toFixed(2) + " WLD";
 }
+
+// Ye code automatically purane test balance ko override kar dega
+window.addEventListener('DOMContentLoaded', () => {
+  const checkAndFixBalance = setInterval(() => {
+    // Saare elements dhoondo jahan text ya HTML mein "Test WLD" ya "100.00" hai
+    const allElements = document.querySelectorAll('*');
+    allElements.forEach(el => {
+      if (el.children.length === 0 && el.innerText && el.innerText.includes('Test WLD Balance')) {
+        // Purane text ko replace karke real balance ya fetching state daal do
+        el.innerText = "Real WLD Balance: Fetching...";
+        if (typeof currentWldBalance !== 'undefined') {
+          el.innerText = "Real WLD Balance: " + currentWldBalance.toFixed(2) + " WLD";
+        }
+      }
+    });
+  }, 1000);
+});
