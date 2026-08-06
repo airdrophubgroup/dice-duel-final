@@ -25,83 +25,57 @@ function showPhoneDebug(msg, isError = true) {
   dbg.scrollTop = dbg.scrollHeight;
 }
 
-// Safe Initialization with Delay to prevent webview race condition
 window.addEventListener('DOMContentLoaded', () => {
-  showPhoneDebug("Waiting for World App webview bridge...", false);
+  showPhoneDebug("Loading application environment...", false);
   
   setTimeout(() => {
     try {
       if (typeof MiniKit !== 'undefined') {
         MiniKit.install(WORLD_APP_ID);
-        showPhoneDebug("MiniKit.install executed after delay.", false);
+        showPhoneDebug("MiniKit initialized.", false);
       }
     } catch (e) {
-      showPhoneDebug("Install error: " + e.message);
+      showPhoneDebug("Init warning: " + e.message);
     }
-
-    if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
-      showPhoneDebug("MiniKit isInstalled = TRUE 🚀", false);
-      if (MiniKit.user && MiniKit.user.walletAddress) {
-        setUserData('@' + (MiniKit.user.username || 'User'), MiniKit.user.walletAddress);
-      } else {
-        if ($('landingHint')) $('landingHint').textContent = 'Tap Play Now to Connect Wallet';
-      }
-    } else {
-      showPhoneDebug("MiniKit not detected. Using simulation/direct mode.");
-      if ($('landingHint')) $('landingHint').textContent = 'Tap Play Now to Continue';
-    }
-  }, 1000); // 1 second delay for webview injection
+    if ($('landingHint')) $('landingHint').textContent = 'Tap Play Now to Connect';
+  }, 500);
 });
-
-function randomAlphaNumeric(len){
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  const bytes = new Uint8Array(len);
-  crypto.getRandomValues(bytes);
-  let out = '';
-  for (let i = 0; i < len; i++) out += chars[bytes[i] % chars.length];
-  return out;
-}
 
 function setUserData(username, address){
   myUsername = username;
   myAddress = address ? address.toLowerCase() : address;
   if ($('display-username')) $('display-username').innerText = myUsername;
   if ($('landingHint')) $('landingHint').textContent = 'Wallet Connected Successfully';
-  showPhoneDebug("Wallet Connected: " + myAddress, false);
+  showPhoneDebug("Connected Wallet: " + myAddress, false);
 }
 
 async function performWalletAuth(){
-  showPhoneDebug("Attempting wallet authentication...", false);
+  showPhoneDebug("Authenticating wallet...", false);
   
-  if (typeof MiniKit === 'undefined' || !MiniKit.isInstalled()) {
-    showPhoneDebug("Bypassing MiniKit auth (Direct mode).");
-    // Direct fallback address so your game works smoothly inside World App without blocking
-    setUserData('@WorldAppUser', ADMIN_WALLET);
-    return true;
-  }
-
+  // Try MiniKit auth if available
   try {
-    const res = await MiniKit.walletAuth({
-      nonce: randomAlphaNumeric(16),
-      statement: 'Sign in to TNV Duel Arena.',
-      expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      notBefore: new Date(Date.now() - 60 * 1000),
-    });
-
-    showPhoneDebug("Auth response received.", false);
-
-    if (res && res.executedWith === "minikit" && res.data && res.data.address) {
-      const address = res.data.address;
-      const username = '@' + (MiniKit.user?.username || 'User_' + address.substring(2, 6));
-      setUserData(username, address);
-      return true;
+if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
+      const res = await MiniKit.walletAuth({
+        nonce: Math.random().toString(36).substring(2),
+        statement: 'Sign in to TNV Duel Arena.',
+        expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        notBefore: new Date(Date.now() - 60 * 1000),
+      });      if (res && res.data && res.data.address) {
+        setUserData('@' + (MiniKit.user?.username || 'User'), res.data.address);
+        return true;
+      }
     }
-    return false;
   } catch (err) {
-    showPhoneDebug("Auth exception: " + err.message);
-    setUserData('@WorldAppUser', ADMIN_WALLET); // Fallback to ensure smooth flow
+    showPhoneDebug("MiniKit auth skipped: " + err.message);
+  }
+
+  // Universal Fallback: Prompt user to enter or auto-assign active session wallet so app never blocks
+  let manualWallet = prompt("Enter your World App Wallet Address (or click OK to use default test wallet):", "0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1");
+  if (manualWallet) {
+    setUserData('@Player', manualWallet.trim());
     return true;
   }
+  return false;
 }
 
 async function handlePlayButtonClick() {
@@ -109,7 +83,7 @@ async function handlePlayButtonClick() {
   if (!myAddress) {
     const connected = await performWalletAuth();
     if (!connected) {
-      showPhoneDebug("Wallet connection failed.");
+      showPhoneDebug("Connection cancelled.");
       return;
     }
   }
