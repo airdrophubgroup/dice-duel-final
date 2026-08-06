@@ -24,19 +24,23 @@ const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
 const $ = (id) => document.getElementById(id);
 
 window.addEventListener('DOMContentLoaded', async () => {
-  try { 
-    MiniKit.install(WORLD_APP_ID); 
-  } catch(e) {}
-
-  if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
-    if (MiniKit.user && MiniKit.user.walletAddress) {
-      setUserData('@' + (MiniKit.user.username || 'User'), MiniKit.user.walletAddress);
-    } else {
-      if ($('landingHint')) $('landingHint').textContent = 'Tap Play Now to Connect Wallet';
+  // Safe MiniKit initialization with delay for World App webview injection
+  setTimeout(() => {
+    try {
+      if (typeof MiniKit !== 'undefined') {
+        MiniKit.install(WORLD_APP_ID);
+        if (MiniKit.isInstalled()) {
+          if (MiniKit.user && MiniKit.user.walletAddress) {
+            setUserData('@' + (MiniKit.user.username || 'User'), MiniKit.user.walletAddress);
+          } else {
+            if ($('landingHint')) $('landingHint').textContent = 'Tap Play Now to Connect Wallet';
+          }
+        }
+      }
+    } catch (e) {
+      console.error("MiniKit install error:", e);
     }
-  } else {
-    if ($('landingHint')) $('landingHint').textContent = '⚠️ Please open inside World App';
-  }
+  }, 500);
 
   if (myAddress) {
     try {
@@ -581,10 +585,10 @@ function randomAlphaNumeric(len){
   return out;
 }
 
-// Official v2/v3 MiniKit walletAuth Implementation using MiniKit.walletAuth()
+// Official MiniKit.walletAuth Implementation for v2/v3 SDK
 async function performWalletAuth(){
   if (!MiniKit.isInstalled()) {
-    alert("Please open this app inside World App.");
+    alert("Please open this game inside World App.");
     return false;
   }
 
