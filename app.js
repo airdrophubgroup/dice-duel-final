@@ -1084,3 +1084,13 @@ function closeAdminEarningsModal() {
   const modal = document.getElementById('admin-earnings-modal');
   if (modal) modal.style.display = 'none';
 }
+
+window.handlePlayButtonClick = async function() {
+  const paid = await payRealWldFee(selectedFee);
+  if (!paid) return;
+  
+  // Yahan apna matchmaking ya game start karne ka code daal dena
+  if (typeof startMatchmaking === 'function') {
+    startMatchmaking();
+  }
+};
