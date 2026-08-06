@@ -1001,7 +1001,7 @@ function resetToHome(){
 document.querySelectorAll('.fee-chip').forEach(chip => {
   chip.addEventListener('click', () => selectFee(chip.dataset.fee, chip));
 });
-$('start-btn').addEventListener('click', handlePlayButtonClick);
+
 // 1. Pehle function define karo
 async function handlePlayButtonClick() {
 
@@ -1073,25 +1073,6 @@ function closeAdminEarningsModal() {
   if (modal) modal.style.display = 'none';
 }
 
-window.handlePlayButtonClick = async function () {
-
-    if (matchmakingActive || gameActive) return;
-
-    if (!selectedFee) {
-        alert("Please select an entry fee.");
-        return;
-    }
-
-    const paid = await payRealWldFee(selectedFee);
-
-    if (!paid) {
-        return;
-    }
-
-    await initMatchmakingAfterPayment();
-
-};
-
 async function updateRealWldBalance(walletAddress) {
   if (!walletAddress) return;
   try {
@@ -1157,29 +1138,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }, 1000);
 });
-// 1. MiniKit se Real Balance Fetch Karne Ka Sahi Tarika
-async function fetchUserRealBalance() {
-  if (!MiniKit.isInstalled()) return;
-  
-  try {
-    // Agar MiniKit user ka address provide karta hai
-    const walletAddress = MiniKit.user?.address || window.myAddress;
-    if (!walletAddress) {
-      console.log("Wallet address not found yet");
-      return;
-    }
-
-    // World App ke through balance fetch ya display update karna
-    const balanceElement = document.getElementById('wld-balance') || document.getElementById('test-wld-balance');
-    if (balanceElement) {
-      balanceElement.innerText = "Checking WLD...";
-    }
-    
-    console.log("User wallet address found:", walletAddress);
-  } catch (err) {
-    console.error("Balance fetch error:", err);
-  }
-}
 
 // 2. Play Button Click par Real WLD Payment Prompt Khulne Wala Code
 window.handlePlayButtonClick = async function() {
