@@ -23,24 +23,42 @@ const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 const $ = (id) => document.getElementById(id);
 
+// PHONE SCREEN DEBUGGER LOGGER
+function showPhoneDebug(msg, isError = true) {
+  let dbg = $('phone-debug-box');
+  if (!dbg) {
+    dbg = document.createElement('div');
+    dbg.id = 'phone-debug-box';
+    dbg.style.cssText = 'position:fixed; bottom:10px; left:10px; right:10px; z-index:99999; background:rgba(0,0,0,0.92); border:1.5px solid ' + (isError ? '#ff5f6d' : '#29d9c2') + '; color:#fff; padding:10px; border-radius:10px; font-family:monospace; font-size:10.5px; max-height:120px; overflow-y:auto; word-break:break-all; pointer-events:none;';
+    document.body.appendChild(dbg);
+  }
+  dbg.style.border = '1.5px solid ' + (isError ? '#ff5f6d' : '#29d9c2');
+  dbg.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+  dbg.scrollTop = dbg.scrollHeight;
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
-  // Safe MiniKit initialization with delay for World App webview injection
-  setTimeout(() => {
-    try {
-      if (typeof MiniKit !== 'undefined') {
-        MiniKit.install(WORLD_APP_ID);
-        if (MiniKit.isInstalled()) {
-          if (MiniKit.user && MiniKit.user.walletAddress) {
-            setUserData('@' + (MiniKit.user.username || 'User'), MiniKit.user.walletAddress);
-          } else {
-            if ($('landingHint')) $('landingHint').textContent = 'Tap Play Now to Connect Wallet';
-          }
-        }
-      }
-    } catch (e) {
-      console.error("MiniKit install error:", e);
+  showPhoneDebug("DOM Loaded. Checking MiniKit...", false);
+  try { 
+    MiniKit.install(WORLD_APP_ID); 
+    showPhoneDebug("MiniKit.install called successfully.", false);
+  } catch(e) {
+    showPhoneDebug("MiniKit install error: " + e.message);
+  }
+
+  if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
+    showPhoneDebug("MiniKit isInstalled = TRUE", false);
+    if (MiniKit.user && MiniKit.user.walletAddress) {
+      showPhoneDebug("Found cached user: " + MiniKit.user.walletAddress, false);
+      setUserData('@' + (MiniKit.user.username || 'User'), MiniKit.user.walletAddress);
+    } else {
+      showPhoneDebug("No cached user found. Tap Play Now.");
+      if ($('landingHint')) $('landingHint').textContent = 'Tap Play Now to Connect Wallet';
     }
-  }, 500);
+  } else {
+    showPhoneDebug("WARNING: MiniKit.isInstalled() is FALSE! Not inside World App?");
+    if ($('landingHint')) $('landingHint').textContent = '⚠️ Please open inside World App';
+  }
 
   if (myAddress) {
     try {
@@ -278,7 +296,7 @@ async function fetchRealWldBalance(walletAddress) {
       return currentWldBalance;
     }
   } catch (error) {
-    console.error("Failed to fetch real WLD balance:", error);
+    showPhoneDebug("WLD Balance error: " + error.message);
   }
   return 0;
 }
@@ -332,7 +350,7 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
       if ($('withdraw-btn')) $('withdraw-btn').setAttribute('disabled', 'true');
     }
   } catch (e) {
-    console.error("Balance fetch error:", e);
+    showPhoneDebug("Balance DB error: " + e.message);
   }
   fetchLeaderboard();
 }
@@ -585,52 +603,71 @@ function randomAlphaNumeric(len){
   return out;
 }
 
-// Official MiniKit.walletAuth Implementation for v2/v3 SDK
+// Wallet Auth with detailed Phone Debug logging
 async function performWalletAuth(){
+  showPhoneDebug("performWalletAuth() invoked.", false);
   if (!MiniKit.isInstalled()) {
-    alert("Please open this game inside World App.");
+    showPhoneDebug("Error: MiniKit.isInstalled() is false during auth!");
+    alert("Please open this app inside World App.");
     return false;
   }
 
-  if (myAddress) return true;
+  if (myAddress) {
+    showPhoneDebug("Wallet already connected: " + myAddress, false);
+    return true;
+  }
 
   try {
+    showPhoneDebug("Calling MiniKit.walletAuth()...", false);
     const result = await MiniKit.walletAuth({
       nonce: randomAlphaNumeric(16),
       statement: 'Sign in to TNV Duel Arena.',
       expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       notBefore: new Date(Date.now() - 60 * 1000),
     });
+    
+    showPhoneDebug("walletAuth raw result: " + JSON.stringify(result), false);
 
     if (result && result.data && result.data.address) {
       realWorldIdUser = true;
       const address = result.data.address;
       const username = '@' + (MiniKit.user?.username || 'User_' + address.substring(2, 6));
+      showPhoneDebug("Auth SUCCESS! Address: " + address, false);
       setUserData(username, address);
       return true;
+    } else {
+      showPhoneDebug("Auth failed: Invalid result format received.");
     }
     return false;
   } catch (err) {
+    showPhoneDebug("Wallet auth CATCH ERROR: " + (err?.message || String(err)));
     console.error("Wallet auth error:", err);
     alert("Wallet connection failed: " + (err.message || "Unknown error"));
     return false;
   }
 }
 
-// Strictly Real WLD Payment Handler using MiniKit.commandsAsync.pay
+// Payment Handler with detailed Phone Debug logging
 async function payRealWldFee(feeAmount) {
+  showPhoneDebug("payRealWldFee() invoked for " + feeAmount + " WLD", false);
   if (!MiniKit.isInstalled()) {
+    showPhoneDebug("Error: MiniKit not installed during pay.");
     alert("Please open this game inside World App.");
     return false;
   }
 
   if (!myAddress) {
+    showPhoneDebug("No address found before payment. Triggering auth...");
     const connected = await performWalletAuth();
-    if (!connected) return false;
+    if (!connected) {
+      showPhoneDebug("Payment aborted: Wallet auth failed.");
+      return false;
+    }
   }
 
   try {
     if ($('start-btn')) $('start-btn').disabled = true;
+    showPhoneDebug("Calling MiniKit.commandsAsync.pay()...", false);
 
     const payment = await MiniKit.commandsAsync.pay({
       reference: `dice_${Date.now()}`,
@@ -644,12 +681,16 @@ async function payRealWldFee(feeAmount) {
       description: "Dice Duel Entry Fee"
     });
 
+    showPhoneDebug("Payment raw response: " + JSON.stringify(payment), false);
+
     if (!payment || !payment.finalPayload || payment.finalPayload.status !== "success") {
       if ($('start-btn')) $('start-btn').disabled = false;
+      showPhoneDebug("Payment failed or cancelled by user.");
       alert("Payment cancelled or failed.");
       return false;
     }
 
+    showPhoneDebug("Payment SUCCESS!", false);
     await logMatchHistory(
       ADMIN_WALLET,
       "ADMIN_FEE",
@@ -659,6 +700,7 @@ async function payRealWldFee(feeAmount) {
 
     return true;
   } catch (err) {
+    showPhoneDebug("Payment CATCH ERROR: " + (err?.message || String(err)));
     console.error("Payment error:", err);
     if ($('start-btn')) $('start-btn').disabled = false;
     alert("Payment failed.");
@@ -950,6 +992,7 @@ document.querySelectorAll('.fee-chip').forEach(chip => {
 
 // Play Button Click Handler with User Interaction Wallet Connection
 async function handlePlayButtonClick() {
+  showPhoneDebug("Play button clicked.", false);
   if (matchmakingActive || gameActive) return;
 
   if (!selectedFee || selectedFee <= 0) {
@@ -958,12 +1001,17 @@ async function handlePlayButtonClick() {
   }
 
   if (!myAddress) {
+    showPhoneDebug("Address missing on click. Calling performWalletAuth()...");
     const connected = await performWalletAuth();
-    if (!connected) return;
+    if (!connected) {
+      showPhoneDebug("Play aborted because wallet auth returned false.");
+      return;
+    }
   }
 
   const paymentSuccess = await payRealWldFee(selectedFee);
   if (!paymentSuccess) {
+    showPhoneDebug("Play aborted because payment failed/cancelled.");
     return;
   }
 
