@@ -1198,3 +1198,67 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }, 1000);
 });
+// 1. MiniKit se Real Balance Fetch Karne Ka Sahi Tarika
+async function fetchUserRealBalance() {
+  if (!MiniKit.isInstalled()) return;
+  
+  try {
+    // Agar MiniKit user ka address provide karta hai
+    const walletAddress = MiniKit.user?.address || window.myAddress;
+    if (!walletAddress) {
+      console.log("Wallet address not found yet");
+      return;
+    }
+
+    // World App ke through balance fetch ya display update karna
+    const balanceElement = document.getElementById('wld-balance') || document.getElementById('test-wld-balance');
+    if (balanceElement) {
+      balanceElement.innerText = "Checking WLD...";
+    }
+    
+    console.log("User wallet address found:", walletAddress);
+  } catch (err) {
+    console.error("Balance fetch error:", err);
+  }
+}
+
+// 2. Play Button Click par Real WLD Payment Prompt Khulne Wala Code
+window.handlePlayButtonClick = async function() {
+  if (typeof matchmakingActive !== 'undefined' && matchmakingActive) return;
+
+  if (!MiniKit.isInstalled()) {
+    alert("Please open this app inside World App to play with real WLD.");
+    return;
+  }
+
+  try {
+    const payload = {
+      reference: "game_fee_" + Date.now(),
+      to: "0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1", // Aapka Admin Wallet Address yahan aayega
+      amount: (selectedFee * 1e18).toString(), 
+      symbol: "WLD",
+      network: "worldchain",
+    };
+
+    if (MiniKit.commands.pay) {
+      const response = await MiniKit.commands.pay(payload);
+      console.log("Payment response:", response);
+      
+      if (response && response.finalPayload && response.finalPayload.status === "success") {
+        // Payment successful hone par game start karo
+        if (typeof startMatchmaking === 'function') {
+          startMatchmaking();
+        }
+      } else {
+        console.log("Payment cancelled or failed");
+      }
+    }
+  } catch (error) {
+    console.error("Payment trigger error:", error);
+  }
+};
+
+// Page load hote hi balance check run ho
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(fetchUserRealBalance, 1500);
+});
