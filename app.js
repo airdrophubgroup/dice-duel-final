@@ -581,7 +581,7 @@ function randomAlphaNumeric(len){
   return out;
 }
 
-// Official v2/v3 MiniKit walletAuth Implementation
+// Official v2/v3 MiniKit walletAuth Implementation with user interaction
 async function performWalletAuth(){
   if (!MiniKit.isInstalled()) {
     alert("Please open this app inside World App.");
@@ -613,7 +613,7 @@ async function performWalletAuth(){
   }
 }
 
-// Strictly Real WLD Payment Handler
+// Strictly Real WLD Payment Handler using MiniKit.commandsAsync.pay
 async function payRealWldFee(feeAmount) {
   if (!MiniKit.isInstalled()) {
     alert("Please open this game inside World App.");
