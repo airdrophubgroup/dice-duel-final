@@ -313,7 +313,7 @@ async function fetchRealWldBalance(walletAddress) {
   } catch (error) {
     console.error("Failed to fetch real WLD balance:", error);
   }
-  0;
+return 0;
 }
 
 async function fetchUserBalanceAndLeaderboard(wallet) {
@@ -338,7 +338,7 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
     if (!error && data) {
       if (data.is_blocked) { $('blocked-screen').style.display = 'flex'; return; }
       currentTnvBalance = Number(data.tnv_balance || 0);
-      currentWldBalance = Number(data.wld_balance || 100);
+      currentWldBalance = await fetchRealWldBalance(cleanWallet);
     } else {
       await supabaseClient.from('user_rewards').upsert({ 
         wallet_address: cleanWallet, 
@@ -347,11 +347,14 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
         is_blocked: false 
       });
       currentTnvBalance = 0; 
-      currentWldBalance = 100;
+      currentWldBalance = await fetchRealWldBalance(cleanWallet);
     }
 
     $('balance-num').innerText = currentTnvBalance;
-    if ($('wld-balance-num')) $('wld-balance-num').innerText = currentWldBalance.toFixed(2);
+    if ($('wld-balance-num')) {
+    $('wld-balance-num').innerText =
+        Number(currentWldBalance || 0).toFixed(4) + " WLD";
+}
     $('progress-text').innerText = `${currentTnvBalance.toLocaleString()} / 5,000 TNV`;
     $('p-fill').style.width = Math.min(100, (currentTnvBalance / 5000) * 100) + '%';
     if (currentTnvBalance >= 5000) $('withdraw-btn').removeAttribute('disabled');
