@@ -581,7 +581,7 @@ function randomAlphaNumeric(len){
   return out;
 }
 
-// Official v2/v3 MiniKit walletAuth Implementation with user interaction
+// Official v2/v3 MiniKit walletAuth Implementation using MiniKit.walletAuth()
 async function performWalletAuth(){
   if (!MiniKit.isInstalled()) {
     alert("Please open this app inside World App.");
