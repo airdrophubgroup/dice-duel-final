@@ -601,6 +601,7 @@ function showAuthBanner(msg){
 async function performWalletAuth(silent = false){
   if (!MiniKit.isInstalled()) return false;
   
+  // 1. Direct MiniKit user object check
   if (MiniKit.user && MiniKit.user.walletAddress) {
     realWorldIdUser = true;
     const address = MiniKit.user.walletAddress;
@@ -609,8 +610,9 @@ async function performWalletAuth(silent = false){
     return true;
   }
 
+  // 2. Safe MiniKit walletAuth command execution
   try {
-    const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
+    const res = await MiniKit.commandsAsync.walletAuth({
       nonce: randomAlphaNumeric(24),
       requestId: 'req_login_' + Date.now(),
       expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -618,17 +620,19 @@ async function performWalletAuth(silent = false){
       statement: 'Sign in to TNV Duel Arena.',
     });
 
-    if (finalPayload?.status === 'success' && finalPayload?.address){
+    const payload = res?.finalPayload;
+    if (payload?.status === 'success' && payload?.address){
       realWorldIdUser = true;
-      const username = await resolveUsername(finalPayload.address);
-      setUserData(username, finalPayload.address);
+      const username = await resolveUsername(payload.address);
+      setUserData(username, payload.address);
       return true;
     }
 
-    showAuthBanner('Sign-in required to play in World App.');
+    if (!silent) showAuthBanner('Sign-in incomplete. Please try again inside World App.');
     return false;
   } catch (err) {
-    showAuthBanner(`Wallet auth error: ${err?.message || String(err)}`);
+    console.error("Wallet auth error:", err);
+    if (!silent) showAuthBanner('Wallet connection failed.');
     return false;
   }
 }
