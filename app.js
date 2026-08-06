@@ -1036,6 +1036,27 @@ document.querySelectorAll('.fee-chip').forEach(chip => {
   chip.addEventListener('click', () => selectFee(chip.dataset.fee, chip));
 });
 $('start-btn').addEventListener('click', handlePlayButtonClick);
+// 1. Pehle function define karo
+async function handlePlayButtonClick() {
+  if (typeof matchmakingActive !== 'undefined' && matchmakingActive) return;
+
+  // Real WLD Payment Trigger
+  if (typeof payRealWldFee === 'function') {
+    const paid = await payRealWldFee(selectedFee);
+    if (!paid) {
+      console.log("Payment cancelled or failed");
+      return;
+    }
+  }
+
+  // Matchmaking or Game start
+  if (typeof startMatchmaking === 'function') {
+    startMatchmaking();
+  }
+}
+
+// 2. Phir event listener lagao (Jo tumhari line 1038 par hai)
+$('start-btn').addEventListener('click', handlePlayButtonClick);
 $('dice-scene').addEventListener('click', rollDice);
 
 async function openAdminEarningsModal() {
