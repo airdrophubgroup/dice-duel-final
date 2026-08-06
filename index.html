@@ -13,7 +13,6 @@
 <body>
 
 <div id="app">
-  <!-- SUPPORT (LEFT) & GLOBAL CHAT (RIGHT) CORNER BUTTONS -->
   <div class="support-container">
     <button class="support-btn-main" onclick="toggleSupportDropdown(event)">💬 Support ▼</button>
     <div id="support-dropdown" class="support-dropdown">
@@ -37,7 +36,6 @@
     </div>
     <div class="progress-bar"><div id="p-fill" class="progress-fill"></div></div>
     
-    <!-- WITHDRAW BUTTON TNV KE PAAS & WLD ALAG CLEAN DISPLAY -->
     <div id="balance-area" style="display:flex; flex-direction:column; gap:6px; align-items:center; margin-top:8px;">
       <div>
         <span>Balance: <span id="balance-num">0</span> TNV</span>
@@ -48,7 +46,6 @@
       </div>
     </div>
 
-    <!-- STYLISH HISTORY, WITHDRAWALS & ADMIN REVENUE BUTTONS -->
     <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:10px;">
       <button class="btn btn-ghost" style="font-size:10.5px; padding:6px 12px; border:1px solid rgba(41,217,194,0.4); color:var(--photon);" onclick="openUserHistoryModal()">📜 Match History</button>
       <button class="btn btn-ghost" style="font-size:10.5px; padding:6px 12px; border:1px solid rgba(41,217,194,0.4); color:var(--photon);" onclick="openUserWithdrawalsModal()">💸 My Withdrawals</button>
@@ -80,9 +77,8 @@
         <div class="fee-chip" data-fee="50">50 WLD<span class="chip-earn">+90.0</span></div>
       </div>
 
-      <button class="btn btn-primary" id="start-btn" onclick="handlePlayButtonClick()">PLAY NOW (0.5 WLD)</button>
+      <button class="btn btn-primary" id="start-btn">PLAY NOW (0.5 WLD)</button>
       
-      <!-- GAME RULES & REWARDS INFO CARD -->
       <div class="rules-card">
         <h3>📖 Game Rules & Rewards</h3>
         <div class="rules-grid">
@@ -96,7 +92,6 @@
         </div>
       </div>
 
-      <!-- ADMIN WITHDRAWAL PANEL -->
       <div id="admin-panel">
         <div class="admin-header">
           <span>🛡️ ADMIN WITHDRAWAL REQUESTS</span>
@@ -107,7 +102,6 @@
         </div>
       </div>
 
-      <!-- ADMIN AUTO-CLICKER DETECTOR PANEL -->
       <div id="admin-cheaters-panel">
         <div class="admin-header">
           <span>⚠️ AUTO-CLICKER DETECTIONS</span>
@@ -118,7 +112,6 @@
         </div>
       </div>
 
-<!-- LEADERBOARD SECTION -->
       <div class="leaderboard-section">
         <div class="lb-header">
           <span>⚡ TNV ELITE LEADERBOARD</span>
@@ -129,7 +122,6 @@
         </div>
       </div>
 
-      <!-- 👇 YAHAN LAGANA HAI: CUSTOM AIRDROP COLUMN -->
       <div class="airdrop-custom-card">
         <div class="airdrop-icon">🎁</div>
         <div class="airdrop-content">
@@ -138,9 +130,7 @@
           <span class="badge-coming">COMING SOON</span>
         </div>
       </div>
-      <!-- END AIRDROP COLUMN -->
 
-      <!-- TNV COIN LEADERSHIP DISTRIBUTION -->
       <div class="rules-card" style="margin-top: 18px; text-align: left;">
         <h3>💎 TNV COIN LEADERSHIP DISTRIBUTION</h3>
         <div class="rules-grid" style="margin-bottom: 14px;">
@@ -179,7 +169,6 @@
     </section>
   </main>
 
-  <!-- GLOBAL CHAT MODAL -->
   <div id="chat-modal" class="custom-modal">
     <div class="modal-card chat-card">
       <div class="chat-header">
@@ -196,7 +185,6 @@
     </div>
   </div>
 
-  <!-- USER MATCH HISTORY MODAL -->
   <div id="user-history-modal" class="custom-modal">
     <div class="modal-card" style="max-width:420px; width:92%;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -210,7 +198,6 @@
     </div>
   </div>
 
-  <!-- USER WITHDRAWAL REQUESTS MODAL -->
   <div id="user-withdrawals-modal" class="custom-modal">
     <div class="modal-card" style="max-width:420px; width:92%;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -224,7 +211,6 @@
     </div>
   </div>
 
-  <!-- ADMIN EARNINGS REVENUE MODAL -->
   <div id="admin-earnings-modal" class="custom-modal">
     <div class="modal-card" style="max-width:450px; width:92%;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -239,7 +225,6 @@
     </div>
   </div>
 
-  <!-- BLOCKED / SUSPENDED USER SCREEN -->
   <div id="blocked-screen">
     <div class="blocked-card">
       <div style="font-size: 52px; margin-bottom: 12px;">🚫</div>
@@ -251,7 +236,6 @@
     </div>
   </div>
 
-  <!-- WITHDRAW POPUP MODAL (USER) -->
   <div id="withdraw-modal" class="custom-modal">
     <div class="modal-card">
       <h3>⚡ WITHDRAW TNV</h3>
@@ -268,7 +252,6 @@
     </div>
   </div>
 
-  <!-- ADMIN APPROVAL MODAL -->
   <div id="admin-approve-modal" class="custom-modal">
     <div class="modal-card">
       <h3>🛡️ APPROVE WITHDRAWAL</h3>
@@ -305,6 +288,7 @@
     </div>
   </div>
 </div>
+
 <script type="module" src="app.js"></script>
 </body>
 </html>
