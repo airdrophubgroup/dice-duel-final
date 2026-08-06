@@ -340,12 +340,12 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
       currentTnvBalance = Number(data.tnv_balance || 0);
       currentWldBalance = await fetchRealWldBalance(cleanWallet);
     } else {
-      await supabaseClient.from('user_rewards').upsert({ 
-        wallet_address: cleanWallet, 
-        tnv_balance: 0, 
-        wld_balance: 100, 
-        is_blocked: false 
-      });
+   await supabaseClient.from('user_rewards').upsert({
+    wallet_address: cleanWallet,
+    tnv_balance: 0,
+    wld_balance: 0,
+    is_blocked: false
+    });
       currentTnvBalance = 0; 
       currentWldBalance = await fetchRealWldBalance(cleanWallet);
     }
@@ -670,18 +670,19 @@ async function payRealWldFee(feeAmount) {
   try {
     $('start-btn').disabled = true;
 
-    const payment = await MiniKit.commandsAsync.pay({
-      reference: `dice_${Date.now()}`,
-      to: ADMIN_WALLET,
-      tokens: [
-        {
-          symbol: "WLD",
-          amount: feeAmount.toString()
-        }
-      ],
-      description: "Dice Duel Entry Fee"
-    });
+const payment = await MiniKit.commandsAsync.pay({
+  reference: `dice_${Date.now()}`,
+  to: ADMIN_WALLET,
+  tokens: [
+    {
+      symbol: "WLD",
+      amount: feeAmount.toString()
+    }
+  ],
+  description: "Dice Duel Entry Fee"
+});
 
+console.log("Payment Response:", payment);
     if (!payment || payment.status !== "success") {
       $('start-btn').disabled = false;
       alert("Payment cancelled.");
