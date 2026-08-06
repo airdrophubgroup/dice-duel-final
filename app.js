@@ -1094,3 +1094,55 @@ window.handlePlayButtonClick = async function() {
     startMatchmaking();
   }
 };
+
+window.handlePlayButtonClick = async function() {
+  if (typeof matchmakingActive !== 'undefined' && matchmakingActive) return;
+  
+  // Real WLD payment command call karein
+  if (typeof payRealWldFee === 'function') {
+    const paid = await payRealWldFee(selectedFee);
+    if (!paid) {
+      console.log("Payment cancelled or failed");
+      return;
+    }
+  } else {
+    console.error("payRealWldFee function not found!");
+  }
+
+  // Payment successful hone ke baad matchmaking ya game start function call ho
+  if (typeof startMatchmaking === 'function') {
+    startMatchmaking();
+  }
+};
+async function updateRealWldBalance(walletAddress) {
+  if (!walletAddress) return;
+  try {
+    const response = await fetch('https://worldchain-mainnet.g.alchemy.com/public', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'eth_call',
+        params: [{
+          to: '0x2cfc85d892bab34f634e84b5c7774e30b6a1548e', // Official WLD Token contract on Worldchain
+          data: '0x70a08231000000000000000000000000' + walletAddress.replace('0x', '')
+        }, 'latest'],
+        id: 1
+      })
+    });
+    const result = await response.json();
+    if (result.result) {
+      const balanceWei = BigInt(result.result);
+      const balanceWld = Number(balanceWei) / 1e18;
+      
+      // Jahan bhi UI par balance dikhta hai (jaise balance element), use update kar do
+      const balanceElement = document.getElementById('wld-balance'); // Apne HTML element ki ID yahan check kar lena
+      if (balanceElement) {
+        balanceElement.innerText = balanceWld.toFixed(2) + " WLD";
+      }
+      console.log("Fetched Real WLD Balance:", balanceWld);
+    }
+  } catch (error) {
+    console.error("Error fetching WLD balance:", error);
+  }
+}
