@@ -1175,3 +1175,9 @@ window.addEventListener('DOMContentLoaded', () => {
     updateRealWldBalance(myAddress);
   }
 });
+
+// Jahan bhi Test WLD balance dikh raha hai, us element ko ye value assign kar do:
+const testBalanceElement = document.getElementById('test-wld-balance'); // ya jo bhi ID ho
+if (testBalanceElement) {
+  testBalanceElement.innerText = currentWldBalance.toFixed(2) + " WLD";
+}
