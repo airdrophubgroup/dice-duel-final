@@ -1,4 +1,6 @@
 {
+  "name": "dice-duel",
+  "version": "1.0.0",
   "dependencies": {
     "@worldcoin/minikit-js": "^2.0.3"
   }
