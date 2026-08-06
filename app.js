@@ -657,87 +657,49 @@ async function performWalletAuth(silent = false){
 // ----------------------------------------------------
 // PLAY BUTTON: 1) SIGN IN (if needed) -> 2) MINIKIT.PAY -> 3) MATCHMAKING (only on success)
 // ----------------------------------------------------
+
 async function payRealWldFee(feeAmount) {
   if (!MiniKit.isInstalled()) {
-    alert("Please open this app inside World App to make real WLD transactions.");
+    alert("Please open this game inside World App.");
     return false;
   }
 
   try {
-    const payload = {
-      reference: "game_fee_" + Date.now(),
-      to: ADMIN_WALLET,
-      amount: (feeAmount * 1e18).toString(), // Wei format conversion
-      symbol: "WLD",
-      network: "worldchain",
-    };
-
-    if (MiniKit.commands.pay) {
-      const response = await MiniKit.commands.pay(payload);
-      console.log("Payment response:", response);
-      
-      // Response check karne ke baad agar payment successful ho jaye
-      if (response && response.finalPayload && response.finalPayload.status === "success") {
-        return true;
-      }
-    }
-  } catch (error) {
-    console.error("Payment failed:", error);
-  }
-  return false;
-
-
- // STEP 2: Trigger the official MiniKit payment request (Allow / Cancel prompt) 
-if (MiniKit.isInstalled()) {
     $('start-btn').disabled = true;
 
-    let paymentSuccessful = false;
-    try {
-      const paymentPayload = {
-        reference: 'ref_' + randomAlphaNumeric(16),
-        to: ADMIN_WALLET,
-        tokens: [
-          {
-            symbol: Tokens.WLD,
-            token_amount: tokenToDecimals(selectedFee, Tokens.WLD).toString(),
-          },
-        ],
-        description: `TNV Duel Arena Bet: ${selectedFee} WLD`,
-      };
+    const payment = await MiniKit.commandsAsync.pay({
+      reference: `dice_${Date.now()}`,
+      to: ADMIN_WALLET,
+      tokens: [
+        {
+          symbol: "WLD",
+          amount: feeAmount.toString()
+        }
+      ],
+      description: "Dice Duel Entry Fee"
+    });
 
-      const { finalPayload } = await MiniKit.commandsAsync.pay(paymentPayload);
-      paymentSuccessful = (finalPayload?.status === 'success');
-
-    } catch (err) {
-      console.warn("Payment error:", err);
-      paymentSuccessful = false;
-    }
-
-    // STEP 3: Only proceed if payment was genuinely successful
-    if (!paymentSuccessful) {
-      alert("Payment was cancelled or failed.");
+    if (!payment || payment.status !== "success") {
       $('start-btn').disabled = false;
-      return;
+      alert("Payment cancelled.");
+      return false;
     }
 
-    await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', selectedFee, `Entry fee payment from ${myUsername || myAddress}`);
+    await logMatchHistory(
+      ADMIN_WALLET,
+      "ADMIN_FEE",
+      feeAmount,
+      `Entry fee from ${myUsername || myAddress}`
+    );
 
-  } else {
-    // Desktop simulation fallback (no MiniKit / no real payment prompt available)
-    const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
-    let currentWld = Number(usrData?.wld_balance || 100);
-    if (currentWld < selectedFee) {
-      alert(`Insufficient WLD Balance: ${currentWld.toFixed(2)}, Required: ${selectedFee}`);
-      return;
-    }
-    if (!confirm(`Confirm payment of ${selectedFee} WLD to start match?`)) {
-      return; // simulated cancel
-    }
-    await supabaseClient.from('user_rewards').update({ wld_balance: Number((currentWld - selectedFee).toFixed(2)) }).eq('wallet_address', myAddress);
+    return true;
+
+  } catch (err) {
+    console.error(err);
+    $('start-btn').disabled = false;
+    alert("Payment failed.");
+    return false;
   }
-
-  // STEP 3 (continued): Start matchmaking only after a successful payment
-  initMatchmakingAfterPayment();
 }
 
 function selectFee(amount, element){
@@ -1038,21 +1000,22 @@ document.querySelectorAll('.fee-chip').forEach(chip => {
 $('start-btn').addEventListener('click', handlePlayButtonClick);
 // 1. Pehle function define karo
 async function handlePlayButtonClick() {
-  if (typeof matchmakingActive !== 'undefined' && matchmakingActive) return;
 
-  // Real WLD Payment Trigger
-  if (typeof payRealWldFee === 'function') {
-    const paid = await payRealWldFee(selectedFee);
-    if (!paid) {
-      console.log("Payment cancelled or failed");
-      return;
-    }
+  if (matchmakingActive || gameActive) return;
+
+  if (!selectedFee || selectedFee <= 0) {
+    alert("Please select an entry fee.");
+    return;
   }
 
-  // Matchmaking or Game start
-  if (typeof startMatchmaking === 'function') {
-    startMatchmaking();
+  const paymentSuccess = await payRealWldFee(selectedFee);
+
+  if (!paymentSuccess) {
+    return;
   }
+
+  await initMatchmakingAfterPayment();
+
 }
 
 // 2. Phir event listener lagao (Jo tumhari line 1038 par hai)
@@ -1106,35 +1069,25 @@ function closeAdminEarningsModal() {
   if (modal) modal.style.display = 'none';
 }
 
-window.handlePlayButtonClick = async function() {
-  const paid = await payRealWldFee(selectedFee);
-  if (!paid) return;
-  
-  // Yahan apna matchmaking ya game start karne ka code daal dena
-  if (typeof startMatchmaking === 'function') {
-    startMatchmaking();
-  }
-};
+window.handlePlayButtonClick = async function () {
 
-window.handlePlayButtonClick = async function() {
-  if (typeof matchmakingActive !== 'undefined' && matchmakingActive) return;
-  
-  // Real WLD payment command call karein
-  if (typeof payRealWldFee === 'function') {
-    const paid = await payRealWldFee(selectedFee);
-    if (!paid) {
-      console.log("Payment cancelled or failed");
-      return;
+    if (matchmakingActive || gameActive) return;
+
+    if (!selectedFee) {
+        alert("Please select an entry fee.");
+        return;
     }
-  } else {
-    console.error("payRealWldFee function not found!");
-  }
 
-  // Payment successful hone ke baad matchmaking ya game start function call ho
-  if (typeof startMatchmaking === 'function') {
-    startMatchmaking();
-  }
+    const paid = await payRealWldFee(selectedFee);
+
+    if (!paid) {
+        return;
+    }
+
+    await initMatchmakingAfterPayment();
+
 };
+
 async function updateRealWldBalance(walletAddress) {
   if (!walletAddress) return;
   try {
