@@ -1108,6 +1108,8 @@ async function updateRealWldBalance(walletAddress) {
       })
     });
     const result = await response.json();
+    console.log("Wallet Address:", walletAddress);
+    console.log("RPC Response:", result);
     if (result.result) {
       const balanceWei = BigInt(result.result);
       const balanceWld = Number(balanceWei) / 1e18;
