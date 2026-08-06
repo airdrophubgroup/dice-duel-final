@@ -306,6 +306,53 @@
   </div>
 </div>
 
+async function openAdminEarningsModal() {
+  const modal = document.getElementById('admin-earnings-modal');
+  if (modal) modal.style.display = 'flex';
+
+  const listContainer = document.getElementById('admin-earnings-list');
+  if (listContainer) {
+    listContainer.innerHTML = '<div style="text-align:center; color:var(--slate);">Loading admin revenue...</div>';
+  }
+
+  try {
+    const { data: earnings, error } = await supabaseClient
+      .from('admin_revenue') // Aapki table ka naam (agar alag ho toh change kar sakte hain)
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    if (earnings && earnings.length > 0) {
+      let html = '';
+      earnings.forEach(item => {
+        let timeString = item.created_at ? new Date(item.created_at).toLocaleString() : 'N/A';
+        let amountVal = item.amount || item.fee || 0;
+        
+        html += `
+          <div style="padding: 8px 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: bold; color: var(--gold);">Amount: ${amountVal}</div>
+              <div style="font-size: 10px; color: var(--slate); margin-top: 2px;">🕒 ${timeString}</div>
+            </div>
+          </div>
+        `;
+      });
+      if (listContainer) listContainer.innerHTML = html;
+    } else {
+      if (listContainer) listContainer.innerHTML = '<div style="text-align:center; color:var(--slate);">No revenue records found.</div>';
+    }
+  } catch (err) {
+    console.error("Error fetching admin revenue:", err);
+    if (listContainer) listContainer.innerHTML = '<div style="text-align:center; color:#e74c3c;">Failed to load revenue data.</div>';
+  }
+}
+
+function closeAdminEarningsModal() {
+  const modal = document.getElementById('admin-earnings-modal');
+  if (modal) modal.style.display = 'none';
+}
+
 <script type="module" src="app.js"></script>
 </body>
 </html>
