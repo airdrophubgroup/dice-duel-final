@@ -5,6 +5,7 @@ const SB_URL = "https://efmkazyrxllcyvcwmewd.supabase.co";
 const SB_KEY = "sb_publishable_px6Myv6S29bTXRYmYLAkgQ_WDHDb7da";
 const WORLD_APP_ID = "app_74bd2499a35b025efb62d99125df7883";
 
+// Aapka Real Admin Wallet Address jahan saare payment fees aayenge
 const ADMIN_WALLET = "0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1"; 
 
 const supabaseClient = createClient(SB_URL, SB_KEY);
@@ -31,39 +32,14 @@ window.addEventListener('DOMContentLoaded', async () => {
   } catch(e) {}
 
   if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
-    if ($('landingHint')) $('landingHint').textContent = 'World App detected — signing in...';
-    
-    try {
-      await Promise.race([
-        performWalletAuth(true),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Auth timeout')), 4000))
-      ]);
-    } catch(err) {
-      let fakeAddress = localStorage.getItem("myAddress");
-      let fakeUsername = localStorage.getItem("myUsername");
-      if (!fakeAddress || fakeAddress.toLowerCase() === ADMIN_WALLET.toLowerCase()) {
-        const randomHex = Math.floor(Math.random() * 100000).toString(16);
-        fakeAddress = '0xDEV000000000000000000000000000' + randomHex;
-        fakeUsername = '@Guest_' + randomHex;
-        localStorage.setItem("myAddress", fakeAddress);
-        localStorage.setItem("myUsername", fakeUsername);
-      }
-      setUserData(fakeUsername || '@Guest', fakeAddress);
-    }
+    if ($('landingHint')) $('landingHint').textContent = 'World App connected — signing in...';
+    await performWalletAuth(false);
   } else {
-    if ($('landingHint')) $('landingHint').textContent = 'Desktop Mode (Simulation active)';
-    let fakeAddress = localStorage.getItem("myAddress");
-    let fakeUsername = localStorage.getItem("myUsername");
-    if (!fakeAddress || !fakeAddress.startsWith('0xDEV')) {
-      const randomHex = Math.floor(Math.random() * 10000).toString(16);
-      fakeAddress = '0xDEV' + randomHex + '94bfb6a1';
-      fakeUsername = '@TestPC_' + randomHex;
-      localStorage.setItem("myAddress", fakeAddress);
-      localStorage.setItem("myUsername", fakeUsername);
-    }
-    setUserData(fakeUsername || '@TestPC', fakeAddress);
+    if ($('landingHint')) $('landingHint').textContent = '⚠️ Please open this app inside World App.';
+    showAuthBanner('This app requires World App to run. Please open via World App.');
   }
 
+  // Stuck matches cleanup
   if (myAddress) {
     try {
       const { data: stuckMatches } = await supabaseClient
@@ -80,7 +56,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             let curBal = Number(usrData?.wld_balance || 0);
             let refundBal = Number((curBal + feeToRefund).toFixed(2));
             await supabaseClient.from('user_rewards').update({ wld_balance: refundBal }).eq('wallet_address', myAddress);
-            await logMatchHistory(myAddress, 'REFUND', feeToRefund, `Search interrupted (reload) & fee refunded (${feeToRefund} WLD)`);
+            await logMatchHistory(myAddress, 'REFUND', feeToRefund, `Search interrupted & fee refunded (${feeToRefund} WLD)`);
             await supabaseClient.from('matches').delete().eq('id', match.id);
           }
         }
@@ -116,7 +92,7 @@ function initGlobalChat() {
   loadAndCleanChatHistory();
 
   globalChatChannel = supabaseClient.channel('global_community_chat', {
-    config: { presence: { key: myUsername || 'Guest' }, broadcast: { self: true } }
+    config: { presence: { key: myUsername || 'User' }, broadcast: { self: true } }
   });
 
   globalChatChannel
@@ -223,7 +199,7 @@ window.sendChatMessage = function() {
   const msg = input.value.trim();
   if (!msg) return;
 
-  let senderName = myUsername || '@Guest';
+  let senderName = myUsername || '@User';
   globalChatChannel.send({
     type: 'broadcast',
     event: 'new_chat_msg',
@@ -316,7 +292,7 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
   }
 
   try {
-    const cleanWallet = wallet ? wallet.toLowerCase().trim() : '';
+    const cleanWallet = wallet.toLowerCase().trim();
     
     const { data, error } = await supabaseClient
       .from('user_rewards')
@@ -340,9 +316,12 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
     }
 
     if ($('balance-num')) $('balance-num').innerText = currentTnvBalance;
-    if ($('wld-balance-num')) {
-      $('wld-balance-num').innerText = Number(currentWldBalance || 0).toFixed(4) + " WLD";
+    
+    const wldDisp = $('wld-balance-num') || $('wld-balance');
+    if (wldDisp) {
+      wldDisp.innerText = Number(currentWldBalance || 0).toFixed(4) + " WLD";
     }
+
     if ($('progress-text')) $('progress-text').innerText = `${currentTnvBalance.toLocaleString()} / 5,000 TNV`;
     if ($('p-fill')) $('p-fill').style.width = Math.min(100, (currentTnvBalance / 5000) * 100) + '%';
     if (currentTnvBalance >= 5000) {
@@ -445,7 +424,7 @@ window.confirmAdminApproval = async function() {
 };
 
 window.openUserHistoryModal = async function() {
-  if (!myAddress) { alert('Please sign in first!'); return; }
+  if (!myAddress) { alert('Please sign in inside World App!'); return; }
   $('user-history-modal').style.display = 'flex';
   const container = $('user-history-list');
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading history...</div>`;
@@ -465,7 +444,7 @@ window.openUserHistoryModal = async function() {
 window.closeUserHistoryModal = function() { $('user-history-modal').style.display = 'none'; };
 
 window.openUserWithdrawalsModal = async function() {
-  if (!myAddress) { alert('Please sign in first!'); return; }
+  if (!myAddress) { alert('Please sign in inside World App!'); return; }
   $('user-withdrawals-modal').style.display = 'flex';
   const container = $('user-withdrawals-list');
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading requests...</div>`;
@@ -521,7 +500,7 @@ async function fetchLeaderboard() {
     let html = '';
     data.forEach((row, index) => {
       let rankClass = index === 0 ? 'top-1' : (index === 1 ? 'top-2' : (index === 2 ? 'top-3' : ''));
-      let shortWallet = row.wallet_address.startsWith('0xDEV') ? 'Dev_' + row.wallet_address.slice(-4) : row.wallet_address.slice(0, 6) + '...' + row.wallet_address.slice(-4);
+      let shortWallet = row.wallet_address.slice(0, 6) + '...' + row.wallet_address.slice(-4);
       html += `<div class="lb-item ${rankClass}"><span class="lb-rank">#${index + 1}</span><span class="lb-user">${shortWallet}</span><span class="lb-score">${row.tnv_balance} TNV</span></div>`;
     });
     lbContainer.innerHTML = html;
@@ -621,7 +600,14 @@ function showAuthBanner(msg){
 
 async function performWalletAuth(silent = false){
   if (!MiniKit.isInstalled()) return false;
-  if (myAddress && realWorldIdUser) return true;
+  
+  if (MiniKit.user && MiniKit.user.walletAddress) {
+    realWorldIdUser = true;
+    const address = MiniKit.user.walletAddress;
+    const username = '@' + (MiniKit.user.username || 'User_' + address.substring(2, 8));
+    setUserData(username, address);
+    return true;
+  }
 
   try {
     const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
@@ -636,32 +622,34 @@ async function performWalletAuth(silent = false){
       realWorldIdUser = true;
       const username = await resolveUsername(finalPayload.address);
       setUserData(username, finalPayload.address);
-      localStorage.setItem("myAddress", myAddress);
-      localStorage.setItem("myUsername", username);
       return true;
     }
 
-    showAuthBanner(`Sign-in did not complete (status: ${finalPayload?.status || 'unknown'})`);
-    if (!silent) alert("Sign-in cancelled or failed.");
+    showAuthBanner('Sign-in required to play in World App.');
     return false;
   } catch (err) {
     showAuthBanner(`Wallet auth error: ${err?.message || String(err)}`);
-    if (!silent) alert("Wallet authentication error.");
     return false;
   }
 }
 
-// ----------------------------------------------------
-// CORRECT WORKING PAYMENT FUNCTION (Using tokenToDecimals for proper Wei conversion)
-// ----------------------------------------------------
+// Strictly Real WLD MiniKit Payment Handler
 async function payRealWldFee(feeAmount) {
   if (!MiniKit.isInstalled()) {
     alert("Please open this game inside World App.");
     return false;
   }
 
+  if (!myAddress || !realWorldIdUser) {
+    const authed = await performWalletAuth(false);
+    if (!authed) {
+      alert("Wallet authentication required to play.");
+      return false;
+    }
+  }
+
   try {
-    $('start-btn').disabled = true;
+    if ($('start-btn')) $('start-btn').disabled = true;
 
     const payment = await MiniKit.commandsAsync.pay({
       reference: `dice_${Date.now()}`,
@@ -678,7 +666,7 @@ async function payRealWldFee(feeAmount) {
     console.log("Payment Response:", payment);
     
     if (!payment || !payment.finalPayload || payment.finalPayload.status !== "success") {
-      $('start-btn').disabled = false;
+      if ($('start-btn')) $('start-btn').disabled = false;
       alert("Payment cancelled or failed.");
       return false;
     }
@@ -694,8 +682,8 @@ async function payRealWldFee(feeAmount) {
 
   } catch (err) {
     console.error("Payment error:", err);
-    $('start-btn').disabled = false;
-    alert("Payment failed.");
+    if ($('start-btn')) $('start-btn').disabled = false;
+    alert("Payment error: " + (err.message || "Failed"));
     return false;
   }
 }
@@ -894,7 +882,6 @@ async function rollDice(){
 async function finalizeGame(){
   if (!gameActive) return;
   gameActive = false;
-  if (!myAddress) myAddress = localStorage.getItem("myAddress") || "";
 
   localStorage.removeItem("currentMatchId");
   localStorage.removeItem("isP1");
@@ -994,7 +981,7 @@ document.querySelectorAll('.fee-chip').forEach(chip => {
   chip.addEventListener('click', () => selectFee(chip.dataset.fee, chip));
 });
 
-// Single Unified Play Button Click Handler
+// Play Button Click Handler
 async function handlePlayButtonClick() {
   if (matchmakingActive || gameActive) return;
 
