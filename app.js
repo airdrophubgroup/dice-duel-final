@@ -26,10 +26,13 @@ window.addEventListener('DOMContentLoaded', async () => {
   } catch(e) {}
 
   if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
-    if ($('landingHint')) $('landingHint').textContent = 'World App connected — signing in...';
-    await performWalletAuth(false);
+    if (MiniKit.user && MiniKit.user.walletAddress) {
+      setUserData('@' + (MiniKit.user.username || 'User'), MiniKit.user.walletAddress);
+    } else {
+      if ($('landingHint')) $('landingHint').textContent = 'Tap Play Now to Connect Wallet';
+    }
   } else {
-    if ($('landingHint')) $('landingHint').textContent = '⚠️ Please open this app inside World App.';
+    if ($('landingHint')) $('landingHint').textContent = '⚠️ Please open inside World App';
   }
 
   fetchLeaderboard();
@@ -44,35 +47,26 @@ function randomAlphaNumeric(len){
   return out;
 }
 
-async function resolveUsername(address){
-  try{
-    if (MiniKit.user && MiniKit.user.username) return '@' + MiniKit.user.username;
-  }catch(e){}
-  return '@WLD_' + address.substring(2, 8);
-}
-
 function setUserData(username, address){
   myUsername = username;
   myAddress = address ? address.toLowerCase() : address;
   if ($('display-username')) $('display-username').innerText = myUsername;
   if ($('my-name-tag')) $('my-name-tag').innerText = myUsername;
+  if ($('landingHint')) $('landingHint').textContent = 'Wallet Connected Successfully';
   fetchUserBalanceAndLeaderboard(myAddress);
 }
 
-async function performWalletAuth(silent = false){
-  if (!MiniKit.isInstalled()) return false;
-  
-  if (MiniKit.user && MiniKit.user.walletAddress) {
-    realWorldIdUser = true;
-    const address = MiniKit.user.walletAddress;
-    const username = '@' + (MiniKit.user.username || 'User_' + address.substring(2, 8));
-    setUserData(username, address);
-    return true;
+async function performWalletAuth(){
+  if (!MiniKit.isInstalled()) {
+    alert("Please open this app inside World App.");
+    return false;
   }
+
+  if (myAddress) return true;
 
   try {
     const result = await MiniKit.walletAuth({
-      nonce: randomAlphaNumeric(24),
+      nonce: randomAlphaNumeric(16),
       statement: 'Sign in to TNV Duel Arena.',
       expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       notBefore: new Date(Date.now() - 60 * 1000),
@@ -81,14 +75,14 @@ async function performWalletAuth(silent = false){
     if (result && result.data && result.data.address) {
       realWorldIdUser = true;
       const address = result.data.address;
-      const username = await resolveUsername(address);
+      const username = '@' + (MiniKit.user?.username || 'User_' + address.substring(2, 6));
       setUserData(username, address);
       return true;
     }
-
     return false;
   } catch (err) {
     console.error("Wallet auth error:", err);
+    alert("Wallet connection failed: " + (err.message || "Unknown error"));
     return false;
   }
 }
@@ -138,12 +132,10 @@ async function payRealWldFee(feeAmount) {
     return false;
   }
 
-  if (!myAddress || !realWorldIdUser) {
-    const authed = await performWalletAuth(false);
-    if (!authed) {
-      alert("Wallet authentication required.");
-      return false;
-    }
+  // Ensure wallet is connected first via official MiniKit.walletAuth
+  if (!myAddress) {
+    const connected = await performWalletAuth();
+    if (!connected) return false;
   }
 
   try {
@@ -178,6 +170,13 @@ async function payRealWldFee(feeAmount) {
 
 async function handlePlayButtonClick() {
   if (!selectedFee || selectedFee <= 0) return;
+  
+  // Connects wallet on click if not already connected, then proceeds to payment
+  if (!myAddress) {
+    const connected = await performWalletAuth();
+    if (!connected) return;
+  }
+
   const paymentSuccess = await payRealWldFee(selectedFee);
   if (!paymentSuccess) return;
 }
