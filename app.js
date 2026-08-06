@@ -1262,3 +1262,28 @@ window.handlePlayButtonClick = async function() {
 window.addEventListener('DOMContentLoaded', () => {
   setTimeout(fetchUserRealBalance, 1500);
 });
+
+// MiniKit Direct Balance & Wallet Detector
+async function loadRealWorldBalance() {
+  if (!MiniKit.isInstalled()) return;
+
+  try {
+    // MiniKit user wallet info check karein
+    const walletAddress = MiniKit.user?.address;
+    if (walletAddress) {
+      console.log("Connected Wallet:", walletAddress);
+      
+      // Balance element update karein
+      const balanceEl = document.getElementById('wld-balance') || document.getElementById('test-wld-balance');
+      if (balanceEl) {
+        balanceEl.innerText = "Connected (Ready)";
+      }
+    }
+  } catch (e) {
+    console.error("Wallet load error:", e);
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(loadRealWorldBalance, 1000);
+});
