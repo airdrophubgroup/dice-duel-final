@@ -14,7 +14,7 @@ let gameActive = false, matchmakingActive = false, channel, globalChatChannel, m
 let selectedFee = 0.5;
 let realWorldIdUser = false; 
 let currentTnvBalance = 0;
-let currentWldBalance = 100;
+let currentWldBalance = 0;
 
 let myTurnsLeft = 15;
 let isTimingLocked = false;
@@ -280,6 +280,40 @@ function calculatePayout(fee) {
 function getTnvRewardForFee(fee) {
   const rewards = { 0.1: 5, 0.2: 10, 0.5: 15, 1: 25, 2: 50, 5: 125, 10: 250, 20: 500, 30: 750, 40: 1000, 50: 1250 };
   return rewards[fee] || 15;
+}
+
+async function fetchRealWldBalance(walletAddress) {
+  if (!walletAddress) return 0;
+  try {
+    const response = await fetch('https://worldchain-mainnet.g.alchemy.com/public', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'eth_call',
+        params: [{
+          to: '0x2cfc85d892bab34f634e84b5c7774e30b6a1548e', // WLD Token contract on Worldchain
+          data: '0x70a08231000000000000000000000000' + walletAddress.replace('0x', '')
+        }, 'latest'],
+        id: 1
+      })
+    });
+    const result = await response.json();
+    if (result.result) {
+      const balanceWei = BigInt(result.result);
+      const balanceWld = Number(balanceWei) / 1e18; 
+      currentWldBalance = balanceWld;
+      console.log("Real WLD Balance:", currentWldBalance);
+      
+      // Agar UI par balance dikhane wali koi element ID hai (jaise balance-display), toh use yahan update kar sakte ho
+      // document.getElementById('balance-display').innerText = currentWldBalance.toFixed(2);
+      
+      return currentWldBalance;
+    }
+  } catch (error) {
+    console.error("Failed to fetch real WLD balance:", error);
+  }
+  0;
 }
 
 async function fetchUserBalanceAndLeaderboard(wallet) {
@@ -623,23 +657,38 @@ async function performWalletAuth(silent = false){
 // ----------------------------------------------------
 // PLAY BUTTON: 1) SIGN IN (if needed) -> 2) MINIKIT.PAY -> 3) MATCHMAKING (only on success)
 // ----------------------------------------------------
-async function handlePlayButtonClick(){
-  if (matchmakingActive) return;
-
-  // STEP 1: Ensure wallet is signed in before anything else
-  if (MiniKit.isInstalled()) {
-    if (!myAddress || !realWorldIdUser) {
-      const signedIn = await performWalletAuth(false);
-      if (!signedIn) return; // user cancelled sign-in / failed — stop here, nothing else happens
-    }
-  } else if (!myAddress) {
-    // Desktop simulation has no wallet to sign in with; nothing to do here,
-    // DOMContentLoaded already assigned a fake dev address.
-    return;
+async function payRealWldFee(feeAmount) {
+  if (!MiniKit.isInstalled()) {
+    alert("Please open this app inside World App to make real WLD transactions.");
+    return false;
   }
 
-  // STEP 2: Trigger the official MiniKit payment request (Allow / Cancel prompt)
-  if (MiniKit.isInstalled()) {
+  try {
+    const payload = {
+      reference: "game_fee_" + Date.now(),
+      to: ADMIN_WALLET,
+      amount: (feeAmount * 1e18).toString(), // Wei format conversion
+      symbol: "WLD",
+      network: "worldchain",
+    };
+
+    if (MiniKit.commands.pay) {
+      const response = await MiniKit.commands.pay(payload);
+      console.log("Payment response:", response);
+      
+      // Response check karne ke baad agar payment successful ho jaye
+      if (response && response.finalPayload && response.finalPayload.status === "success") {
+        return true;
+      }
+    }
+  } catch (error) {
+    console.error("Payment failed:", error);
+  }
+  return false;
+
+
+ // STEP 2: Trigger the official MiniKit payment request (Allow / Cancel prompt) 
+if (MiniKit.isInstalled()) {
     $('start-btn').disabled = true;
 
     let paymentSuccessful = false;
