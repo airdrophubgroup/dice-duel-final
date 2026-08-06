@@ -1146,3 +1146,44 @@ async function updateRealWldBalance(walletAddress) {
     console.error("Error fetching WLD balance:", error);
   }
 }
+
+// Page load hone par ya wallet milne par real WLD balance fetch karne ke liye
+window.addEventListener('DOMContentLoaded', () => {
+  // Agar aapke paas user ka address pehle se save hai toh yahan pass karein
+  if (typeof myAddress !== 'undefined' && myAddress) {
+    updateRealWldBalance(myAddress);
+  }
+});
+
+async function updateRealWldBalance(walletAddress) {
+  if (!walletAddress) return;
+  try {
+    const response = await fetch('https://worldchain-mainnet.g.alchemy.com/public', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'eth_call',
+        params: [{
+          to: '0x2cfc85d892bab34f634e84b5c7774e30b6a1548e', // Official WLD contract on Worldchain
+          data: '0x70a08231000000000000000000000000' + walletAddress.replace('0x', '')
+        }, 'latest'],
+        id: 1
+      })
+    });
+    const result = await response.json();
+    if (result.result) {
+      const balanceWei = BigInt(result.result);
+      currentWldBalance = Number(balanceWei) / 1e18;
+      
+      // UI element jahan balance dikhta hai use update karein
+      const balanceElements = document.querySelectorAll('.wld-balance, #wld-balance, .balance-text');
+      balanceElements.forEach(el => {
+        el.innerText = currentWldBalance.toFixed(2);
+      });
+      console.log("Real WLD Balance Updated:", currentWldBalance);
+    }
+  } catch (error) {
+    console.error("Failed to fetch balance:", error);
+  }
+}
