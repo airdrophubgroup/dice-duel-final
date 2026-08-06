@@ -601,7 +601,7 @@ function showAuthBanner(msg){
 async function performWalletAuth(silent = false){
   if (!MiniKit.isInstalled()) return false;
   
-  // 1. Direct MiniKit user object check
+  // 1. Check if user wallet address is already available in MiniKit session
   if (MiniKit.user && MiniKit.user.walletAddress) {
     realWorldIdUser = true;
     const address = MiniKit.user.walletAddress;
@@ -610,21 +610,20 @@ async function performWalletAuth(silent = false){
     return true;
   }
 
-  // 2. Safe MiniKit walletAuth command execution
+  // 2. Correct v2/v3 MiniKit walletAuth syntax
   try {
-    const res = await MiniKit.commandsAsync.walletAuth({
+    const result = await MiniKit.walletAuth({
       nonce: randomAlphaNumeric(24),
-      requestId: 'req_login_' + Date.now(),
+      statement: 'Sign in to TNV Duel Arena.',
       expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       notBefore: new Date(Date.now() - 60 * 1000),
-      statement: 'Sign in to TNV Duel Arena.',
     });
 
-    const payload = res?.finalPayload;
-    if (payload?.status === 'success' && payload?.address){
+    if (result && result.data && result.data.address) {
       realWorldIdUser = true;
-      const username = await resolveUsername(payload.address);
-      setUserData(username, payload.address);
+      const address = result.data.address;
+      const username = await resolveUsername(address);
+      setUserData(username, address);
       return true;
     }
 
