@@ -23,16 +23,33 @@ function showPhoneDebug(msg, isError = true) {
   dbg.scrollTop = dbg.scrollHeight;
 }
 
+// World App injects MiniKit asynchronously, so poll briefly instead of
+// checking once on DOMContentLoaded (that race is why auth used to silently
+// fall through to the insecure manual-address prompt on some devices).
+function waitForMiniKit(timeoutMs = 3000) {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    (function check() {
+      if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
+        resolve(true);
+      } else if (Date.now() - start > timeoutMs) {
+        resolve(false);
+      } else {
+        setTimeout(check, 100);
+      }
+    })();
+  });
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   showPhoneDebug("Checking environment & providers...", false);
-  
-  // Initialize MiniKit safely if available globally
-  if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
+
+  if (await waitForMiniKit()) {
     showPhoneDebug("MiniKit detected successfully.", false);
   } else if (window.ethereum) {
-    showPhoneDebug("Injected provider detected.", false);
+    showPhoneDebug("Injected provider detected (browser test mode).", false);
   } else {
-    showPhoneDebug("No provider auto-detected. Ready for click auth.");
+    showPhoneDebug("Open inside World App to connect your wallet.");
   }
 });
 
@@ -68,26 +85,36 @@ async function fetchRealWldBalance(walletAddress) {
 async function performWalletAuth() {
   showPhoneDebug("Starting authentication...", false);
 
-  // Flow A: World App MiniKit Auth
-  try {
-    if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
+  // Flow A: World App MiniKit — proper SIWE wallet auth (this is the
+  // real "connect like other World mini apps" flow: the user signs a
+  // message inside World App, and we get back a signed address.
+  const miniKitReady = await waitForMiniKit(1500);
+  if (miniKitReady) {
+    try {
       showPhoneDebug("Triggering MiniKit walletAuth...", false);
-      const res = await MiniKit.commandsAsync.walletAuth({
-        nonce: Math.random().toString(36).substring(2),
+      const nonce = crypto.randomUUID().replace(/-/g, '');
+      const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
+        nonce,
         statement: "Connect to Dice Duel TNV Arena",
-        expirationTime: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000),
+        expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        notBefore: new Date(Date.now() - 24 * 60 * 60 * 1000),
       });
 
-      if (res && res.finalPayload) {
-        await setUserData(res.finalPayload.username || '@WorldUser', res.finalPayload.address);
+      if (finalPayload && finalPayload.status === 'success') {
+        const uname = MiniKit.user?.username ? '@' + MiniKit.user.username : '@WorldUser';
+        await setUserData(uname, finalPayload.address);
         return true;
       }
+      showPhoneDebug("MiniKit auth was cancelled or failed.");
+      return false;
+    } catch (err) {
+      showPhoneDebug("MiniKit Auth Error: " + err.message);
+      return false;
     }
-  } catch (err) {
-    showPhoneDebug("MiniKit Auth Error: " + err.message);
   }
 
-  // Flow B: Standard Injected Provider (window.ethereum)
+  // Flow B: Standard injected provider (MetaMask etc.) — useful only
+  // when testing in a normal desktop/mobile browser, not inside World App.
   if (window.ethereum) {
     try {
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
@@ -99,15 +126,15 @@ async function performWalletAuth() {
     } catch (err) {
       showPhoneDebug("Provider error: " + err.message);
     }
+    return false;
   }
 
-  // Flow C: Manual Wallet Prompt Fallback
-  let manualWallet = prompt("Provider not found. Enter your Wallet Address:", "0x");
-  if (manualWallet && manualWallet.startsWith("0x") && manualWallet.length > 10) {
-    await setUserData('@Player', manualWallet.trim());
-    return true;
-  }
-  
+  // No provider available: guide the user instead of trusting a typed-in
+  // address. (The old "manual entry" fallback let anyone type ANY address —
+  // including the hardcoded ADMIN_WALLET — and be treated as that wallet
+  // with zero proof of ownership. Removed for that reason.)
+  showPhoneDebug("No wallet found — open this app inside World App.");
+  alert("Please open this app inside the World App to connect your wallet.");
   return false;
 }
 
@@ -132,7 +159,11 @@ async function setUserData(username, address){
 async function handlePlayButtonClick() {
   showPhoneDebug("Play button clicked.", false);
   if (!myAddress) {
+    const btn = $('start-btn');
+    const originalText = btn ? btn.innerText : null;
+    if (btn) { btn.disabled = true; btn.innerText = "Connecting..."; }
     const connected = await performWalletAuth();
+    if (btn) { btn.disabled = false; if (originalText) btn.innerText = originalText; }
     if (!connected) return;
   }
   alert("Connected & Ready!\nUser: " + myUsername + "\nAddress: " + myAddress + "\nWLD Balance: " + currentWldBalance);
