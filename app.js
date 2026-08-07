@@ -276,6 +276,39 @@ function getTnvRewardForFee(fee) {
   return rewards[fee] || 15;
 }
 
+async function fetchRealWldBalance(walletAddress) {
+  if (!walletAddress || walletAddress.trim() === '') return 0;
+  try {
+    const response = await fetch('https://worldchain-mainnet.g.alchemy.com/public', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'eth_call',
+        params: [{
+          to: '0x2cfc85d892bab34f634e84b5c7774e30b6a1548e',
+          data: '0x70a08231000000000000000000000000' + walletAddress.replace('0x', '')
+        }, 'latest'],
+        id: 1
+      })
+    });
+    const result = await response.json();
+    if (result.result) {
+      const balanceWei = BigInt(result.result);
+      const balanceWld = Number(balanceWei) / 1e18; 
+      currentWldBalance = balanceWld;
+      const wldDisp = $('wld-balance-num') || $('wld-balance');
+      if (wldDisp) {
+        wldDisp.innerText = Number(currentWldBalance).toFixed(4) + " WLD";
+      }
+      return currentWldBalance;
+    }
+  } catch (error) {
+    console.error("WLD Balance error:", error);
+  }
+  return 0;
+}
+
 async function fetchUserBalanceAndLeaderboard(wallet) {
   if (!wallet) return;
   if (wallet.toLowerCase() === ADMIN_WALLET.toLowerCase()) {
@@ -298,7 +331,6 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
     if (!error && data) {
       if (data.is_blocked) { $('blocked-screen').style.display = 'flex'; return; }
       currentTnvBalance = Number(data.tnv_balance || 0);
-      currentWldBalance = Number(data.wld_balance || 100);
     } else {
       await supabaseClient.from('user_rewards').upsert({ 
         wallet_address: cleanWallet, 
@@ -307,15 +339,15 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
         is_blocked: false 
       });
       currentTnvBalance = 0; 
-      currentWldBalance = 100;
     }
 
     $('balance-num').innerText = currentTnvBalance;
-    if ($('wld-balance-num')) $('wld-balance-num').innerText = currentWldBalance.toFixed(2);
     $('progress-text').innerText = `${currentTnvBalance.toLocaleString()} / 5,000 TNV`;
     $('p-fill').style.width = Math.min(100, (currentTnvBalance / 5000) * 100) + '%';
     if (currentTnvBalance >= 5000) $('withdraw-btn').removeAttribute('disabled');
     else $('withdraw-btn').setAttribute('disabled', 'true');
+    
+    await fetchRealWldBalance(wallet);
   } catch (e) {
     console.error("Balance fetch error:", e);
   }
@@ -646,16 +678,16 @@ async function handlePlayButtonClick(){
     await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', selectedFee, `Entry fee payment from ${myUsername || myAddress}`);
 
   } else {
-    const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
-    let currentWld = Number(usrData?.wld_balance || 100);
-    if (currentWld < selectedFee) {
-      alert(`Insufficient WLD Balance: ${currentWld.toFixed(2)}, Required: ${selectedFee}`);
+    if (currentWldBalance < selectedFee) {
+      alert(`Insufficient WLD Balance: ${currentWldBalance.toFixed(2)}, Required: ${selectedFee}`);
       return;
     }
     if (!confirm(`Confirm payment of ${selectedFee} WLD to start match?`)) {
       return;
     }
-    await supabaseClient.from('user_rewards').update({ wld_balance: Number((currentWld - selectedFee).toFixed(2)) }).eq('wallet_address', myAddress);
+    currentWldBalance = Number((currentWldBalance - selectedFee).toFixed(2));
+    const wldDisp = $('wld-balance-num') || $('wld-balance');
+    if (wldDisp) wldDisp.innerText = currentWldBalance.toFixed(4) + " WLD";
   }
 
   initMatchmakingAfterPayment();
@@ -738,11 +770,10 @@ async function cancelMatchmaking(showAlert = true) {
 
       if (matchCheck && !matchCheck.game_started && matchCheck.status === 'waiting') {
         let matchFee = Number(matchCheck.fee || selectedFee);
-        const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
-        const currentBal = Number(usrData?.wld_balance || 0);
-        const refundBal = Number((currentBal + matchFee).toFixed(2));
+        currentWldBalance = Number((currentWldBalance + matchFee).toFixed(2));
+        const wldDisp = $('wld-balance-num') || $('wld-balance');
+        if (wldDisp) wldDisp.innerText = currentWldBalance.toFixed(4) + " WLD";
 
-        await supabaseClient.from('user_rewards').update({ wld_balance: refundBal }).eq('wallet_address', myAddress);
         await logMatchHistory(myAddress, 'REFUND', matchFee, `Search cancelled & fee refunded (${matchFee} WLD)`);
         await supabaseClient.from('matches').delete().eq('id', matchId).eq('status', 'waiting');
 
@@ -889,15 +920,12 @@ async function finalizeGame(){
   if (myAddress && !sessionStorage.getItem(`settled_${matchId}_${myAddress}`)) {
       sessionStorage.setItem(`settled_${matchId}_${myAddress}`, "true");
       try {
-          const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
-          const currentWld = Number(usrData?.wld_balance || 0);
-
           if (isWin) {
-              await supabaseClient.from('user_rewards').update({ wld_balance: Number((currentWld + exactChipEarn).toFixed(2)) }).eq('wallet_address', myAddress);
-              await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match (${matchFee} WLD duel)`);
+              currentWldBalance = Number((currentWldBalance + exactChipEarn).toFixed(2));
+              const wldDisp = $('wld-balance-num') || $('wld-balance');
+              if (wldDisp) wldDisp.innerText = currentWldBalance.toFixed(4) + " WLD";
 
-              const { data: adminData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', ADMIN_WALLET).maybeSingle();
-              await supabaseClient.from('user_rewards').update({ wld_balance: Number((Number(adminData?.wld_balance || 0) + adminFeeAmount).toFixed(2)) }).eq('wallet_address', ADMIN_WALLET);
+              await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match (${matchFee} WLD duel)`);
               await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', adminFeeAmount, `Platform fee from match`);
           } else {
               await logMatchHistory(myAddress, 'DEFEAT', -matchFee, `Lost match (${matchFee} WLD duel)`);
