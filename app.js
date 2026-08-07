@@ -7,9 +7,7 @@ const ADMIN_WALLET = "0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1";
 const supabaseClient = createClient(SB_URL, SB_KEY);
 
 let myAddress = "", myUsername = "";
-let selectedFee = 0.5;
 let currentWldBalance = 0;
-let currentTnvBalance = 0;
 
 const $ = (id) => document.getElementById(id);
 
@@ -26,22 +24,17 @@ function showPhoneDebug(msg, isError = true) {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
-  showPhoneDebug("App loaded with Direct Provider mode.", false);
+  showPhoneDebug("Checking environment & providers...", false);
   
-  // Check if window.ethereum (World App Injected Provider) is available
-  if (window.ethereum) {
-    try {
-      const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-      if (accounts && accounts.length > 0) {
-        await setUserData('@WorldUser', accounts[0]);
-      } else {
-        if ($('landingHint')) $('landingHint').textContent = 'Tap Play Now to Connect Wallet';
-      }
-    } catch (e) {
-      showPhoneDebug("Auto-detect error: " + e.message);
-    }
+  // 1. Check for MiniKit
+  if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
+    showPhoneDebug("MiniKit detected successfully.", false);
+  } 
+  // 2. Check for Injected Provider
+  else if (window.ethereum) {
+    showPhoneDebug("Injected provider detected.", false);
   } else {
-    showPhoneDebug("Injected provider not found yet. Click Play Now to connect.");
+    showPhoneDebug("No provider auto-detected. Ready for click auth.");
   }
 });
 
@@ -74,9 +67,56 @@ async function fetchRealWldBalance(walletAddress) {
   return 0;
 }
 
+async function performWalletAuth() {
+  showPhoneDebug("Starting authentication...", false);
+
+  // Flow A: World App MiniKit Auth
+  try {
+    if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
+      showPhoneDebug("Triggering MiniKit walletAuth...", false);
+      const res = await MiniKit.commandsAsync.walletAuth({
+        nonce: Math.random().toString(36).substring(2),
+        statement: "Connect to Dice Duel TNV Arena",
+        expirationTime: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000),
+      });
+
+      if (res && res.finalPayload) {
+        await setUserData(res.finalPayload.username || '@WorldUser', res.finalPayload.address);
+        return true;
+      }
+    }
+  } catch (err) {
+    showPhoneDebug("MiniKit Auth Error: " + err.message);
+  }
+
+  // Flow B: Standard Injected Provider (window.ethereum)
+  if (window.ethereum) {
+    try {
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      if (accounts && accounts.length > 0) {
+        let shortAddr = accounts[0].substring(0, 6) + '...' + accounts[0].substring(38);
+        await setUserData('@User_' + shortAddr, accounts[0]);
+        return true;
+      }
+    } catch (err) {
+      showPhoneDebug("Provider error: " + err.message);
+    }
+  }
+
+  // Flow C: Manual Wallet Prompt Fallback
+  let manualWallet = prompt("Provider not found. Enter your Wallet Address:", "0x");
+  if (manualWallet && manualWallet.startsWith("0x") && manualWallet.length > 10) {
+    await setUserData('@Player', manualWallet.trim());
+    return true;
+  }
+  
+  return false;
+}
+
 async function setUserData(username, address){
   myUsername = username;
   myAddress = address ? address.toLowerCase() : address;
+  
   if ($('display-username')) $('display-username').innerText = myUsername;
   if ($('landingHint')) $('landingHint').textContent = 'Wallet Connected Successfully';
   
@@ -87,33 +127,8 @@ async function setUserData(username, address){
   if (wldDisp) {
     wldDisp.innerText = Number(wldBal).toFixed(4) + " WLD";
   }
-  showPhoneDebug("Wallet Connected: " + myAddress + " | WLD: " + wldBal, false);
-}
-
-async function performWalletAuth(){
-  showPhoneDebug("Requesting wallet connection...", false);
   
-  if (window.ethereum) {
-    try {
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      if (accounts && accounts.length > 0) {
-        await setUserData('@WorldUser', accounts[0]);
-        return true;
-      }
-    } catch (err) {
-      showPhoneDebug("Request accounts error: " + err.message);
-    }
-  }
-
-  // Fallback direct prompt if injected provider is restricted in webview
-  let manualWallet = prompt("Enter your World App Wallet Address:", "0x");
-  if (manualWallet && manualWallet.startsWith("0x") && manualWallet.length > 10) {
-    await setUserData('@Player', manualWallet.trim());
-    return true;
-  }
-  
-  alert("Please open inside World App or provide a valid wallet address.");
-  return false;
+  showPhoneDebug("Connected: " + myAddress + " | WLD: " + wldBal, false);
 }
 
 async function handlePlayButtonClick() {
@@ -122,7 +137,7 @@ async function handlePlayButtonClick() {
     const connected = await performWalletAuth();
     if (!connected) return;
   }
-  alert("Connected & Ready! Address: " + myAddress + "\nWLD Balance: " + currentWldBalance);
+  alert("Connected & Ready!\nUser: " + myUsername + "\nAddress: " + myAddress + "\nWLD Balance: " + currentWldBalance);
 }
 
 if ($('start-btn')) $('start-btn').addEventListener('click', handlePlayButtonClick);
