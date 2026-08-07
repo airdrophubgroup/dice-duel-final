@@ -14,7 +14,7 @@ let gameActive = false, matchmakingActive = false, channel, globalChatChannel, m
 let selectedFee = 0.5;
 let realWorldIdUser = false; 
 let currentTnvBalance = 0;
-let currentWldBalance = 100;
+let currentWldBalance = 0;
 
 let myTurnsLeft = 15;
 let isTimingLocked = false;
@@ -30,38 +30,22 @@ window.addEventListener('DOMContentLoaded', async () => {
     MiniKit.install(WORLD_APP_ID); 
   } catch(e) {}
 
+  // Strict World App Check - No Simulation Fallback
   if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
     if ($('landingHint')) $('landingHint').textContent = 'World App detected — signing in...';
     
     try {
       await Promise.race([
         performWalletAuth(true),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Auth timeout')), 4000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Auth timeout')), 5000))
       ]);
     } catch(err) {
-      let fakeAddress = localStorage.getItem("myAddress");
-      let fakeUsername = localStorage.getItem("myUsername");
-      if (!fakeAddress || fakeAddress.toLowerCase() === ADMIN_WALLET.toLowerCase()) {
-        const randomHex = Math.floor(Math.random() * 100000).toString(16);
-        fakeAddress = '0xDEV000000000000000000000000000' + randomHex;
-        fakeUsername = '@Guest_' + randomHex;
-        localStorage.setItem("myAddress", fakeAddress);
-        localStorage.setItem("myUsername", fakeUsername);
-      }
-      setUserData(fakeUsername || '@Guest', fakeAddress);
+      if ($('landingHint')) $('landingHint').textContent = 'Sign-in failed. Please restart inside World App.';
     }
   } else {
-    if ($('landingHint')) $('landingHint').textContent = 'Desktop Mode (Simulation active)';
-    let fakeAddress = localStorage.getItem("myAddress");
-    let fakeUsername = localStorage.getItem("myUsername");
-    if (!fakeAddress || !fakeAddress.startsWith('0xDEV')) {
-      const randomHex = Math.floor(Math.random() * 10000).toString(16);
-      fakeAddress = '0xDEV' + randomHex + '94bfb6a1';
-      fakeUsername = '@TestPC_' + randomHex;
-      localStorage.setItem("myAddress", fakeAddress);
-      localStorage.setItem("myUsername", fakeUsername);
-    }
-    setUserData(fakeUsername || '@TestPC', fakeAddress);
+    if ($('landingHint')) $('landingHint').textContent = 'Error: Please open this app inside World App.';
+    alert("Please open this app inside the World App.");
+    return;
   }
 
   if (myAddress) {
@@ -324,7 +308,7 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
     
     const { data, error } = await supabaseClient
       .from('user_rewards')
-      .select('tnv_balance, wld_balance, is_blocked')
+      .select('tnv_balance, is_blocked')
       .eq('wallet_address', cleanWallet)
       .maybeSingle();
   
@@ -335,7 +319,6 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
       await supabaseClient.from('user_rewards').upsert({ 
         wallet_address: cleanWallet, 
         tnv_balance: 0, 
-        wld_balance: 100, 
         is_blocked: false 
       });
       currentTnvBalance = 0; 
@@ -502,7 +485,7 @@ async function fetchLeaderboard() {
     let html = '';
     data.forEach((row, index) => {
       let rankClass = index === 0 ? 'top-1' : (index === 1 ? 'top-2' : (index === 2 ? 'top-3' : ''));
-      let shortWallet = row.wallet_address.startsWith('0xDEV') ? 'Dev_' + row.wallet_address.slice(-4) : row.wallet_address.slice(0, 6) + '...' + row.wallet_address.slice(-4);
+      let shortWallet = row.wallet_address.slice(0, 6) + '...' + row.wallet_address.slice(-4);
       html += `<div class="lb-item ${rankClass}"><span class="lb-rank">#${index + 1}</span><span class="lb-user">${shortWallet}</span><span class="lb-score">${row.tnv_balance} TNV</span></div>`;
     });
     lbContainer.innerHTML = html;
@@ -635,61 +618,47 @@ async function performWalletAuth(silent = false){
 async function handlePlayButtonClick(){
   if (matchmakingActive) return;
 
-  if (MiniKit.isInstalled()) {
-    if (!myAddress || !realWorldIdUser) {
-      const signedIn = await performWalletAuth(false);
-      if (!signedIn) return;
-    }
-  } else if (!myAddress) {
+  if (!MiniKit.isInstalled()) {
+    alert("Please open this app inside the World App.");
     return;
   }
 
-  if (MiniKit.isInstalled()) {
-    $('start-btn').disabled = true;
-
-    let paymentSuccessful = false;
-    try {
-      const paymentPayload = {
-        reference: 'ref_' + randomAlphaNumeric(16),
-        to: ADMIN_WALLET,
-        tokens: [
-          {
-            symbol: Tokens.WLD,
-            token_amount: tokenToDecimals(selectedFee, Tokens.WLD).toString(),
-          },
-        ],
-        description: `TNV Duel Arena Bet: ${selectedFee} WLD`,
-      };
-
-      const { finalPayload } = await MiniKit.commandsAsync.pay(paymentPayload);
-      paymentSuccessful = (finalPayload?.status === 'success');
-
-    } catch (err) {
-      console.warn("Payment error:", err);
-      paymentSuccessful = false;
-    }
-
-    if (!paymentSuccessful) {
-      alert("Payment was cancelled or failed.");
-      $('start-btn').disabled = false;
-      return;
-    }
-
-    await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', selectedFee, `Entry fee payment from ${myUsername || myAddress}`);
-
-  } else {
-    if (currentWldBalance < selectedFee) {
-      alert(`Insufficient WLD Balance: ${currentWldBalance.toFixed(2)}, Required: ${selectedFee}`);
-      return;
-    }
-    if (!confirm(`Confirm payment of ${selectedFee} WLD to start match?`)) {
-      return;
-    }
-    currentWldBalance = Number((currentWldBalance - selectedFee).toFixed(2));
-    const wldDisp = $('wld-balance-num') || $('wld-balance');
-    if (wldDisp) wldDisp.innerText = currentWldBalance.toFixed(4) + " WLD";
+  if (!myAddress || !realWorldIdUser) {
+    const signedIn = await performWalletAuth(false);
+    if (!signedIn) return;
   }
 
+  $('start-btn').disabled = true;
+
+  let paymentSuccessful = false;
+  try {
+    const paymentPayload = {
+      reference: 'ref_' + randomAlphaNumeric(16),
+      to: ADMIN_WALLET,
+      tokens: [
+        {
+          symbol: Tokens.WLD,
+          token_amount: tokenToDecimals(selectedFee, Tokens.WLD).toString(),
+        },
+      ],
+      description: `TNV Duel Arena Bet: ${selectedFee} WLD`,
+    };
+
+    const { finalPayload } = await MiniKit.commandsAsync.pay(paymentPayload);
+    paymentSuccessful = (finalPayload?.status === 'success');
+
+  } catch (err) {
+    console.warn("Payment error:", err);
+    paymentSuccessful = false;
+  }
+
+  if (!paymentSuccessful) {
+    alert("Payment was cancelled or failed.");
+    $('start-btn').disabled = false;
+    return;
+  }
+
+  await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', selectedFee, `Entry fee payment from ${myUsername || myAddress}`);
   initMatchmakingAfterPayment();
 }
 
@@ -770,14 +739,10 @@ async function cancelMatchmaking(showAlert = true) {
 
       if (matchCheck && !matchCheck.game_started && matchCheck.status === 'waiting') {
         let matchFee = Number(matchCheck.fee || selectedFee);
-        currentWldBalance = Number((currentWldBalance + matchFee).toFixed(2));
-        const wldDisp = $('wld-balance-num') || $('wld-balance');
-        if (wldDisp) wldDisp.innerText = currentWldBalance.toFixed(4) + " WLD";
-
-        await logMatchHistory(myAddress, 'REFUND', matchFee, `Search cancelled & fee refunded (${matchFee} WLD)`);
+        await logMatchHistory(myAddress, 'REFUND', matchFee, `Search cancelled & fee refund noted (${matchFee} WLD)`);
         await supabaseClient.from('matches').delete().eq('id', matchId).eq('status', 'waiting');
 
-        if (showAlert) alert(`Search cancelled. ${matchFee} WLD entry fee has been refunded.`);
+        if (showAlert) alert(`Search cancelled.`);
       } else {
         if (showAlert) alert(`Search cancelled.`);
       }
@@ -921,10 +886,6 @@ async function finalizeGame(){
       sessionStorage.setItem(`settled_${matchId}_${myAddress}`, "true");
       try {
           if (isWin) {
-              currentWldBalance = Number((currentWldBalance + exactChipEarn).toFixed(2));
-              const wldDisp = $('wld-balance-num') || $('wld-balance');
-              if (wldDisp) wldDisp.innerText = currentWldBalance.toFixed(4) + " WLD";
-
               await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match (${matchFee} WLD duel)`);
               await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', adminFeeAmount, `Platform fee from match`);
           } else {
