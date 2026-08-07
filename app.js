@@ -30,7 +30,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     MiniKit.install(WORLD_APP_ID); 
   } catch(e) {}
 
-  // STRICT CHECK: Agar World App / MiniKit installed nahi hai, toh saari UI block kar do
   if (typeof MiniKit === 'undefined' || !MiniKit.isInstalled()) {
     document.body.innerHTML = `
       <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#0b0b16; color:#fff; font-family:'Space Grotesk',sans-serif; text-align:center; padding:20px;">
@@ -263,6 +262,7 @@ function getTnvRewardForFee(fee) {
   return rewards[fee] || 15;
 }
 
+// Fetch real WLD balance from World Chain and update database as well
 async function fetchRealWldBalance(walletAddress) {
   if (!walletAddress || walletAddress.trim() === '') return 0;
   try {
@@ -284,10 +284,18 @@ async function fetchRealWldBalance(walletAddress) {
       const balanceWei = BigInt(result.result);
       const balanceWld = Number(balanceWei) / 1e18; 
       currentWldBalance = balanceWld;
+      
       const wldDisp = $('wld-balance-num') || $('wld-balance');
       if (wldDisp) {
         wldDisp.innerText = Number(currentWldBalance).toFixed(4) + " WLD";
       }
+
+      // Sync balance to Supabase database for record-keeping
+      await supabaseClient
+        .from('user_rewards')
+        .update({ wld_balance: currentWldBalance })
+        .eq('wallet_address', walletAddress.toLowerCase());
+
       return currentWldBalance;
     }
   } catch (error) {
@@ -311,28 +319,35 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
     
     const { data, error } = await supabaseClient
       .from('user_rewards')
-      .select('tnv_balance, is_blocked')
+      .select('tnv_balance, wld_balance, is_blocked')
       .eq('wallet_address', cleanWallet)
       .maybeSingle();
   
     if (!error && data) {
       if (data.is_blocked) { $('blocked-screen').style.display = 'flex'; return; }
       currentTnvBalance = Number(data.tnv_balance || 0);
+      currentWldBalance = Number(data.wld_balance || 0);
     } else {
       await supabaseClient.from('user_rewards').upsert({ 
         wallet_address: cleanWallet, 
         tnv_balance: 0, 
+        wld_balance: 0, 
         is_blocked: false 
       });
       currentTnvBalance = 0; 
+      currentWldBalance = 0;
     }
 
     $('balance-num').innerText = currentTnvBalance;
+    const wldDisp = $('wld-balance-num') || $('wld-balance');
+    if (wldDisp) wldDisp.innerText = Number(currentWldBalance).toFixed(4) + " WLD";
+
     $('progress-text').innerText = `${currentTnvBalance.toLocaleString()} / 5,000 TNV`;
     $('p-fill').style.width = Math.min(100, (currentTnvBalance / 5000) * 100) + '%';
     if (currentTnvBalance >= 5000) $('withdraw-btn').removeAttribute('disabled');
     else $('withdraw-btn').setAttribute('disabled', 'true');
     
+    // Immediately fetch real live balance from blockchain and update UI/DB
     await fetchRealWldBalance(wallet);
   } catch (e) {
     console.error("Balance fetch error:", e);
@@ -663,7 +678,13 @@ async function handlePlayButtonClick(){
     return;
   }
 
-  await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', selectedFee, `Entry fee payment from ${myUsername || myAddress}`);
+  // Log fee and update records in database history
+  await logMatchHistory(myAddress, 'DEFEAT', -selectedFee, `Entry fee paid for ${selectedFee} WLD duel`);
+  await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', selectedFee, `Platform fee from match`);
+  
+  // Refresh real balance after payment deduction
+  await fetchRealWldBalance(myAddress);
+
   initMatchmakingAfterPayment();
 }
 
@@ -893,7 +914,7 @@ async function finalizeGame(){
       sessionStorage.setItem(`settled_${matchId}_${myAddress}`, "true");
       try {
           if (isWin) {
-              await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match (${matchFee} WLD duel)`);
+              await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match payout (${exactChipEarn} WLD)`);
               await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', adminFeeAmount, `Platform fee from match`);
           } else {
               await logMatchHistory(myAddress, 'DEFEAT', -matchFee, `Lost match (${matchFee} WLD duel)`);
@@ -933,6 +954,7 @@ async function finalizeGame(){
   }
 
   $('result-overlay').style.display = 'flex';
+  await fetchRealWldBalance(myAddress);
   fetchUserBalanceAndLeaderboard(myAddress);
 }
 
