@@ -26,12 +26,10 @@ function showPhoneDebug(msg, isError = true) {
 window.addEventListener('DOMContentLoaded', async () => {
   showPhoneDebug("Checking environment & providers...", false);
   
-  // 1. Check for MiniKit
+  // Initialize MiniKit safely if available globally
   if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
     showPhoneDebug("MiniKit detected successfully.", false);
-  } 
-  // 2. Check for Injected Provider
-  else if (window.ethereum) {
+  } else if (window.ethereum) {
     showPhoneDebug("Injected provider detected.", false);
   } else {
     showPhoneDebug("No provider auto-detected. Ready for click auth.");
