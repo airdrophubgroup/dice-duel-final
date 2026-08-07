@@ -262,7 +262,6 @@ function getTnvRewardForFee(fee) {
   return rewards[fee] || 15;
 }
 
-// Fetch real WLD balance from World Chain and update database as well
 async function fetchRealWldBalance(walletAddress) {
   if (!walletAddress || walletAddress.trim() === '') return 0;
   try {
@@ -285,12 +284,13 @@ async function fetchRealWldBalance(walletAddress) {
       const balanceWld = Number(balanceWei) / 1e18; 
       currentWldBalance = balanceWld;
       
-      const wldDisp = $('wld-balance-num') || $('wld-balance');
-      if (wldDisp) {
-        wldDisp.innerText = Number(currentWldBalance).toFixed(4) + " WLD";
-      }
+      const wldDispNum = $('wld-balance-num');
+      const wldDispText = $('wld-balance');
+      
+      const formattedVal = Number(currentWldBalance).toFixed(4) + " WLD";
+      if (wldDispNum) wldDispNum.innerText = Number(currentWldBalance).toFixed(4);
+      if (wldDispText) wldDispText.innerText = formattedVal;
 
-      // Sync balance to Supabase database for record-keeping
       await supabaseClient
         .from('user_rewards')
         .update({ wld_balance: currentWldBalance })
@@ -347,7 +347,6 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
     if (currentTnvBalance >= 5000) $('withdraw-btn').removeAttribute('disabled');
     else $('withdraw-btn').setAttribute('disabled', 'true');
     
-    // Immediately fetch real live balance from blockchain and update UI/DB
     await fetchRealWldBalance(wallet);
   } catch (e) {
     console.error("Balance fetch error:", e);
@@ -678,11 +677,9 @@ async function handlePlayButtonClick(){
     return;
   }
 
-  // Log fee and update records in database history
   await logMatchHistory(myAddress, 'DEFEAT', -selectedFee, `Entry fee paid for ${selectedFee} WLD duel`);
   await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', selectedFee, `Platform fee from match`);
   
-  // Refresh real balance after payment deduction
   await fetchRealWldBalance(myAddress);
 
   initMatchmakingAfterPayment();
