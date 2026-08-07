@@ -671,8 +671,7 @@ async function handlePlayButtonClick(){
     paymentSuccessful = false;
   }
 
-if (!paymentSuccessful) {
-    // Default alert ki jagah Neon Glowing Red Warning display karne ke liye
+  if (!paymentSuccessful) {
     let existingWarning = document.getElementById('neon-payment-warning');
     if (!existingWarning) {
       existingWarning = document.createElement('div');
@@ -691,6 +690,22 @@ if (!paymentSuccessful) {
     $('start-btn').disabled = false;
     return;
   }
+
+  let existingSuccess = document.getElementById('neon-payment-success');
+  if (!existingSuccess) {
+    existingSuccess = document.createElement('div');
+    existingSuccess.id = 'neon-payment-success';
+    existingSuccess.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:rgba(5,15,10,0.95); border:2px solid #29d9c2; color:#29d9c2; padding:14px 20px; border-radius:12px; font-family:"Space Grotesk", sans-serif; font-size:13px; font-weight:700; text-align:center; box-shadow:0 0 20px rgba(41,217,194,0.6); backdrop-filter:blur(8px); transition:opacity 0.3s ease;';
+    document.body.appendChild(existingSuccess);
+  }
+  existingSuccess.innerHTML = '✨ Payment Successful!';
+  existingSuccess.style.opacity = '1';
+
+  setTimeout(() => {
+    existingSuccess.style.opacity = '0';
+    setTimeout(() => { existingSuccess.remove(); }, 300);
+  }, 3000);
+
   await logMatchHistory(myAddress, 'DEFEAT', -selectedFee, `Entry fee paid for ${selectedFee} WLD duel`);
   await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', selectedFee, `Platform fee from match`);
   
