@@ -30,22 +30,26 @@ window.addEventListener('DOMContentLoaded', async () => {
     MiniKit.install(WORLD_APP_ID); 
   } catch(e) {}
 
-  // Strict World App / MiniKit check: No fake fallback allowed
-  if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
-    if ($('landingHint')) $('landingHint').textContent = 'World App detected — signing in...';
-    
-    try {
-      await Promise.race([
-        performWalletAuth(true),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Auth timeout')), 5000))
-      ]);
-    } catch(err) {
-      if ($('landingHint')) $('landingHint').textContent = 'Sign-in failed. Please restart inside World App.';
-    }
-  } else {
-    if ($('landingHint')) $('landingHint').textContent = 'Access Denied: Open inside World App.';
-    alert("Please open this app strictly inside the World App.");
+  // STRICT CHECK: Agar World App / MiniKit installed nahi hai, toh saari UI block kar do
+  if (typeof MiniKit === 'undefined' || !MiniKit.isInstalled()) {
+    document.body.innerHTML = `
+      <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#0b0b16; color:#fff; font-family:'Space Grotesk',sans-serif; text-align:center; padding:20px;">
+        <h2 style="color:#ff5f6d; margin-bottom:10px;">⚠️ Access Restricted</h2>
+        <p style="color:#a0a0b0; font-size:14px; max-width:320px;">This mini app can only be opened and played directly inside the <strong>World App</strong>.</p>
+      </div>
+    `;
     return;
+  }
+
+  if ($('landingHint')) $('landingHint').textContent = 'World App detected — signing in...';
+  
+  try {
+    await Promise.race([
+      performWalletAuth(true),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Auth timeout')), 5000))
+    ]);
+  } catch(err) {
+    if ($('landingHint')) $('landingHint').textContent = 'Sign-in failed. Please restart inside World App.';
   }
 
   if (myAddress) {
@@ -191,6 +195,7 @@ function renderChatMessageUI(sender, message, senderAddress, timestamp) {
 }
 
 window.openChatModal = function() {
+  if (!MiniKit.isInstalled()) return;
   $('chat-modal').style.display = 'flex';
   const container = $('chat-messages-container');
   container.scrollTop = container.scrollHeight;
@@ -199,6 +204,7 @@ window.openChatModal = function() {
 window.closeChatModal = function() { $('chat-modal').style.display = 'none'; };
 
 window.sendChatMessage = function() {
+  if (!MiniKit.isInstalled()) return;
   const input = $('chat-input-field');
   const msg = input.value.trim();
   if (!msg) return;
@@ -233,6 +239,7 @@ function playVictorySound() {
 }
 
 window.toggleSupportDropdown = function(event) {
+  if (!MiniKit.isInstalled()) return;
   event.stopPropagation();
   const dropdown = $('support-dropdown');
   dropdown.classList.toggle('show');
@@ -489,6 +496,7 @@ async function fetchLeaderboard() {
 }
 
 window.openWithdrawModal = function() {
+  if (!MiniKit.isInstalled()) return;
   if (currentTnvBalance < 5000) { alert('Min 5,000 TNV required!'); return; }
   $('modal-bal').innerText = currentTnvBalance;
   $('withdraw-input-container').style.display = 'block';
@@ -499,6 +507,7 @@ window.openWithdrawModal = function() {
 window.closeWithdrawModal = function() { $('withdraw-modal').style.display = 'none'; };
 
 window.submitWithdrawRequest = async function() {
+  if (!MiniKit.isInstalled()) return;
   let withdrawAmt = Number($('withdraw-amount-input').value);
   if (isNaN(withdrawAmt) || withdrawAmt < 5000 || withdrawAmt > currentTnvBalance) { alert('Invalid amount'); return; }
   await supabaseClient.from('withdraw_requests').insert({ wallet_address: myAddress, amount: withdrawAmt, status: 'pending' });
@@ -659,6 +668,7 @@ async function handlePlayButtonClick(){
 }
 
 function selectFee(amount, element){
+  if (!MiniKit.isInstalled()) return;
   if (matchmakingActive) return;
   selectedFee = parseFloat(amount);
   document.querySelectorAll('.fee-chip').forEach(chip => chip.classList.remove('active'));
@@ -808,6 +818,7 @@ async function runTimer(startTime = null){
 }
 
 async function rollDice(){
+  if (!MiniKit.isInstalled()) return;
   if (!gameActive || $('game-timer').innerText === '0s') return;
   if (isTimingLocked) return;
   if (myTurnsLeft <= 0) return;
