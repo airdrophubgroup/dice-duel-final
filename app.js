@@ -1,4 +1,5 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+import { MiniKit } from "https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@1.9.4/+esm";
 
 const SB_URL = "https://efmkazyrxllcyvcwmewd.supabase.co";
 const SB_KEY = "sb_publishable_px6Myv6S29bTXRYmYLAkgQ_WDHDb7da";
@@ -8,12 +9,11 @@ const WORLD_APP_ID = "app_74bd2499a35b025efb62d99125df7883";
 const supabaseClient = createClient(SB_URL, SB_KEY);
 
 // MiniKit.isInstalled() ALWAYS returns false until install() has been
-// called first — even when running inside World App. Call it as early
-// as possible (script runs after minikit.min.js in index.html, so
-// MiniKit is already global here).
-if (typeof MiniKit !== 'undefined') {
-  MiniKit.install(WORLD_APP_ID);
-}
+// called first — even when running inside World App. Old code relied
+// on a <script> tag that loaded a CDN path (dist/minikit.min.js) which
+// doesn't reliably exist for this SDK anymore — that's why MiniKit was
+// silently undefined. Importing it directly as an ES module fixes that.
+MiniKit.install(WORLD_APP_ID);
 
 let myAddress = "", myUsername = "";
 let currentWldBalance = 0;
@@ -39,7 +39,7 @@ function waitForMiniKit(timeoutMs = 3000) {
   return new Promise((resolve) => {
     const start = Date.now();
     (function check() {
-      if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
+      if (MiniKit.isInstalled()) {
         resolve(true);
       } else if (Date.now() - start > timeoutMs) {
         resolve(false);
