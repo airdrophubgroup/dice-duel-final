@@ -3,8 +3,17 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 const SB_URL = "https://efmkazyrxllcyvcwmewd.supabase.co";
 const SB_KEY = "sb_publishable_px6Myv6S29bTXRYmYLAkgQ_WDHDb7da";
 const ADMIN_WALLET = "0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1";
+const WORLD_APP_ID = "app_74bd2499a35b025efb62d99125df7883";
 
 const supabaseClient = createClient(SB_URL, SB_KEY);
+
+// MiniKit.isInstalled() ALWAYS returns false until install() has been
+// called first — even when running inside World App. Call it as early
+// as possible (script runs after minikit.min.js in index.html, so
+// MiniKit is already global here).
+if (typeof MiniKit !== 'undefined') {
+  MiniKit.install(WORLD_APP_ID);
+}
 
 let myAddress = "", myUsername = "";
 let currentWldBalance = 0;
