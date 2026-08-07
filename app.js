@@ -30,7 +30,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     MiniKit.install(WORLD_APP_ID); 
   } catch(e) {}
 
-  // Strict World App Check - No Simulation Fallback
+  // Strict World App / MiniKit check: No fake fallback allowed
   if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
     if ($('landingHint')) $('landingHint').textContent = 'World App detected — signing in...';
     
@@ -43,8 +43,8 @@ window.addEventListener('DOMContentLoaded', async () => {
       if ($('landingHint')) $('landingHint').textContent = 'Sign-in failed. Please restart inside World App.';
     }
   } else {
-    if ($('landingHint')) $('landingHint').textContent = 'Error: Please open this app inside World App.';
-    alert("Please open this app inside the World App.");
+    if ($('landingHint')) $('landingHint').textContent = 'Access Denied: Open inside World App.';
+    alert("Please open this app strictly inside the World App.");
     return;
   }
 
@@ -60,11 +60,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         for (let match of stuckMatches) {
           if (!match.game_started) {
             let feeToRefund = Number(match.fee || selectedFee);
-            const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
-            let curBal = Number(usrData?.wld_balance || 0);
-            let refundBal = Number((curBal + feeToRefund).toFixed(2));
-            await supabaseClient.from('user_rewards').update({ wld_balance: refundBal }).eq('wallet_address', myAddress);
-            await logMatchHistory(myAddress, 'REFUND', feeToRefund, `Search interrupted (reload) & fee refunded (${feeToRefund} WLD)`);
+            await logMatchHistory(myAddress, 'REFUND', feeToRefund, `Search interrupted & fee refunded`);
             await supabaseClient.from('matches').delete().eq('id', match.id);
           }
         }
