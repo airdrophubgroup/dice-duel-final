@@ -48,12 +48,35 @@ function checkWorldAppEnvironment() {
   return true;
 }
 
-window.addEventListener('DOMContentLoaded', async () => {
-  if (!checkWorldAppEnvironment()) return;
+// Give MiniKit's native bridge a brief moment to register after install()
+// before we trust isInstalled(). Without this, a real World App user can
+// occasionally get caught by the check on a slow device/connection.
+function waitForMiniKitReady(timeoutMs = 2000) {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    (function check() {
+      if ((typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) || window.ethereum) {
+        resolve(true);
+      } else if (Date.now() - start > timeoutMs) {
+        resolve(false);
+      } else {
+        setTimeout(check, 100);
+      }
+    })();
+  });
+}
 
+window.addEventListener('DOMContentLoaded', async () => {
+  // MUST install MiniKit BEFORE checking isInstalled() — isInstalled()
+  // always returns false until install() has run, even inside World App.
+  // Checking first (like before) meant the "ACCESS DENIED" screen fired
+  // every time, even for real World App users.
   try { 
     MiniKit.install(WORLD_APP_ID); 
   } catch(e) {}
+
+  const ready = await waitForMiniKitReady();
+  if (!ready) { checkWorldAppEnvironment(); return; }
 
   if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
     if ($('landingHint')) $('landingHint').textContent = 'World App detected — signing in...';
@@ -147,6 +170,12 @@ function initGlobalChat() {
     });
 }
 
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str == null ? '' : String(str);
+  return div.innerHTML;
+}
+
 function showLiveBetNotification(username, fee) {
   let existingContainer = document.getElementById('live-bet-ticker-container');
   if (!existingContainer) {
@@ -158,7 +187,7 @@ function showLiveBetNotification(username, fee) {
 
   const ticker = document.createElement('div');
   ticker.style.cssText = 'background:rgba(17,17,32,0.92); border:1px solid rgba(41,217,194,0.4); backdrop-filter:blur(8px); color:#f1eee6; padding:8px 12px; border-radius:12px; font-size:11.5px; font-family:"Space Grotesk", sans-serif; box-shadow:0 8px 24px rgba(0,0,0,0.5); opacity:0; transition:all 0.3s ease; text-align:center;';
-  ticker.innerHTML = `🔥 <span style="color:var(--photon); font-weight:700;">${username || 'A player'}</span> started a <span style="color:var(--gold); font-weight:700;">${fee} WLD</span> duel!`;
+  ticker.innerHTML = `🔥 <span style="color:var(--photon); font-weight:700;">${escapeHtml(username || 'A player')}</span> started a <span style="color:var(--gold); font-weight:700;">${escapeHtml(fee)}</span> WLD duel!`;
   
   existingContainer.appendChild(ticker);
   setTimeout(() => { ticker.style.opacity = '1'; }, 50);
@@ -206,8 +235,8 @@ function renderChatMessageUI(sender, message, senderAddress, timestamp) {
   const div = document.createElement('div');
   div.className = `chat-msg-item ${isMine ? 'my-msg' : ''}`;
   div.innerHTML = `
-    <div class="chat-sender">${sender}</div>
-    <div>${message}</div>
+    <div class="chat-sender">${escapeHtml(sender)}</div>
+    <div>${escapeHtml(message)}</div>
     <div style="font-size:9px; color:var(--slate); text-align:right; margin-top:2px;">${timeStr}</div>
   `;
   container.appendChild(div);
@@ -420,6 +449,7 @@ async function fetchAdminCheaters() {
 }
 
 window.promptBlockUser = async function(walletToBlock) {
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
   if (confirm(`⚠️ Block user: ${walletToBlock}?`)) {
     await supabaseClient.from('user_rewards').update({ is_blocked: true }).eq('wallet_address', walletToBlock);
     alert('User blocked.');
@@ -428,6 +458,7 @@ window.promptBlockUser = async function(walletToBlock) {
 };
 
 window.openAdminModal = function(reqId, userWallet, amount) {
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
   activeAdminReqId = reqId;
   $('admin-modal-info').innerText = `Paying ${amount} TNV to ${userWallet.slice(0,6)}...${userWallet.slice(-4)}`;
   $('admin-tx-input').value = "";
@@ -437,6 +468,7 @@ window.openAdminModal = function(reqId, userWallet, amount) {
 window.closeAdminModal = function() { $('admin-approve-modal').style.display = 'none'; };
 
 window.confirmAdminApproval = async function() {
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
   let txProof = $('admin-tx-input').value.trim();
   if (!txProof) { alert('Enter Tx Hash'); return; }
   await supabaseClient.from('withdraw_requests').update({ status: 'approved', tx_hash: txProof }).eq('id', activeAdminReqId);
