@@ -515,7 +515,19 @@ window.openAdminEarningsModal = async function() {
     const { data } = await supabaseClient.from('match_history').select('*').eq('wallet_address', ADMIN_WALLET).eq('action_type', 'ADMIN_FEE').order('created_at', { ascending: false }).limit(50);
     if (!data || data.length === 0) { container.innerHTML = `<div style="text-align:center; color:var(--slate);">No fees collected.</div>`; return; }
     let total = 0, html = '';
-    data.forEach(i => { total += Number(i.amount || 0); html += `<div style="background:rgba(243,156,18,0.05); padding:8px; border-radius:8px;"><span style="color:var(--gold);">+${i.amount} WLD</span></div>`; });
+    data.forEach(i => { 
+      total += Number(i.amount || 0); 
+      let timeStr = i.created_at ? new Date(i.created_at).toLocaleString() : '';
+      html += `
+        <div style="background:rgba(243,156,18,0.05); padding:8px 10px; border-radius:8px; margin-bottom:6px;">
+          <div style="display:flex; justify-content:space-between; font-weight:700;">
+            <span style="color:var(--gold);">+${i.amount} WLD</span>
+            <span style="font-size:9.5px; color:var(--slate);">${timeStr}</span>
+          </div>
+          <div style="color:var(--slate); font-size:10.5px; margin-top:2px;">${i.description || ''}</div>
+        </div>
+      `; 
+    });
     container.innerHTML = `<div style="color:var(--gold); font-weight:700; margin-bottom:8px;">Total: ${total.toFixed(2)} WLD</div>` + html;
   } catch(e) {}
 };
