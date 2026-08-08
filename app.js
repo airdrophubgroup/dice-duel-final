@@ -285,18 +285,6 @@ function getTnvRewardForFee(fee) {
   return rewards[fee] || 15;
 }
 
-function showBalanceDebug(msg) {
-  let dbg = document.getElementById('balance-debug-box');
-  if (!dbg) {
-    dbg = document.createElement('div');
-    dbg.id = 'balance-debug-box';
-    dbg.style.cssText = 'position:fixed; bottom:10px; left:10px; right:10px; z-index:99999; background:rgba(0,0,0,0.95); border:1.5px solid #29d9c2; color:#fff; padding:10px; border-radius:10px; font-family:monospace; font-size:10.5px; max-height:140px; overflow-y:auto; word-break:break-all;';
-    document.body.appendChild(dbg);
-  }
-  dbg.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
-  dbg.scrollTop = dbg.scrollHeight;
-}
-
 // Reads the user's REAL on-chain WLD balance directly from World Chain
 // (ERC-20 balanceOf via public RPC) — this is the actual wallet balance,
 // not an internal ledger number that can drift or be wrong.
@@ -304,7 +292,6 @@ async function fetchRealWldBalance(walletAddress) {
   if (!walletAddress) return 0;
   try {
     const paddedAddress = walletAddress.toLowerCase().replace('0x', '').padStart(64, '0');
-    showBalanceDebug("Fetching real WLD for " + walletAddress);
     const response = await fetch(WORLDCHAIN_RPC, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -319,20 +306,12 @@ async function fetchRealWldBalance(walletAddress) {
       })
     });
     const result = await response.json();
-    showBalanceDebug("RPC raw response: " + JSON.stringify(result));
-    if (result.error) {
-      showBalanceDebug("RPC error: " + JSON.stringify(result.error));
-      return null;
-    }
+    if (result.error) return null;
     if (result.result && result.result !== '0x') {
       const balanceWei = BigInt(result.result);
-      const bal = Number(balanceWei) / 1e18; // WLD has 18 decimals
-      showBalanceDebug("Parsed balance: " + bal + " WLD");
-      return bal;
+      return Number(balanceWei) / 1e18; // WLD has 18 decimals
     }
-    showBalanceDebug("Empty/zero result from chain.");
   } catch (e) {
-    showBalanceDebug("Fetch threw: " + e.message);
     console.error("On-chain WLD balance fetch failed:", e);
   }
   return null; // null = fetch failed, distinguish from a genuine 0 balance
