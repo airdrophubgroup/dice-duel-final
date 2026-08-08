@@ -695,6 +695,25 @@ async function handlePlayButtonClick(){
 
   $('start-btn').disabled = true;
 
+  // Secure Atomic Payment check via Database RPC before proceeding
+  try {
+    const { data: payCheck, error: payErr } = await supabaseClient.rpc('secure_join_match', {
+      p_address: myAddress,
+      p_fee: selectedFee,
+      p_username: myUsername
+    });
+
+    if (payErr || !payCheck || !payCheck.success) {
+      alert(payCheck?.message || "Payment verification failed in database.");
+      $('start-btn').disabled = false;
+      return;
+    }
+  } catch (err) {
+    alert("Secure matchmaking error.");
+    $('start-btn').disabled = false;
+    return;
+  }
+
   let paymentSuccessful = false;
   try {
     const paymentPayload = {
