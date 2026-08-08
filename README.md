@@ -1,54 +1,47 @@
-TNV Duel Arena 🎲
-TNV Duel Arena is a fast-paced, real-time competitive WLD duel and reward mini-app built strictly for the World App ecosystem. Players battle head-to-head in a high-stakes 32-second dice rolling challenge to win WLD prize pools and earn TNV ecosystem tokens.  
-JS
-+ 1
+<div align="center">
 
-🚀 Key Features
-Strict World App Integration: Fully protected environment checks ensure the application runs exclusively inside official World App with native MiniKit authentication and wallet signatures.  
-JS
+# 🎲 TNV DUEL ARENA 🎲
+### *The Ultimate Real-Time WLD Dice Battler in World App*
 
-Real-Time Multiplayer Duels: Powered by Supabase Realtime broadcast channels for live matchmaking, live betting alerts, and synchronized opponent score updates.  
-JS
+<img src="https://img.shields.io/badge/Status-Live%20%26%20Secure-29d9c2?style=for-the-badge&logo=worldcoin&logoColor=white" /> <img src="https://img.shields.io/badge/Network-Worldchain-6c5ce7?style=for-the-badge&logo=ethereum&logoColor=white" /> <img src="https://img.shields.io/badge/Security-RPC%20Protected-ffb300?style=for-the-badge&logo=supabase&logoColor=white" />
 
-Anti-Cheat & Timing Mechanics: Features a strict 2-second alternating cooldown per tap and a 15-tap limit per user to completely block auto-clickers and automated scripts.  
-JS
+</div>
 
-On-Chain & Database Security: Integrated with Worldchain mainnet RPC for live WLD balance checks and atomic database-level RPC functions (secure_join_match, settle_match_result) to prevent balance manipulation and fake payouts.  
-JS
+---
 
-Community Global Chat: Built-in 24-hour persistent community chat room with secure HTML escaping and live connection counts.  
-JS
+## ⚡ ABOUT THE GAME
 
-Leaderboards & Rewards: Automated TNV coin distribution for both victories and consolation defeats, alongside an elite top-10 leaderboard system.  
-JS
+**TNV Duel Arena** is a lightning-fast, high-stakes competitive dice rolling mini-app built exclusively for the **World App** ecosystem[cite: 4]. Players face off in head-to-head 32-second duels to claim WLD prize pools and climb the elite TNV token leaderboard[cite: 4]!
 
-🛠️ Tech Stack
-Frontend: Vanilla JavaScript (ES Modules), HTML5, CSS3 (Glassmorphism & Neon UI)
+---
 
-Web3 / Integration: @worldcoin/minikit-js, Worldchain RPC (Alchemy)  
-JS
+## 🔥 KEY FEATURES
 
-Backend / Database: Supabase (PostgreSQL, RLS Security Policies, and Stored Procedures / RPCs)  
-JS
+* 🛡️ **Strict World App Enforcement**: Protected environment validation ensures seamless gameplay exclusively inside the official World App using native MiniKit wallet authentication[cite: 4].
+* ⚡ **Real-Time Multiplayer Duels**: Powered by Supabase Realtime channels for instant matchmaking, live betting tickers, and synchronized opponent score tracking[cite: 4].
+* 🔒 **Anti-Cheat & Timing Cooldown**: Built-in 2-second alternating tap cooldowns and a strict 15-tap limit per match completely neutralize auto-clickers[cite: 4].
+* 💎 **On-Chain & Database Security**: Integrated with Worldchain mainnet RPC for live WLD balance verification and atomic database RPC functions (`secure_join_match`, `settle_match_result`) to block fake payouts[cite: 4].
+* 🌐 **Community Global Chat**: Persistent 24-hour global community chat room featuring secure HTML sanitization and live user counters[cite: 4].
 
-Hosting: Vercel  
-JS
+---
 
-📖 Game Rules & Mechanics
-Entry & Betting: Select an entry fee ranging from 0.1 WLD to 50 WLD to enter the matchmaking pool.  
-JS
+## 📖 GAME RULES & MECHANICS
 
-Gameplay: Once an opponent connects, a 32-second match timer starts (30s gameplay + 2s result display). Tap the 3D dice cube to roll, keeping the 2-second cooldown rule in mind.  
-JS
-+ 1
+1. **Entry & Betting**: Choose your entry fee ranging from `0.1 WLD` up to `50 WLD` to enter the matchmaking queue[cite: 4].
+2. **Timing Mechanic**: Keep an eye on the screen! Tap once every 2 seconds—otherwise, your time decreases and any missed taps cannot be recovered (15 taps max per user limit)[cite: 4].
+3. **Victory & Rewards**: The player with the highest score claims the WLD prize pool and win-tier TNV coins[cite: 4]. Defeated players still earn consolation TNV tokens so nobody leaves empty-handed[cite: 4].
 
-Victory & Rewards: The player with the higher score takes home the payout WLD and win-tier TNV coins. Defeated players still receive consolation TNV coins so nobody leaves empty-handed.  
-JS
-+ 1
+---
 
-🛡️ Security Architecture
-Row Level Security (RLS) enabled across all database tables (matches, user_rewards, match_history) to prevent unauthorized tampering.  
-JS
+## 🛠️ TECH STACK
 
-Server-Side RPC Verification ensures that fund deductions, matchmaking, and match settlements happen securely on the database layer rather than client-side execution.  
-JS
+* **Frontend**: Vanilla JavaScript (ES Modules), HTML5, CSS3 (Neon Glassmorphism UI)
+* **Web3 / SDK**: `@worldcoin/minikit-js`, Worldchain Mainnet RPC (Alchemy)[cite: 4]
+* **Backend & Security**: Supabase (PostgreSQL, Row Level Security, Secure RPC Stored Procedures)[cite: 4]
+* **Hosting**: Vercel[cite: 4]
+
+---
+
+<div align="center">
+  <p><b>Built with passion for the Worldcoin Community 🚀</b></p>
+</div>
