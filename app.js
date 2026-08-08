@@ -464,7 +464,18 @@ window.confirmAdminApproval = async function() {
   if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
   let txProof = $('admin-tx-input').value.trim();
   if (!txProof) { alert('Enter Tx Hash'); return; }
-  await supabaseClient.from('withdraw_requests').update({ status: 'approved', tx_hash: txProof }).eq('id', activeAdminReqId);
+
+  const { error } = await supabaseClient.rpc('admin_approve_withdrawal', {
+    p_admin_wallet: myAddress,
+    p_req_id: activeAdminReqId,
+    p_tx_hash: txProof
+  });
+
+  if (error) {
+    alert('Approval failed: ' + error.message);
+    return;
+  }
+
   alert('Approved successfully!');
   closeAdminModal();
   fetchAdminWithdrawRequests();
@@ -974,15 +985,15 @@ async function finalizeGame(){
   if (myAddress && !sessionStorage.getItem(`settled_${matchId}_${myAddress}`)) {
       sessionStorage.setItem(`settled_${matchId}_${myAddress}`, "true");
       try {
-          const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
-          const currentWld = Number(usrData?.wld_balance || 0);
-
           if (isWin) {
-              await supabaseClient.from('user_rewards').update({ wld_balance: Number((currentWld + exactChipEarn).toFixed(2)) }).eq('wallet_address', myAddress);
-              await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match (${matchFee} WLD duel)`);
+              await supabaseClient.rpc('settle_match_result', {
+                  p_match_id: matchId,
+                  p_winner_address: myAddress,
+                  p_payout: exactChipEarn,
+                  p_admin_fee: adminFeeAmount
+              });
 
-              const { data: adminData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', ADMIN_WALLET).maybeSingle();
-              await supabaseClient.from('user_rewards').update({ wld_balance: Number((Number(adminData?.wld_balance || 0) + adminFeeAmount).toFixed(2)) }).eq('wallet_address', ADMIN_WALLET);
+              await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match (${matchFee} WLD duel)`);
               await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', adminFeeAmount, `Platform fee from match`);
           } else {
               await logMatchHistory(myAddress, 'DEFEAT', -matchFee, `Lost match (${matchFee} WLD duel)`);
