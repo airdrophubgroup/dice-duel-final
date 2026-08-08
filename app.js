@@ -48,9 +48,6 @@ function checkWorldAppEnvironment() {
   return true;
 }
 
-// Give MiniKit's native bridge a brief moment to register after install()
-// before we trust isInstalled(). Without this, a real World App user can
-// occasionally get caught by the check on a slow device/connection.
 function waitForMiniKitReady(timeoutMs = 2000) {
   return new Promise((resolve) => {
     const start = Date.now();
@@ -67,10 +64,6 @@ function waitForMiniKitReady(timeoutMs = 2000) {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
-  // MUST install MiniKit BEFORE checking isInstalled() — isInstalled()
-  // always returns false until install() has run, even inside World App.
-  // Checking first (like before) meant the "ACCESS DENIED" screen fired
-  // every time, even for real World App users.
   try { 
     MiniKit.install(WORLD_APP_ID); 
   } catch(e) {}
