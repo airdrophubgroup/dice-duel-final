@@ -709,21 +709,16 @@ async function handlePlayButtonClick(){
 
   $('start-btn').disabled = true;
 
-  // Secure Atomic Payment check via Database RPC before proceeding
-  try {
-    const { data: payCheck, error: payErr } = await supabaseClient.rpc('secure_join_match', {
-      p_address: myAddress,
-      p_fee: selectedFee,
-      p_username: myUsername
-    });
-
-    if (payErr || !payCheck || !payCheck.success) {
-      alert(payCheck?.message || "Payment verification failed in database.");
-      $('start-btn').disabled = false;
-      return;
-    }
-  } catch (err) {
-    alert("Secure matchmaking error.");
+  // Check against the REAL on-chain WLD balance (already fetched into
+  // currentWldBalance) — not a database number. The old secure_join_match
+  // RPC checked/deducted an internal DB ledger that's separate from your
+  // real wallet and never actually gets spent by the real payment below,
+  // which caused "insufficient balance" errors even with plenty of real
+  // WLD in your wallet. The actual MiniKit.pay() call further down is
+  // the real, reliable balance check — it talks to your real World App
+  // wallet directly.
+  if (currentWldBalance < selectedFee) {
+    alert(`Insufficient WLD balance. You have ${currentWldBalance.toFixed(2)} WLD, need ${selectedFee} WLD.`);
     $('start-btn').disabled = false;
     return;
   }
