@@ -6,7 +6,7 @@ const SB_KEY = "sb_publishable_px6Myv6S29bTXRYmYLAkgQ_WDHDb7da";
 const WORLD_APP_ID = "app_74bd2499a35b025efb62d99125df7883";
 
 // Updated to your new Escrow Smart Contract Address
-const ADMIN_WALLET = "0xd9145CCE52D386f254917e481eB44e9943F39138"; 
+const ADMIN_WALLET = "0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1"; 
 const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";
 const WORLDCHAIN_RPC = "https://worldchain-mainnet.g.alchemy.com/public";
 
