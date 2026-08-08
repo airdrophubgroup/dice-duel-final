@@ -5,7 +5,6 @@ const SB_URL = "https://efmkazyrxllcyvcwmewd.supabase.co";
 const SB_KEY = "sb_publishable_px6Myv6S29bTXRYmYLAkgQ_WDHDb7da";
 const WORLD_APP_ID = "app_74bd2499a35b025efb62d99125df7883";
 
-// Updated to your new Escrow Smart Contract Address
 const ADMIN_WALLET = "0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1"; 
 const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";
 const WORLDCHAIN_RPC = "https://worldchain-mainnet.g.alchemy.com/public";
@@ -76,8 +75,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     if ($('landingHint')) $('landingHint').textContent = 'World App detected — signing in...';
     
     try {
-      await performWalletAuth(true);
-    } catch(err) {}
+      await Promise.race([
+        performWalletAuth(true),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Auth timeout')), 4000))
+      ]);
+    } catch(err) {
+      alert("Authentication failed or cancelled inside World App.");
+    }
   }
 
   if (myAddress) {
@@ -91,9 +95,13 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (stuckMatches && stuckMatches.length > 0) {
         for (let match of stuckMatches) {
           if (!match.game_started) {
-            await supabaseClient.rpc('secure_cancel_and_refund', {
-              p_match_id: match.id, p_wallet: myAddress
-            });
+            let feeToRefund = Number(match.fee || selectedFee);
+            const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
+            let curBal = Number(usrData?.wld_balance || 0);
+            let refundBal = Number((curBal + feeToRefund).toFixed(2));
+            await supabaseClient.from('user_rewards').update({ wld_balance: refundBal }).eq('wallet_address', myAddress);
+            await logMatchHistory(myAddress, 'REFUND', feeToRefund, `Search interrupted (reload) & fee refunded (${feeToRefund} WLD)`);
+            await supabaseClient.from('matches').delete().eq('id', match.id);
           }
         }
       }
@@ -349,13 +357,13 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
 
     if (realBalance !== null) {
       currentWldBalance = realBalance;
-      if (!data) {
-        await supabaseClient.rpc('secure_ensure_user_row', { p_wallet: cleanWallet });
-      }
+      const upsertPayload = { wallet_address: cleanWallet, wld_balance: realBalance };
+      if (!data) { upsertPayload.tnv_balance = 0; upsertPayload.is_blocked = false; }
+      await supabaseClient.from('user_rewards').upsert(upsertPayload, { onConflict: 'wallet_address' });
     } else {
       currentWldBalance = Number(data?.wld_balance || 0);
       if (!data) {
-        await supabaseClient.rpc('secure_ensure_user_row', { p_wallet: cleanWallet });
+        await supabaseClient.from('user_rewards').upsert({ wallet_address: cleanWallet, tnv_balance: 0, wld_balance: 0, is_blocked: false });
       }
     }
 
@@ -436,15 +444,9 @@ async function fetchAdminCheaters() {
 window.promptBlockUser = async function(walletToBlock) {
   if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
   if (confirm(`⚠️ Block user: ${walletToBlock}?`)) {
-    const { data: result } = await supabaseClient.rpc('secure_admin_block_user', {
-      p_admin_wallet: myAddress, p_target_wallet: walletToBlock
-    });
-    if (result && result.success) {
-      alert('User blocked.');
-      fetchAdminCheaters();
-    } else {
-      alert('Block failed: ' + (result?.error || 'unknown error'));
-    }
+    await supabaseClient.from('user_rewards').update({ is_blocked: true }).eq('wallet_address', walletToBlock);
+    alert('User blocked.');
+    fetchAdminCheaters();
   }
 };
 
@@ -571,16 +573,8 @@ window.closeWithdrawModal = function() { $('withdraw-modal').style.display = 'no
 window.submitWithdrawRequest = async function() {
   let withdrawAmt = Number($('withdraw-amount-input').value);
   if (isNaN(withdrawAmt) || withdrawAmt < 5000 || withdrawAmt > currentTnvBalance) { alert('Invalid amount'); return; }
-
-  const { data: result, error } = await supabaseClient.rpc('secure_submit_withdraw_request', {
-    p_wallet: myAddress, p_amount: withdrawAmt
-  });
-
-  if (error || !result || !result.success) {
-    alert('Withdrawal request failed: ' + (result?.error || error?.message || 'unknown error'));
-    return;
-  }
-
+  await supabaseClient.from('withdraw_requests').insert({ wallet_address: myAddress, amount: withdrawAmt, status: 'pending' });
+  await supabaseClient.from('user_rewards').update({ tnv_balance: currentTnvBalance - withdrawAmt }).eq('wallet_address', myAddress);
   alert('Withdrawal requested!');
   closeWithdrawModal();
   fetchUserBalanceAndLeaderboard(myAddress);
@@ -701,6 +695,7 @@ async function handlePlayButtonClick(){
 
   $('start-btn').disabled = true;
 
+  // Secure Atomic Payment check via Database RPC before proceeding
   try {
     const { data: payCheck, error: payErr } = await supabaseClient.rpc('secure_join_match', {
       p_address: myAddress,
@@ -721,31 +716,16 @@ async function handlePlayButtonClick(){
 
   let paymentSuccessful = false;
   try {
-    // Step 1: Approve the Escrow Contract to spend WLD tokens
-    const feeWei = tokenToDecimals(selectedFee, Tokens.WLD).toString();
-    const approvePayload = {
-      reference: 'ref_app_' + randomAlphaNumeric(16),
-      to: WLD_TOKEN_CONTRACT,
-      tokens: [
-        {
-          symbol: Tokens.WLD,
-          token_amount: "0", // standard ERC-20 approval call helper or direct transfer payload
-        },
-      ],
-      description: `Approve WLD for Duel`,
-    };
-
-    // MiniKit smart contract interaction via pay command targeting escrow
     const paymentPayload = {
       reference: 'ref_' + randomAlphaNumeric(16),
-      to: ADMIN_WALLET, // Escrow Contract Address
+      to: ADMIN_WALLET,
       tokens: [
         {
           symbol: Tokens.WLD,
-          token_amount: feeWei,
+          token_amount: tokenToDecimals(selectedFee, Tokens.WLD).toString(),
         },
       ],
-      description: `TNV Duel Escrow Bet: ${selectedFee} WLD`,
+      description: `TNV Duel Arena Bet: ${selectedFee} WLD`,
     };
 
     const { finalPayload } = await MiniKit.commandsAsync.pay(paymentPayload);
@@ -783,7 +763,7 @@ async function handlePlayButtonClick(){
     existingSuccess.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:rgba(5,15,10,0.95); border:2px solid #29d9c2; color:#29d9c2; padding:14px 20px; border-radius:12px; font-family:"Space Grotesk", sans-serif; font-size:13px; font-weight:700; text-align:center; box-shadow:0 0 20px rgba(41,217,194,0.6); backdrop-filter:blur(8px); transition:opacity 0.3s ease;';
     document.body.appendChild(existingSuccess);
   }
-  existingSuccess.innerHTML = '✨ Payment Successful into Escrow!';
+  existingSuccess.innerHTML = '✨ Payment Successful!';
   existingSuccess.style.opacity = '1';
 
   setTimeout(() => {
@@ -791,6 +771,7 @@ async function handlePlayButtonClick(){
     setTimeout(() => { existingSuccess.remove(); }, 300);
   }, 3000);
 
+  await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', selectedFee, `Entry fee payment from ${myUsername || myAddress}`);
   initMatchmakingAfterPayment();
 }
 
@@ -867,12 +848,19 @@ async function cancelMatchmaking(showAlert = true) {
   if (!matchmakingActive || gameActive) return;
   if (matchId) {
     try {
-      const { data: result } = await supabaseClient.rpc('secure_cancel_and_refund', {
-        p_match_id: matchId, p_wallet: myAddress
-      });
+      const { data: matchCheck } = await supabaseClient.from('matches').select('status, game_started, fee').eq('id', matchId).single();
 
-      if (result && result.refunded) {
-        if (showAlert) alert(`Search cancelled. ${result.amount} WLD entry fee has been refunded.`);
+      if (matchCheck && !matchCheck.game_started && matchCheck.status === 'waiting') {
+        let matchFee = Number(matchCheck.fee || selectedFee);
+        const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
+        const currentBal = Number(usrData?.wld_balance || 0);
+        const refundBal = Number((currentBal + matchFee).toFixed(2));
+
+        await supabaseClient.from('user_rewards').update({ wld_balance: refundBal }).eq('wallet_address', myAddress);
+        await logMatchHistory(myAddress, 'REFUND', matchFee, `Search cancelled & fee refunded (${matchFee} WLD)`);
+        await supabaseClient.from('matches').delete().eq('id', matchId).eq('status', 'waiting');
+
+        if (showAlert) alert(`Search cancelled. ${matchFee} WLD entry fee has been refunded.`);
       } else {
         if (showAlert) alert(`Search cancelled.`);
       }
@@ -905,7 +893,7 @@ async function startSyncCountdown(){
   if (pollTimer) clearInterval(pollTimer);
 
   if (isP1) {
-    await supabaseClient.rpc('secure_start_match', { p_match_id: matchId, p_wallet: myAddress });
+    await supabaseClient.from("matches").update({ game_started: true, status: "playing", start_time: new Date().toISOString() }).eq("id", matchId);
   }
 
   $('wait-status').style.color = 'var(--photon)';
@@ -994,10 +982,15 @@ async function finalizeGame(){
   let matchFee = Number(m.fee || selectedFee);
 
   if (m.status !== 'completed'){
-    const { data: completeResult } = await supabaseClient.rpc('secure_complete_match', {
-      p_match_id: matchId, p_wallet: myAddress
-    });
-    if (completeResult && completeResult.match) finalRow = completeResult.match;
+    let winnerAddress = null, winnerUsername = null, payout = calculatePayout(matchFee);
+    if (m.p1_score > m.p2_score) { winnerAddress = m.p1_address; winnerUsername = m.p1_username; }
+    else if (m.p2_score > m.p1_score) { winnerAddress = m.p2_address; winnerUsername = m.p2_username; }
+
+    const { data: updated } = await supabaseClient
+      .from('matches')
+      .update({ status: 'completed', winner_address: winnerAddress, winner_username: winnerUsername, payout_amount: payout })
+      .eq('id', matchId).eq('status', 'playing').select().single();
+    if (updated) finalRow = updated;
   }
 
   const myFinal = isP1 ? finalRow.p1_score : finalRow.p2_score;
@@ -1033,10 +1026,15 @@ async function finalizeGame(){
   if (myAddress && !sessionStorage.getItem(`tnv_settled_${matchId}_${myAddress}`)) {
     sessionStorage.setItem(`tnv_settled_${matchId}_${myAddress}`, "true");
     try {
-      const { data: tnvResult } = await supabaseClient.rpc('secure_credit_tnv', {
-        p_match_id: matchId, p_wallet: myAddress
-      });
-      if (tnvResult && tnvResult.earnedTnv !== undefined) earnedTnv = tnvResult.earnedTnv;
+      const { data: usrData } = await supabaseClient.from('user_rewards').select('tnv_balance, total_games, games_played, games_won').eq('wallet_address', myAddress).maybeSingle();
+      if (usrData) {
+        await supabaseClient.from('user_rewards').update({ 
+          tnv_balance: Number(usrData.tnv_balance || 0) + earnedTnv,
+          total_games: Number(usrData.total_games || 0) + 1,
+          games_played: Number(usrData.games_played || 0) + 1,
+          games_won: Number(usrData.games_won || 0) + (isWin ? 1 : 0)
+        }).eq('wallet_address', myAddress);
+      }
     } catch(e) {}
   }
 
