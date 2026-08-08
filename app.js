@@ -75,12 +75,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     if ($('landingHint')) $('landingHint').textContent = 'World App detected — signing in...';
     
     try {
-      await Promise.race([
-        performWalletAuth(true),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Auth timeout')), 4000))
-      ]);
+      await performWalletAuth(true);
     } catch(err) {
-      alert("Authentication failed or cancelled inside World App.");
+      // Silent auto sign-in attempt — no alert here. If it didn't complete,
+      // the user can still sign in manually by tapping Play Now.
     }
   }
 
@@ -95,13 +93,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (stuckMatches && stuckMatches.length > 0) {
         for (let match of stuckMatches) {
           if (!match.game_started) {
-            let feeToRefund = Number(match.fee || selectedFee);
-            const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
-            let curBal = Number(usrData?.wld_balance || 0);
-            let refundBal = Number((curBal + feeToRefund).toFixed(2));
-            await supabaseClient.from('user_rewards').update({ wld_balance: refundBal }).eq('wallet_address', myAddress);
-            await logMatchHistory(myAddress, 'REFUND', feeToRefund, `Search interrupted (reload) & fee refunded (${feeToRefund} WLD)`);
-            await supabaseClient.from('matches').delete().eq('id', match.id);
+            await supabaseClient.rpc('secure_cancel_and_refund', {
+              p_match_id: match.id, p_wallet: myAddress
+            });
           }
         }
       }
@@ -356,14 +350,20 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
     currentTnvBalance = Number(data?.tnv_balance || 0);
 
     if (realBalance !== null) {
+      // Display-only: this is the REAL on-chain wallet balance. It must
+      // NEVER be written back into user_rewards.wld_balance — that column
+      // is the internal game ledger that settle_match_result / refund RPCs
+      // credit on wins. Overwriting it here was erasing winnings the
+      // instant they were credited.
       currentWldBalance = realBalance;
-      const upsertPayload = { wallet_address: cleanWallet, wld_balance: realBalance };
-      if (!data) { upsertPayload.tnv_balance = 0; upsertPayload.is_blocked = false; }
-      await supabaseClient.from('user_rewards').upsert(upsertPayload, { onConflict: 'wallet_address' });
+      if (!data) {
+        await supabaseClient.rpc('secure_ensure_user_row', { p_wallet: cleanWallet });
+      }
     } else {
+      // Chain fetch failed — fall back to showing the last known ledger value.
       currentWldBalance = Number(data?.wld_balance || 0);
       if (!data) {
-        await supabaseClient.from('user_rewards').upsert({ wallet_address: cleanWallet, tnv_balance: 0, wld_balance: 0, is_blocked: false });
+        await supabaseClient.rpc('secure_ensure_user_row', { p_wallet: cleanWallet });
       }
     }
 
@@ -444,9 +444,15 @@ async function fetchAdminCheaters() {
 window.promptBlockUser = async function(walletToBlock) {
   if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
   if (confirm(`⚠️ Block user: ${walletToBlock}?`)) {
-    await supabaseClient.from('user_rewards').update({ is_blocked: true }).eq('wallet_address', walletToBlock);
-    alert('User blocked.');
-    fetchAdminCheaters();
+    const { data: result } = await supabaseClient.rpc('secure_admin_block_user', {
+      p_admin_wallet: myAddress, p_target_wallet: walletToBlock
+    });
+    if (result && result.success) {
+      alert('User blocked.');
+      fetchAdminCheaters();
+    } else {
+      alert('Block failed: ' + (result?.error || 'unknown error'));
+    }
   }
 };
 
@@ -573,8 +579,16 @@ window.closeWithdrawModal = function() { $('withdraw-modal').style.display = 'no
 window.submitWithdrawRequest = async function() {
   let withdrawAmt = Number($('withdraw-amount-input').value);
   if (isNaN(withdrawAmt) || withdrawAmt < 5000 || withdrawAmt > currentTnvBalance) { alert('Invalid amount'); return; }
-  await supabaseClient.from('withdraw_requests').insert({ wallet_address: myAddress, amount: withdrawAmt, status: 'pending' });
-  await supabaseClient.from('user_rewards').update({ tnv_balance: currentTnvBalance - withdrawAmt }).eq('wallet_address', myAddress);
+
+  const { data: result, error } = await supabaseClient.rpc('secure_submit_withdraw_request', {
+    p_wallet: myAddress, p_amount: withdrawAmt
+  });
+
+  if (error || !result || !result.success) {
+    alert('Withdrawal request failed: ' + (result?.error || error?.message || 'unknown error'));
+    return;
+  }
+
   alert('Withdrawal requested!');
   closeWithdrawModal();
   fetchUserBalanceAndLeaderboard(myAddress);
@@ -848,19 +862,12 @@ async function cancelMatchmaking(showAlert = true) {
   if (!matchmakingActive || gameActive) return;
   if (matchId) {
     try {
-      const { data: matchCheck } = await supabaseClient.from('matches').select('status, game_started, fee').eq('id', matchId).single();
+      const { data: result } = await supabaseClient.rpc('secure_cancel_and_refund', {
+        p_match_id: matchId, p_wallet: myAddress
+      });
 
-      if (matchCheck && !matchCheck.game_started && matchCheck.status === 'waiting') {
-        let matchFee = Number(matchCheck.fee || selectedFee);
-        const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
-        const currentBal = Number(usrData?.wld_balance || 0);
-        const refundBal = Number((currentBal + matchFee).toFixed(2));
-
-        await supabaseClient.from('user_rewards').update({ wld_balance: refundBal }).eq('wallet_address', myAddress);
-        await logMatchHistory(myAddress, 'REFUND', matchFee, `Search cancelled & fee refunded (${matchFee} WLD)`);
-        await supabaseClient.from('matches').delete().eq('id', matchId).eq('status', 'waiting');
-
-        if (showAlert) alert(`Search cancelled. ${matchFee} WLD entry fee has been refunded.`);
+      if (result && result.refunded) {
+        if (showAlert) alert(`Search cancelled. ${result.amount} WLD entry fee has been refunded.`);
       } else {
         if (showAlert) alert(`Search cancelled.`);
       }
@@ -893,7 +900,7 @@ async function startSyncCountdown(){
   if (pollTimer) clearInterval(pollTimer);
 
   if (isP1) {
-    await supabaseClient.from("matches").update({ game_started: true, status: "playing", start_time: new Date().toISOString() }).eq("id", matchId);
+    await supabaseClient.rpc('secure_start_match', { p_match_id: matchId, p_wallet: myAddress });
   }
 
   $('wait-status').style.color = 'var(--photon)';
@@ -982,15 +989,10 @@ async function finalizeGame(){
   let matchFee = Number(m.fee || selectedFee);
 
   if (m.status !== 'completed'){
-    let winnerAddress = null, winnerUsername = null, payout = calculatePayout(matchFee);
-    if (m.p1_score > m.p2_score) { winnerAddress = m.p1_address; winnerUsername = m.p1_username; }
-    else if (m.p2_score > m.p1_score) { winnerAddress = m.p2_address; winnerUsername = m.p2_username; }
-
-    const { data: updated } = await supabaseClient
-      .from('matches')
-      .update({ status: 'completed', winner_address: winnerAddress, winner_username: winnerUsername, payout_amount: payout })
-      .eq('id', matchId).eq('status', 'playing').select().single();
-    if (updated) finalRow = updated;
+    const { data: completeResult } = await supabaseClient.rpc('secure_complete_match', {
+      p_match_id: matchId, p_wallet: myAddress
+    });
+    if (completeResult && completeResult.match) finalRow = completeResult.match;
   }
 
   const myFinal = isP1 ? finalRow.p1_score : finalRow.p2_score;
@@ -1026,15 +1028,10 @@ async function finalizeGame(){
   if (myAddress && !sessionStorage.getItem(`tnv_settled_${matchId}_${myAddress}`)) {
     sessionStorage.setItem(`tnv_settled_${matchId}_${myAddress}`, "true");
     try {
-      const { data: usrData } = await supabaseClient.from('user_rewards').select('tnv_balance, total_games, games_played, games_won').eq('wallet_address', myAddress).maybeSingle();
-      if (usrData) {
-        await supabaseClient.from('user_rewards').update({ 
-          tnv_balance: Number(usrData.tnv_balance || 0) + earnedTnv,
-          total_games: Number(usrData.total_games || 0) + 1,
-          games_played: Number(usrData.games_played || 0) + 1,
-          games_won: Number(usrData.games_won || 0) + (isWin ? 1 : 0)
-        }).eq('wallet_address', myAddress);
-      }
+      const { data: tnvResult } = await supabaseClient.rpc('secure_credit_tnv', {
+        p_match_id: matchId, p_wallet: myAddress
+      });
+      if (tnvResult && tnvResult.earnedTnv !== undefined) earnedTnv = tnvResult.earnedTnv;
     } catch(e) {}
   }
 
