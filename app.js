@@ -27,7 +27,30 @@ const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 const $ = (id) => document.getElementById(id);
 
+// STRICT BROWSER RESTRICTION & RED WARNING SCREEN
+function checkWorldAppEnvironment() {
+  const isWorldApp = (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) || window.ethereum;
+  
+  if (!isWorldApp) {
+    document.body.innerHTML = `
+      <div style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#050000; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:999999; font-family:sans-serif; text-align:center; padding:20px;">
+        <div style="background:rgba(255, 0, 0, 0.08); border:2px solid #ff3333; padding:30px; border-radius:20px; box-shadow: 0 0 30px rgba(255, 0, 0, 0.4); max-width:400px;">
+          <h1 style="color:#ff3333; font-size:24px; margin-bottom:15px; text-shadow: 0 0 10px rgba(255,51,51,0.5);">⚠️ ACCESS DENIED</h1>
+          <p style="color:#ffffff; font-size:16px; line-height:1.5; margin-bottom:20px;">This mini app can only be accessed and used inside the official <b>World App</b>.</p>
+          <div style="background:#ff3333; color:#000; font-weight:bold; padding:12px 20px; border-radius:10px; font-size:15px; box-shadow: 0 0 15px #ff3333;">
+            Please open inside World App
+          </div>
+        </div>
+      </div>
+    `;
+    return false;
+  }
+  return true;
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
+  if (!checkWorldAppEnvironment()) return;
+
   try { 
     MiniKit.install(WORLD_APP_ID); 
   } catch(e) {}
@@ -41,29 +64,8 @@ window.addEventListener('DOMContentLoaded', async () => {
         new Promise((_, reject) => setTimeout(() => reject(new Error('Auth timeout')), 4000))
       ]);
     } catch(err) {
-      let fakeAddress = localStorage.getItem("myAddress");
-      let fakeUsername = localStorage.getItem("myUsername");
-      if (!fakeAddress || fakeAddress.toLowerCase() === ADMIN_WALLET.toLowerCase()) {
-        const randomHex = Math.floor(Math.random() * 100000).toString(16);
-        fakeAddress = '0xDEV000000000000000000000000000' + randomHex;
-        fakeUsername = '@Guest_' + randomHex;
-        localStorage.setItem("myAddress", fakeAddress);
-        localStorage.setItem("myUsername", fakeUsername);
-      }
-      setUserData(fakeUsername || '@Guest', fakeAddress);
+      alert("Authentication failed or cancelled inside World App.");
     }
-  } else {
-    if ($('landingHint')) $('landingHint').textContent = 'Desktop Mode (Simulation active)';
-    let fakeAddress = localStorage.getItem("myAddress");
-    let fakeUsername = localStorage.getItem("myUsername");
-    if (!fakeAddress || !fakeAddress.startsWith('0xDEV')) {
-      const randomHex = Math.floor(Math.random() * 10000).toString(16);
-      fakeAddress = '0xDEV' + randomHex + '94bfb6a1';
-      fakeUsername = '@TestPC_' + randomHex;
-      localStorage.setItem("myAddress", fakeAddress);
-      localStorage.setItem("myUsername", fakeUsername);
-    }
-    setUserData(fakeUsername || '@TestPC', fakeAddress);
   }
 
   if (myAddress) {
@@ -602,6 +604,7 @@ function showAuthBanner(msg){
 }
 
 async function performWalletAuth(silent = false){
+  if (!checkWorldAppEnvironment()) return false;
   if (!MiniKit.isInstalled()) return false;
   if (myAddress && realWorldIdUser) return true;
 
@@ -634,92 +637,74 @@ async function performWalletAuth(silent = false){
 }
 
 async function handlePlayButtonClick(){
+  if (!checkWorldAppEnvironment()) return;
   if (matchmakingActive) return;
 
-  if (MiniKit.isInstalled()) {
-    if (!myAddress || !realWorldIdUser) {
-      const signedIn = await performWalletAuth(false);
-      if (!signedIn) return;
+  if (!myAddress || !realWorldIdUser) {
+    const signedIn = await performWalletAuth(false);
+    if (!signedIn) return;
+  }
+
+  $('start-btn').disabled = true;
+
+  let paymentSuccessful = false;
+  try {
+    const paymentPayload = {
+      reference: 'ref_' + randomAlphaNumeric(16),
+      to: ADMIN_WALLET,
+      tokens: [
+        {
+          symbol: Tokens.WLD,
+          token_amount: tokenToDecimals(selectedFee, Tokens.WLD).toString(),
+        },
+      ],
+      description: `TNV Duel Arena Bet: ${selectedFee} WLD`,
+    };
+
+    const { finalPayload } = await MiniKit.commandsAsync.pay(paymentPayload);
+    paymentSuccessful = (finalPayload?.status === 'success');
+
+  } catch (err) {
+    console.warn("Payment error:", err);
+    paymentSuccessful = false;
+  }
+
+  if (!paymentSuccessful) {
+    let existingWarning = document.getElementById('neon-payment-warning');
+    if (!existingWarning) {
+      existingWarning = document.createElement('div');
+      existingWarning.id = 'neon-payment-warning';
+      existingWarning.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:rgba(15,5,10,0.95); border:2px solid #ff3366; color:#ff3366; padding:14px 20px; border-radius:12px; font-family:"Space Grotesk", sans-serif; font-size:13px; font-weight:700; text-align:center; box-shadow:0 0 20px rgba(255,51,102,0.6); backdrop-filter:blur(8px); transition:opacity 0.3s ease;';
+      document.body.appendChild(existingWarning);
     }
-  } else if (!myAddress) {
+    existingWarning.innerHTML = '⚠️ Payment was cancelled or failed.';
+    existingWarning.style.opacity = '1';
+
+    setTimeout(() => {
+      existingWarning.style.opacity = '0';
+      setTimeout(() => { existingWarning.remove(); }, 300);
+    }, 4000);
+
+    $('start-btn').disabled = false;
     return;
   }
 
-  if (MiniKit.isInstalled()) {
-    $('start-btn').disabled = true;
-
-    let paymentSuccessful = false;
-    try {
-      const paymentPayload = {
-        reference: 'ref_' + randomAlphaNumeric(16),
-        to: ADMIN_WALLET,
-        tokens: [
-          {
-            symbol: Tokens.WLD,
-            token_amount: tokenToDecimals(selectedFee, Tokens.WLD).toString(),
-          },
-        ],
-        description: `TNV Duel Arena Bet: ${selectedFee} WLD`,
-      };
-
-      const { finalPayload } = await MiniKit.commandsAsync.pay(paymentPayload);
-      paymentSuccessful = (finalPayload?.status === 'success');
-
-    } catch (err) {
-      console.warn("Payment error:", err);
-      paymentSuccessful = false;
-    }
-
-    if (!paymentSuccessful) {
-      let existingWarning = document.getElementById('neon-payment-warning');
-      if (!existingWarning) {
-        existingWarning = document.createElement('div');
-        existingWarning.id = 'neon-payment-warning';
-        existingWarning.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:rgba(15,5,10,0.95); border:2px solid #ff3366; color:#ff3366; padding:14px 20px; border-radius:12px; font-family:"Space Grotesk", sans-serif; font-size:13px; font-weight:700; text-align:center; box-shadow:0 0 20px rgba(255,51,102,0.6); backdrop-filter:blur(8px); transition:opacity 0.3s ease;';
-        document.body.appendChild(existingWarning);
-      }
-      existingWarning.innerHTML = '⚠️ Payment was cancelled or failed.';
-      existingWarning.style.opacity = '1';
-
-      setTimeout(() => {
-        existingWarning.style.opacity = '0';
-        setTimeout(() => { existingWarning.remove(); }, 300);
-      }, 4000);
-
-      $('start-btn').disabled = false;
-      return;
-    }
-
-    let existingSuccess = document.getElementById('neon-payment-success');
-    if (!existingSuccess) {
-      existingSuccess = document.createElement('div');
-      existingSuccess.id = 'neon-payment-success';
-      existingSuccess.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:rgba(5,15,10,0.95); border:2px solid #29d9c2; color:#29d9c2; padding:14px 20px; border-radius:12px; font-family:"Space Grotesk", sans-serif; font-size:13px; font-weight:700; text-align:center; box-shadow:0 0 20px rgba(41,217,194,0.6); backdrop-filter:blur(8px); transition:opacity 0.3s ease;';
-      document.body.appendChild(existingSuccess);
-    }
-    existingSuccess.innerHTML = '✨ Payment Successful!';
-    existingSuccess.style.opacity = '1';
-
-    setTimeout(() => {
-      existingSuccess.style.opacity = '0';
-      setTimeout(() => { existingSuccess.remove(); }, 300);
-    }, 3000);
-
-    await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', selectedFee, `Entry fee payment from ${myUsername || myAddress}`);
-
-  } else {
-    const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
-    let currentWld = Number(usrData?.wld_balance || 100);
-    if (currentWld < selectedFee) {
-      alert(`Insufficient WLD Balance: ${currentWld.toFixed(2)}, Required: ${selectedFee}`);
-      return;
-    }
-    if (!confirm(`Confirm payment of ${selectedFee} WLD to start match?`)) {
-      return;
-    }
-    await supabaseClient.from('user_rewards').update({ wld_balance: Number((currentWld - selectedFee).toFixed(2)) }).eq('wallet_address', myAddress);
+  let existingSuccess = document.getElementById('neon-payment-success');
+  if (!existingSuccess) {
+    existingSuccess = document.createElement('div');
+    existingSuccess.id = 'neon-payment-success';
+    existingSuccess.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:rgba(5,15,10,0.95); border:2px solid #29d9c2; color:#29d9c2; padding:14px 20px; border-radius:12px; font-family:"Space Grotesk", sans-serif; font-size:13px; font-weight:700; text-align:center; box-shadow:0 0 20px rgba(41,217,194,0.6); backdrop-filter:blur(8px); transition:opacity 0.3s ease;';
+    document.body.appendChild(existingSuccess);
   }
+  existingSuccess.innerHTML = '✨ Payment Successful!';
+  existingSuccess.style.opacity = '1';
 
+  setTimeout(() => {
+    existingSuccess.style.opacity = '0';
+    setTimeout(() => { existingSuccess.remove(); }, 300);
+  }, 3000);
+
+  await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', selectedFee, `Entry fee payment from ${myUsername || myAddress}`);
   initMatchmakingAfterPayment();
 }
 
@@ -878,6 +863,7 @@ async function runTimer(startTime = null){
 }
 
 async function rollDice(){
+  if (!checkWorldAppEnvironment()) return;
   if (!gameActive || $('game-timer').innerText === '0s') return;
   if (isTimingLocked) return;
   if (myTurnsLeft <= 0) return;
