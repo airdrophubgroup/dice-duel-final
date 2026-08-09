@@ -13,7 +13,7 @@ const WORLDCHAIN_RPC = "https://worldchain-mainnet.g.alchemy.com/public";
 const PROXY_API_URL = "/api/proxy-request";
 
 // Fixed contract (front-running gap closed + player2-overwrite bug fixed).
-const DICE_DUEL_CONTRACT = "0xaAee96B91EE396d597Ea22A7DFCE3f5581B502e7";
+const DICE_DUEL_CONTRACT = "0x060EDB17E26D5385f20f85D577dc9b87Dfa6cE28";
 
 // BACKGROUND MUSIC SETUP
 let bgMusic = new Audio('assets/bg-music.mp3'); 
@@ -33,11 +33,22 @@ function stopBackgroundMusic() {
   } catch (e) {}
 }
 
-// Minimal ABIs — just the functions app.js actually calls.
-const ERC20_APPROVE_ABI = [{
+// World App's Permit2 contract — World App automatically pre-approves every
+// ERC-20 a user holds to this contract, so we bundle a Permit2 "approve"
+// (off-chain-style, consumed same tx) with our contract call instead of a
+// direct token.approve() — World App's own security policy BLOCKS direct
+// ERC-20 approve() calls (error: disallowed_operation).
+const PERMIT2_CONTRACT = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
+
+const PERMIT2_APPROVE_ABI = [{
   type: "function", name: "approve", stateMutability: "nonpayable",
-  inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }],
-  outputs: [{ name: "", type: "bool" }]
+  inputs: [
+    { name: "token", type: "address" },
+    { name: "spender", type: "address" },
+    { name: "amount", type: "uint160" },
+    { name: "expiration", type: "uint48" }
+  ],
+  outputs: []
 }];
 
 const DICE_DUEL_ABI = [{
@@ -843,10 +854,10 @@ let paymentSuccessful = false;
     const txPayload = {
       transaction: [
         {
-          address: WLD_TOKEN_CONTRACT,
-          abi: ERC20_APPROVE_ABI,
+          address: PERMIT2_CONTRACT,
+          abi: PERMIT2_APPROVE_ABI,
           functionName: 'approve',
-          args: [DICE_DUEL_CONTRACT, feeWei],
+          args: [WLD_TOKEN_CONTRACT, DICE_DUEL_CONTRACT, feeWei, 0],
         },
         {
           address: DICE_DUEL_CONTRACT,
