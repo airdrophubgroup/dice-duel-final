@@ -9,8 +9,11 @@ const ADMIN_WALLET = "0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1";
 const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";
 const WORLDCHAIN_RPC = "https://worldchain-mainnet.g.alchemy.com/public";
 
-// Fixed contract (front-running gap closed + player2-overwrite bug fixed).
-const DICE_DUEL_CONTRACT = "0xaAee96B91EE396d597Ea22A7DFCE3f5581B502e7";
+// PROXY ENDPOINT (Frontend ab direct RPC/API call ke bajaye is proxy URL ko use karega)
+const PROXY_API_URL = "/api/proxy-request";
+
+// Fixed contract (front-running gap + player2-overwrite fixed + Permit2 support).
+const DICE_DUEL_CONTRACT = "0x060EDB17E26D5385f20f85D577dc9b87Dfa6cE28";
 
 // BACKGROUND MUSIC SETUP
 let bgMusic = new Audio('assets/bg-music.mp3'); 
@@ -30,6 +33,11 @@ function stopBackgroundMusic() {
   } catch (e) {}
 }
 
+// World App's Permit2 contract — World App automatically pre-approves every
+// ERC-20 a user holds to this contract, so we bundle a Permit2 "approve"
+// (off-chain-style, consumed same tx) with our contract call instead of a
+// direct token.approve() — World App's own security policy BLOCKS direct
+// ERC-20 approve() calls (error: disallowed_operation).
 const PERMIT2_CONTRACT = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 
 const PERMIT2_APPROVE_ABI = [{
@@ -53,6 +61,8 @@ const DICE_DUEL_ABI = [{
   outputs: []
 }];
 
+// Exact wei amounts (18 decimals) for each fee chip — avoids float
+// rounding issues that matter a lot more once real money is involved.
 const FEE_WEI = {
   0.1: "100000000000000000", 0.2: "200000000000000000", 0.5: "500000000000000000",
   1: "1000000000000000000", 2: "2000000000000000000", 5: "5000000000000000000",
@@ -62,6 +72,10 @@ const FEE_WEI = {
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
+// Turns a Supabase match id (uuid string) into a deterministic bytes32
+// value both players compute identically — used as the on-chain matchId.
+// SHA-256 is fine here (doesn't need to be keccak256): we just need a
+// unique, collision-resistant 32-byte value both sides agree on.
 async function matchIdToBytes32(uuidStr) {
   const enc = new TextEncoder().encode(uuidStr);
   const hashBuf = await crypto.subtle.digest('SHA-256', enc);
@@ -87,6 +101,7 @@ const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 const $ = (id) => document.getElementById(id);
 
+// STRICT BROWSER RESTRICTION & RED WARNING SCREEN
 function checkWorldAppEnvironment() {
   const isWorldApp = (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) || window.ethereum;
   
@@ -761,24 +776,15 @@ async function handlePlayButtonClick(){
 
   $('start-btn').disabled = true;
 
+  // Fresh, live balance check right before we attempt payment — not the
+  // possibly-stale `currentWldBalance` cached from page load. This rules
+  // out a stale-balance false pass being the reason the real deposit
+  // then fails.
   const freshBalance = await fetchRealWldBalance(myAddress);
   if (freshBalance !== null) currentWldBalance = freshBalance;
 
   if (currentWldBalance < selectedFee) {
-    let existingWarning = document.getElementById('neon-balance-warning');
-    if (!existingWarning) {
-      existingWarning = document.createElement('div');
-      existingWarning.id = 'neon-balance-warning';
-      existingWarning.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:rgba(15,5,10,0.95); border:2px solid #ff3366; color:#ff3366; padding:14px 20px; border-radius:12px; font-family:"Space Grotesk", sans-serif; font-size:13px; font-weight:700; text-align:center; box-shadow:0 0 25px rgba(255,51,102,0.6); backdrop-filter:blur(8px); transition:opacity 0.3s ease;';
-      document.body.appendChild(existingWarning);
-    }
-    existingWarning.innerHTML = `⚠️ Insufficient WLD balance.<br><span style="font-size:11.5px; color:#f1eee6; font-weight:400;">You have ${currentWldBalance.toFixed(2)} WLD, need ${selectedFee} WLD.</span>`;
-    existingWarning.style.opacity = '1';
-    setTimeout(() => {
-      existingWarning.style.opacity = '0';
-      setTimeout(() => { existingWarning.remove(); }, 300);
-    }, 4000);
-
+    alert(`Insufficient WLD balance. You have ${currentWldBalance.toFixed(2)} WLD, need ${selectedFee} WLD.`);
     $('start-btn').disabled = false;
     return;
   }
@@ -810,6 +816,15 @@ async function handlePlayButtonClick(){
   isP1 = (matchRow.p1_address === myAddress);
   const opponentAddress = isP1 ? (matchRow.p2_address || null) : matchRow.p1_address;
 
+  // NOTE: if we're the first player (opponentAddress unknown yet), we
+  // deposit with an "open" slot (ZERO_ADDRESS) so payment happens right
+  // away instead of waiting for an opponent. This reopens a narrow
+  // front-running window on the join step — mitigated at SETTLEMENT
+  // time instead: the resolver backend must verify the on-chain
+  // player1/player2 actually match the off-chain matched pair before
+  // ever calling settleMatch(); if they don't match (someone sniped the
+  // slot), it calls refundMatch() instead so nobody profits from it.
+
   $('wait-status').innerText = `Confirm payment in World App...`;
 
   let matchIdBytes32, feeWei;
@@ -822,24 +837,44 @@ async function handlePlayButtonClick(){
     return;
   }
 
-  let paymentSuccessful = false;
+  function showTxDebug(msg) {
+  let dbg = document.getElementById('tx-debug-box');
+  if (!dbg) {
+    dbg = document.createElement('div');
+    dbg.id = 'tx-debug-box';
+    dbg.style.cssText = 'position:fixed; bottom:10px; left:10px; right:10px; z-index:99999; background:rgba(0,0,0,0.95); border:1.5px solid #ff9900; color:#fff; padding:10px; border-radius:10px; font-family:monospace; font-size:10px; max-height:160px; overflow-y:auto; word-break:break-all;';
+    document.body.appendChild(dbg);
+  }
+  dbg.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+  dbg.scrollTop = dbg.scrollHeight;
+}
+
+let paymentSuccessful = false;
   try {
-    const payPayload = {
-      reference: matchId,
-      to: ADMIN_WALLET,
-      tokens: [
+    const txPayload = {
+      transaction: [
         {
-          symbol: Tokens.WLD,
-          token_amount: tokenToDecimals(selectedFee, Tokens.WLD).toString(),
+          address: PERMIT2_CONTRACT,
+          abi: PERMIT2_APPROVE_ABI,
+          functionName: 'approve',
+          args: [WLD_TOKEN_CONTRACT, DICE_DUEL_CONTRACT, feeWei, 0],
+        },
+        {
+          address: DICE_DUEL_CONTRACT,
+          abi: DICE_DUEL_ABI,
+          functionName: 'joinMatch',
+          args: [matchIdBytes32, feeWei, opponentAddress || ZERO_ADDRESS],
         },
       ],
-      description: `TNV Duel Entry Fee (${selectedFee} WLD)`,
     };
+    showTxDebug("Sending: " + JSON.stringify(txPayload));
 
-    const { finalPayload } = await MiniKit.commandsAsync.pay(payPayload);
+    const { finalPayload } = await MiniKit.commandsAsync.sendTransaction(txPayload);
+    showTxDebug("Response: " + JSON.stringify(finalPayload));
     paymentSuccessful = (finalPayload?.status === 'success');
   } catch (err) {
-    console.warn("Payment error:", err);
+    showTxDebug("Threw: " + (err?.message || String(err)));
+    console.warn("On-chain deposit error:", err);
     paymentSuccessful = false;
   }
 
@@ -937,19 +972,7 @@ async function cancelMatchmaking(showAlert = true) {
         p_match_id: matchId, p_wallet: myAddress
       });
       if (showAlert) {
-        let existingCancelWarning = document.getElementById('neon-cancel-warning');
-        if (!existingCancelWarning) {
-          existingCancelWarning = document.createElement('div');
-          existingCancelWarning.id = 'neon-cancel-warning';
-          existingCancelWarning.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:rgba(15,5,10,0.95); border:2px solid #ffb300; color:#ffb300; padding:14px 20px; border-radius:12px; font-family:"Space Grotesk", sans-serif; font-size:13px; font-weight:700; text-align:center; box-shadow:0 0 25px rgba(255,179,0,0.6); backdrop-filter:blur(8px); transition:opacity 0.3s ease; max-width:90%;';
-          document.body.appendChild(existingCancelWarning);
-        }
-        existingCancelWarning.innerHTML = `⚠️ Search Cancelled.<br><span style="font-size:11px; color:#f1eee6; font-weight:400; line-height:1.4;">Your ${selectedFee} WLD payment will be reviewed or refunded by admin.</span>`;
-        existingCancelWarning.style.opacity = '1';
-        setTimeout(() => {
-          existingCancelWarning.style.opacity = '0';
-          setTimeout(() => { existingCancelWarning.remove(); }, 300);
-        }, 5000);
+        alert(`Search cancelled. Your ${selectedFee} WLD is still locked on-chain — it's automatically reclaimable after the match timeout if no opponent joined, or once the match resolves.`);
       }
     } catch(e) {}
   }
@@ -1095,7 +1118,7 @@ async function finalizeGame(){
           });
 
           if (isWin) {
-              await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match (${matchFee} WLD duel) — payout tracked`);
+              await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match (${matchFee} WLD duel) — pending on-chain settlement`);
           } else {
               await logMatchHistory(myAddress, 'DEFEAT', -matchFee, `Lost match (${matchFee} WLD duel)`);
           }
