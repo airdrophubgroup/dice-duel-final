@@ -796,38 +796,16 @@ async function handlePlayButtonClick(){
 
   matchId = matchRow.id;
   isP1 = (matchRow.p1_address === myAddress);
-  let opponentAddress = isP1 ? (matchRow.p2_address || null) : matchRow.p1_address;
+  const opponentAddress = isP1 ? (matchRow.p2_address || null) : matchRow.p1_address;
 
-  // If we created the match and don't know our opponent yet, WAIT until
-  // Supabase confirms someone has actually paired with us before we ever
-  // touch the contract. Depositing with an unknown opponent leaves the
-  // on-chain p2 slot open to anyone until the real opponent's tx lands —
-  // waiting here closes that window, since we can then lock the exact
-  // allowed address via `lockedOpponent` in the (updated) contract.
-  if (!opponentAddress) {
-    $('wait-status').innerText = `Waiting for opponent to be matched...`;
-    opponentAddress = await new Promise((resolve) => {
-      let waited = 0;
-      const iv = setInterval(async () => {
-        waited += 1;
-        if (!matchmakingActive) { clearInterval(iv); resolve(null); return; }
-        const { data } = await supabaseClient.from('matches').select('p2_address, status').eq('id', matchId).maybeSingle();
-        if (data && data.p2_address) {
-          clearInterval(iv);
-          resolve(data.p2_address);
-        } else if (!data || data.status !== 'waiting' || waited > 60) {
-          clearInterval(iv);
-          resolve(null);
-        }
-      }, 1000);
-    });
-
-    if (!opponentAddress) {
-      try { await supabaseClient.rpc('secure_leave_waiting_match', { p_match_id: matchId, p_wallet: myAddress }); } catch(e) {}
-      resetToHome();
-      return;
-    }
-  }
+  // NOTE: if we're the first player (opponentAddress unknown yet), we
+  // deposit with an "open" slot (ZERO_ADDRESS) so payment happens right
+  // away instead of waiting for an opponent. This reopens a narrow
+  // front-running window on the join step — mitigated at SETTLEMENT
+  // time instead: the resolver backend must verify the on-chain
+  // player1/player2 actually match the off-chain matched pair before
+  // ever calling settleMatch(); if they don't match (someone sniped the
+  // slot), it calls refundMatch() instead so nobody profits from it.
 
   $('wait-status').innerText = `Confirm payment in World App...`;
 
@@ -855,7 +833,7 @@ async function handlePlayButtonClick(){
           address: DICE_DUEL_CONTRACT,
           abi: DICE_DUEL_ABI,
           functionName: 'joinMatch',
-          args: [matchIdBytes32, feeWei, opponentAddress],
+          args: [matchIdBytes32, feeWei, opponentAddress || ZERO_ADDRESS],
         },
       ],
     });
