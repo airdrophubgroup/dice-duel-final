@@ -13,7 +13,7 @@ const WORLDCHAIN_RPC = "https://worldchain-mainnet.g.alchemy.com/public";
 const PROXY_API_URL = "/api/proxy-request";
 
 // TODO: fill this in after you deploy DiceDuelEscrow.sol!
-const DICE_DUEL_CONTRACT = "0xPUT_YOUR_DEPLOYED_CONTRACT_ADDRESS_HERE";
+const DICE_DUEL_CONTRACT = "0xF5Fc412E1aE71924fd7C6bD44A3cDADa8e69fd37";
 
 // Minimal ABIs — just the functions app.js actually calls.
 const ERC20_APPROVE_ABI = [{
