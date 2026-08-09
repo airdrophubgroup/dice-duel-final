@@ -9,6 +9,9 @@ const ADMIN_WALLET = "0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1";
 const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";
 const WORLDCHAIN_RPC = "https://worldchain-mainnet.g.alchemy.com/public";
 
+// PROXY ENDPOINT (Frontend ab direct RPC/API call ke bajaye is proxy URL ko use karega)
+const PROXY_API_URL = "/api/proxy-request";
+
 // TODO: fill this in after you deploy DiceDuelEscrow.sol!
 const DICE_DUEL_CONTRACT = "0xPUT_YOUR_DEPLOYED_CONTRACT_ADDRESS_HERE";
 
@@ -118,10 +121,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     
     try {
       await performWalletAuth(true);
-    } catch(err) {
-      // Silent auto sign-in attempt — no alert here. If it didn't complete,
-      // the user can still sign in manually by tapping Play Now.
-    }
+    } catch(err) {}
   }
 
   if (myAddress) {
@@ -338,21 +338,18 @@ function getTnvRewardForFee(fee) {
   return rewards[fee] || 15;
 }
 
+// UPDATED: Routed via Proxy Server to keep RPC/API secure and hidden
 async function fetchRealWldBalance(walletAddress) {
   if (!walletAddress) return 0;
   try {
     const paddedAddress = walletAddress.toLowerCase().replace('0x', '').padStart(64, '0');
-    const response = await fetch(WORLDCHAIN_RPC, {
+    const response = await fetch(PROXY_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        jsonrpc: '2.0',
-        method: 'eth_call',
-        params: [{
-          to: WLD_TOKEN_CONTRACT,
-          data: '0x70a08231' + paddedAddress
-        }, 'latest'],
-        id: 1
+        action: 'eth_call',
+        to: WLD_TOKEN_CONTRACT,
+        data: '0x70a08231' + paddedAddress
       })
     });
     const result = await response.json();
@@ -362,7 +359,7 @@ async function fetchRealWldBalance(walletAddress) {
       return Number(balanceWei) / 1e18;
     }
   } catch (e) {
-    console.error("On-chain WLD balance fetch failed:", e);
+    console.error("On-chain WLD balance fetch failed via proxy:", e);
   }
   return null;
 }
@@ -392,17 +389,11 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
     currentTnvBalance = Number(data?.tnv_balance || 0);
 
     if (realBalance !== null) {
-      // Display-only: this is the REAL on-chain wallet balance. It must
-      // NEVER be written back into user_rewards.wld_balance — that column
-      // is the internal game ledger that settle_match_result / refund RPCs
-      // credit on wins. Overwriting it here was erasing winnings the
-      // instant they were credited.
       currentWldBalance = realBalance;
       if (!data) {
         await supabaseClient.rpc('secure_ensure_user_row', { p_wallet: cleanWallet });
       }
     } else {
-      // Chain fetch failed — fall back to showing the last known ledger value.
       currentWldBalance = Number(data?.wld_balance || 0);
       if (!data) {
         await supabaseClient.rpc('secure_ensure_user_row', { p_wallet: cleanWallet });
@@ -751,9 +742,6 @@ async function handlePlayButtonClick(){
 
   $('start-btn').disabled = true;
 
-  // Quick UX check against the REAL on-chain WLD balance — not a
-  // guarantee (the contract itself is the real check), just avoids
-  // opening a transaction sheet that's certain to fail.
   if (currentWldBalance < selectedFee) {
     alert(`Insufficient WLD balance. You have ${currentWldBalance.toFixed(2)} WLD, need ${selectedFee} WLD.`);
     $('start-btn').disabled = false;
@@ -766,11 +754,6 @@ async function handlePlayButtonClick(){
     return;
   }
 
-  // ---- STEP 1: Matchmake FIRST (off-chain, no money moves yet). ----
-  // This is the key ordering change: we need to know the shared matchId
-  // (and, if already paired, the opponent's address) BEFORE either
-  // player deposits on-chain — that's what lets joinMatch() lock the
-  // match to the two specific matched players via `expectedOpponent`.
   matchmakingActive = true;
   $('waiting-overlay').style.display = 'flex';
   $('wait-status').innerText = `Finding opponent...`;
@@ -792,7 +775,6 @@ async function handlePlayButtonClick(){
   isP1 = (matchRow.p1_address === myAddress);
   const opponentAddress = isP1 ? (matchRow.p2_address || null) : matchRow.p1_address;
 
-  // ---- STEP 2: Deposit on-chain (approve + joinMatch bundled). ----
   $('wait-status').innerText = `Confirm payment in World App...`;
 
   let matchIdBytes32, feeWei;
@@ -844,8 +826,6 @@ async function handlePlayButtonClick(){
       setTimeout(() => { existingWarning.remove(); }, 300);
     }, 4000);
 
-    // Don't leave the opponent (or the match row) waiting on a payment
-    // that never happened — release our matchmaking slot.
     try { await supabaseClient.rpc('secure_leave_waiting_match', { p_match_id: matchId, p_wallet: myAddress }); } catch(e) {}
     resetToHome();
     return;
@@ -865,7 +845,6 @@ async function handlePlayButtonClick(){
     setTimeout(() => { existingSuccess.remove(); }, 300);
   }, 3000);
 
-  // ---- STEP 3: Continue matchmaking signaling (unchanged, off-chain). ----
   $('wait-status').innerText = `SEARCHING... (Cancel anytime)`;
 
   if (globalChatChannel) {
@@ -922,15 +901,6 @@ async function cancelMatchmaking(showAlert = true) {
   if (!matchmakingActive || gameActive) return;
   if (matchId) {
     try {
-      // This only releases the Supabase matchmaking slot (stops looking
-      // for an opponent) — it does NOT move any money. Your WLD, once
-      // deposited, is locked in the DiceDuelEscrow contract. It comes
-      // back to you automatically if:
-      //  (a) an opponent joins and the match plays out (win/lose settles
-      //      normally), or
-      //  (b) no opponent joins within the contract's refund timeout
-      //      (10 min by default) — after that, call selfRefundIfExpired()
-      //      to reclaim it yourself, or the resolver refunds it for you.
       await supabaseClient.rpc('secure_leave_waiting_match', {
         p_match_id: matchId, p_wallet: myAddress
       });
@@ -1072,13 +1042,6 @@ async function finalizeGame(){
   if (myAddress && !sessionStorage.getItem(`settled_${matchId}_${myAddress}`)) {
       sessionStorage.setItem(`settled_${matchId}_${myAddress}`, "true");
       try {
-          // NOTE: This no longer moves any WLD itself — that would be
-          // fake now that real WLD lives in the DiceDuelEscrow contract,
-          // not in a Supabase number. This just records the outcome for
-          // your resolver backend to pick up and call settleMatch() /
-          // refundMatch() on-chain. Until that backend exists and is
-          // running, matches will complete in the UI but the real WLD
-          // will stay locked in the contract — build the resolver next.
           await supabaseClient.rpc('queue_match_settlement', {
               p_match_id: matchId,
               p_reporter_address: myAddress,
