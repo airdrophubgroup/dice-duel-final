@@ -765,21 +765,15 @@ async function handlePlayButtonClick(){
 
   $('start-btn').disabled = true;
 
-if (currentWldBalance < selectedFee) {
-    let existingWarning = document.getElementById('neon-balance-warning');
-    if (!existingWarning) {
-      existingWarning = document.createElement('div');
-      existingWarning.id = 'neon-balance-warning';
-      existingWarning.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:rgba(15,5,10,0.95); border:2px solid #ff3366; color:#ff3366; padding:14px 20px; border-radius:12px; font-family:"Space Grotesk", sans-serif; font-size:13px; font-weight:700; text-align:center; box-shadow:0 0 25px rgba(255,51,102,0.6); backdrop-filter:blur(8px); transition:opacity 0.3s ease;';
-      document.body.appendChild(existingWarning);
-    }
-    existingWarning.innerHTML = `⚠️ Insufficient WLD balance.<br><span style="font-size:11.5px; color:#f1eee6; font-weight:400;">You have ${currentWldBalance.toFixed(2)} WLD, need ${selectedFee} WLD.</span>`;
-    existingWarning.style.opacity = '1';
-    setTimeout(() => {
-      existingWarning.style.opacity = '0';
-      setTimeout(() => { existingWarning.remove(); }, 300);
-    }, 4000);
+  // Fresh, live balance check right before we attempt payment — not the
+  // possibly-stale `currentWldBalance` cached from page load. This rules
+  // out a stale-balance false pass being the reason the real deposit
+  // then fails.
+  const freshBalance = await fetchRealWldBalance(myAddress);
+  if (freshBalance !== null) currentWldBalance = freshBalance;
 
+  if (currentWldBalance < selectedFee) {
+    alert(`Insufficient WLD balance. You have ${currentWldBalance.toFixed(2)} WLD, need ${selectedFee} WLD.`);
     $('start-btn').disabled = false;
     return;
   }
@@ -832,9 +826,21 @@ if (currentWldBalance < selectedFee) {
     return;
   }
 
-  let paymentSuccessful = false;
+  function showTxDebug(msg) {
+  let dbg = document.getElementById('tx-debug-box');
+  if (!dbg) {
+    dbg = document.createElement('div');
+    dbg.id = 'tx-debug-box';
+    dbg.style.cssText = 'position:fixed; bottom:10px; left:10px; right:10px; z-index:99999; background:rgba(0,0,0,0.95); border:1.5px solid #ff9900; color:#fff; padding:10px; border-radius:10px; font-family:monospace; font-size:10px; max-height:160px; overflow-y:auto; word-break:break-all;';
+    document.body.appendChild(dbg);
+  }
+  dbg.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+  dbg.scrollTop = dbg.scrollHeight;
+}
+
+let paymentSuccessful = false;
   try {
-    const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({
+    const txPayload = {
       transaction: [
         {
           address: WLD_TOKEN_CONTRACT,
@@ -849,9 +855,14 @@ if (currentWldBalance < selectedFee) {
           args: [matchIdBytes32, feeWei, opponentAddress || ZERO_ADDRESS],
         },
       ],
-    });
+    };
+    showTxDebug("Sending: " + JSON.stringify(txPayload));
+
+    const { finalPayload } = await MiniKit.commandsAsync.sendTransaction(txPayload);
+    showTxDebug("Response: " + JSON.stringify(finalPayload));
     paymentSuccessful = (finalPayload?.status === 'success');
   } catch (err) {
+    showTxDebug("Threw: " + (err?.message || String(err)));
     console.warn("On-chain deposit error:", err);
     paymentSuccessful = false;
   }
@@ -950,19 +961,7 @@ async function cancelMatchmaking(showAlert = true) {
         p_match_id: matchId, p_wallet: myAddress
       });
       if (showAlert) {
-        let existingCancelWarning = document.getElementById('neon-cancel-warning');
-        if (!existingCancelWarning) {
-          existingCancelWarning = document.createElement('div');
-          existingCancelWarning.id = 'neon-cancel-warning';
-          existingCancelWarning.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:rgba(15,5,10,0.95); border:2px solid #ffb300; color:#ffb300; padding:14px 20px; border-radius:12px; font-family:"Space Grotesk", sans-serif; font-size:13px; font-weight:700; text-align:center; box-shadow:0 0 25px rgba(255,179,0,0.6); backdrop-filter:blur(8px); transition:opacity 0.3s ease; max-width:90%;';
-          document.body.appendChild(existingCancelWarning);
-        }
-        existingCancelWarning.innerHTML = `⚠️ Search Cancelled.<br><span style="font-size:11px; color:#f1eee6; font-weight:400; line-height:1.4;">Your ${selectedFee} WLD is locked on-chain — reclaimable after timeout or match resolution.</span>`;
-        existingCancelWarning.style.opacity = '1';
-        setTimeout(() => {
-          existingCancelWarning.style.opacity = '0';
-          setTimeout(() => { existingCancelWarning.remove(); }, 300);
-        }, 5000);
+        alert(`Search cancelled. Your ${selectedFee} WLD is still locked on-chain — it's automatically reclaimable after the match timeout if no opponent joined, or once the match resolves.`);
       }
     } catch(e) {}
   }
