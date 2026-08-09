@@ -358,18 +358,21 @@ function getTnvRewardForFee(fee) {
   return rewards[fee] || 15;
 }
 
-// UPDATED: Routed via Proxy Server to keep RPC/API secure and hidden
 async function fetchRealWldBalance(walletAddress) {
   if (!walletAddress) return 0;
   try {
     const paddedAddress = walletAddress.toLowerCase().replace('0x', '').padStart(64, '0');
-    const response = await fetch(PROXY_API_URL, {
+    const response = await fetch(WORLDCHAIN_RPC, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        action: 'eth_call',
-        to: WLD_TOKEN_CONTRACT,
-        data: '0x70a08231' + paddedAddress
+        jsonrpc: '2.0',
+        method: 'eth_call',
+        params: [{
+          to: WLD_TOKEN_CONTRACT,
+          data: '0x70a08231' + paddedAddress
+        }, 'latest'],
+        id: 1
       })
     });
     const result = await response.json();
@@ -379,7 +382,7 @@ async function fetchRealWldBalance(walletAddress) {
       return Number(balanceWei) / 1e18;
     }
   } catch (e) {
-    console.error("On-chain WLD balance fetch failed via proxy:", e);
+    console.error("On-chain WLD balance fetch failed:", e);
   }
   return null;
 }
