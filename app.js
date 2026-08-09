@@ -15,6 +15,24 @@ const PROXY_API_URL = "/api/proxy-request";
 // TODO: fill this in after you deploy DiceDuelEscrow.sol!
 const DICE_DUEL_CONTRACT = "0xF5Fc412E1aE71924fd7C6bD44A3cDADa8e69fd37";
 
+// BACKGROUND MUSIC SETUP
+let bgMusic = new Audio('assets/bg-music.mp3'); 
+bgMusic.loop = true; 
+bgMusic.volume = 0.4; 
+
+function startBackgroundMusic() {
+  try {
+    bgMusic.play().catch(err => console.log("Audio play blocked:", err));
+  } catch (e) {}
+}
+
+function stopBackgroundMusic() {
+  try {
+    bgMusic.pause();
+    bgMusic.currentTime = 0;
+  } catch (e) {}
+}
+
 // Minimal ABIs — just the functions app.js actually calls.
 const ERC20_APPROVE_ABI = [{
   type: "function", name: "approve", stateMutability: "nonpayable",
@@ -109,6 +127,8 @@ function waitForMiniKitReady(timeoutMs = 2000) {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
+  startBackgroundMusic();
+
   try { 
     MiniKit.install(WORLD_APP_ID); 
   } catch(e) {}
@@ -934,6 +954,8 @@ async function startSyncCountdown(){
   gameActive = true;
   clearInterval(mTimer);
   if (pollTimer) clearInterval(pollTimer);
+
+  stopBackgroundMusic();
 
   if (isP1) {
     await supabaseClient.rpc('secure_start_match', { p_match_id: matchId, p_wallet: myAddress });
