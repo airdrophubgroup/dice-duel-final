@@ -9,6 +9,48 @@ const ADMIN_WALLET = "0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1";
 const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";
 const WORLDCHAIN_RPC = "https://worldchain-mainnet.g.alchemy.com/public";
 
+// TODO: fill this in after you deploy DiceDuelEscrow.sol!
+const DICE_DUEL_CONTRACT = "0xPUT_YOUR_DEPLOYED_CONTRACT_ADDRESS_HERE";
+
+// Minimal ABIs — just the functions app.js actually calls.
+const ERC20_APPROVE_ABI = [{
+  type: "function", name: "approve", stateMutability: "nonpayable",
+  inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }],
+  outputs: [{ name: "", type: "bool" }]
+}];
+
+const DICE_DUEL_ABI = [{
+  type: "function", name: "joinMatch", stateMutability: "nonpayable",
+  inputs: [
+    { name: "matchId", type: "bytes32" },
+    { name: "fee", type: "uint256" },
+    { name: "expectedOpponent", type: "address" }
+  ],
+  outputs: []
+}];
+
+// Exact wei amounts (18 decimals) for each fee chip — avoids float
+// rounding issues that matter a lot more once real money is involved.
+const FEE_WEI = {
+  0.1: "100000000000000000", 0.2: "200000000000000000", 0.5: "500000000000000000",
+  1: "1000000000000000000", 2: "2000000000000000000", 5: "5000000000000000000",
+  10: "10000000000000000000", 20: "20000000000000000000", 30: "30000000000000000000",
+  40: "40000000000000000000", 50: "50000000000000000000"
+};
+
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+// Turns a Supabase match id (uuid string) into a deterministic bytes32
+// value both players compute identically — used as the on-chain matchId.
+// SHA-256 is fine here (doesn't need to be keccak256): we just need a
+// unique, collision-resistant 32-byte value both sides agree on.
+async function matchIdToBytes32(uuidStr) {
+  const enc = new TextEncoder().encode(uuidStr);
+  const hashBuf = await crypto.subtle.digest('SHA-256', enc);
+  const hashArr = Array.from(new Uint8Array(hashBuf));
+  return '0x' + hashArr.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 const supabaseClient = createClient(SB_URL, SB_KEY);
 
 let myAddress = "", myUsername = "", matchId, isP1, myScore = 0, oppScore = 0;
@@ -93,7 +135,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (stuckMatches && stuckMatches.length > 0) {
         for (let match of stuckMatches) {
           if (!match.game_started) {
-            await supabaseClient.rpc('secure_cancel_and_refund', {
+            await supabaseClient.rpc('secure_leave_waiting_match', {
               p_match_id: match.id, p_wallet: myAddress
             });
           }
@@ -709,39 +751,81 @@ async function handlePlayButtonClick(){
 
   $('start-btn').disabled = true;
 
-  // Check against the REAL on-chain WLD balance (already fetched into
-  // currentWldBalance) — not a database number. The old secure_join_match
-  // RPC checked/deducted an internal DB ledger that's separate from your
-  // real wallet and never actually gets spent by the real payment below,
-  // which caused "insufficient balance" errors even with plenty of real
-  // WLD in your wallet. The actual MiniKit.pay() call further down is
-  // the real, reliable balance check — it talks to your real World App
-  // wallet directly.
+  // Quick UX check against the REAL on-chain WLD balance — not a
+  // guarantee (the contract itself is the real check), just avoids
+  // opening a transaction sheet that's certain to fail.
   if (currentWldBalance < selectedFee) {
     alert(`Insufficient WLD balance. You have ${currentWldBalance.toFixed(2)} WLD, need ${selectedFee} WLD.`);
     $('start-btn').disabled = false;
     return;
   }
 
+  if (DICE_DUEL_CONTRACT.includes('PUT_YOUR_DEPLOYED')) {
+    alert('DICE_DUEL_CONTRACT address is not set in app.js yet — deploy the contract first and fill it in.');
+    $('start-btn').disabled = false;
+    return;
+  }
+
+  // ---- STEP 1: Matchmake FIRST (off-chain, no money moves yet). ----
+  // This is the key ordering change: we need to know the shared matchId
+  // (and, if already paired, the opponent's address) BEFORE either
+  // player deposits on-chain — that's what lets joinMatch() lock the
+  // match to the two specific matched players via `expectedOpponent`.
+  matchmakingActive = true;
+  $('waiting-overlay').style.display = 'flex';
+  $('wait-status').innerText = `Finding opponent...`;
+
+  let matchRow;
+  try {
+    const { data, error } = await supabaseClient.rpc('join_or_create_match', {
+      p_address: myAddress, p_fee: selectedFee, p_username: myUsername,
+    });
+    if (error || !data) { resetToHome(); return; }
+    matchRow = Array.isArray(data) ? data[0] : data;
+    if (!matchRow) { resetToHome(); return; }
+  } catch (err) {
+    resetToHome();
+    return;
+  }
+
+  matchId = matchRow.id;
+  isP1 = (matchRow.p1_address === myAddress);
+  const opponentAddress = isP1 ? (matchRow.p2_address || null) : matchRow.p1_address;
+
+  // ---- STEP 2: Deposit on-chain (approve + joinMatch bundled). ----
+  $('wait-status').innerText = `Confirm payment in World App...`;
+
+  let matchIdBytes32, feeWei;
+  try {
+    matchIdBytes32 = await matchIdToBytes32(matchId);
+    feeWei = FEE_WEI[selectedFee];
+    if (!feeWei) throw new Error('Unknown fee tier');
+  } catch (e) {
+    resetToHome();
+    return;
+  }
+
   let paymentSuccessful = false;
   try {
-    const paymentPayload = {
-      reference: 'ref_' + randomAlphaNumeric(16),
-      to: ADMIN_WALLET,
-      tokens: [
+    const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({
+      transaction: [
         {
-          symbol: Tokens.WLD,
-          token_amount: tokenToDecimals(selectedFee, Tokens.WLD).toString(),
+          address: WLD_TOKEN_CONTRACT,
+          abi: ERC20_APPROVE_ABI,
+          functionName: 'approve',
+          args: [DICE_DUEL_CONTRACT, feeWei],
+        },
+        {
+          address: DICE_DUEL_CONTRACT,
+          abi: DICE_DUEL_ABI,
+          functionName: 'joinMatch',
+          args: [matchIdBytes32, feeWei, opponentAddress || ZERO_ADDRESS],
         },
       ],
-      description: `TNV Duel Arena Bet: ${selectedFee} WLD`,
-    };
-
-    const { finalPayload } = await MiniKit.commandsAsync.pay(paymentPayload);
+    });
     paymentSuccessful = (finalPayload?.status === 'success');
-
   } catch (err) {
-    console.warn("Payment error:", err);
+    console.warn("On-chain deposit error:", err);
     paymentSuccessful = false;
   }
 
@@ -755,13 +839,15 @@ async function handlePlayButtonClick(){
     }
     existingWarning.innerHTML = '⚠️ Payment was cancelled or failed.';
     existingWarning.style.opacity = '1';
-
     setTimeout(() => {
       existingWarning.style.opacity = '0';
       setTimeout(() => { existingWarning.remove(); }, 300);
     }, 4000);
 
-    $('start-btn').disabled = false;
+    // Don't leave the opponent (or the match row) waiting on a payment
+    // that never happened — release our matchmaking slot.
+    try { await supabaseClient.rpc('secure_leave_waiting_match', { p_match_id: matchId, p_wallet: myAddress }); } catch(e) {}
+    resetToHome();
     return;
   }
 
@@ -772,16 +858,35 @@ async function handlePlayButtonClick(){
     existingSuccess.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:rgba(5,15,10,0.95); border:2px solid #29d9c2; color:#29d9c2; padding:14px 20px; border-radius:12px; font-family:"Space Grotesk", sans-serif; font-size:13px; font-weight:700; text-align:center; box-shadow:0 0 20px rgba(41,217,194,0.6); backdrop-filter:blur(8px); transition:opacity 0.3s ease;';
     document.body.appendChild(existingSuccess);
   }
-  existingSuccess.innerHTML = '✨ Payment Successful!';
+  existingSuccess.innerHTML = '✨ Deposited on-chain!';
   existingSuccess.style.opacity = '1';
-
   setTimeout(() => {
     existingSuccess.style.opacity = '0';
     setTimeout(() => { existingSuccess.remove(); }, 300);
   }, 3000);
 
-  await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', selectedFee, `Entry fee payment from ${myUsername || myAddress}`);
-  initMatchmakingAfterPayment();
+  // ---- STEP 3: Continue matchmaking signaling (unchanged, off-chain). ----
+  $('wait-status').innerText = `SEARCHING... (Cancel anytime)`;
+
+  if (globalChatChannel) {
+    globalChatChannel.send({
+      type: 'broadcast',
+      event: 'live_bet_alert',
+      payload: { username: myUsername || '@Player', fee: selectedFee, address: myAddress }
+    });
+  }
+
+  let timeLeft = 60;
+  mTimer = setInterval(async () => {
+    timeLeft--;
+    if (timeLeft <= 0){
+      clearInterval(mTimer);
+      if (!gameActive) await cancelMatchmaking(false);
+    }
+  }, 1000);
+
+  setupChannel();
+  pollTimer = setInterval(checkBothReady, 1000);
 }
 
 function selectFee(amount, element){
@@ -813,58 +918,24 @@ function setupChannel() {
     .subscribe();
 }
 
-async function initMatchmakingAfterPayment(){
-  matchmakingActive = true;
-  $('start-btn').disabled = true;
-  $('waiting-overlay').style.display = 'flex';
-  $('wait-status').innerText = `SEARCHING... (Cancel anytime)`;
-
-  if (globalChatChannel) {
-    globalChatChannel.send({
-      type: 'broadcast',
-      event: 'live_bet_alert',
-      payload: { username: myUsername || '@Player', fee: selectedFee, address: myAddress }
-    });
-  }
-
-  let timeLeft = 60;
-  mTimer = setInterval(async () => {
-    timeLeft--;
-    if (timeLeft <= 0){
-      clearInterval(mTimer);
-      if (!gameActive) await cancelMatchmaking(false);
-    }
-  }, 1000);
-
-  try{
-    const { data, error } = await supabaseClient.rpc('join_or_create_match', {
-      p_address: myAddress, p_fee: selectedFee, p_username: myUsername,
-    });
-
-    if (error || !data){ resetToHome(); return; }
-    const matchRow = Array.isArray(data) ? data[0] : data;
-    if (!matchRow) { resetToHome(); return; }
-
-    matchId = matchRow.id;
-    isP1 = (matchRow.p1_address === myAddress);
-
-    setupChannel();
-    pollTimer = setInterval(checkBothReady, 1000);
-  }catch(err){ resetToHome(); }
-}
-
 async function cancelMatchmaking(showAlert = true) {
   if (!matchmakingActive || gameActive) return;
   if (matchId) {
     try {
-      const { data: result } = await supabaseClient.rpc('secure_cancel_and_refund', {
+      // This only releases the Supabase matchmaking slot (stops looking
+      // for an opponent) — it does NOT move any money. Your WLD, once
+      // deposited, is locked in the DiceDuelEscrow contract. It comes
+      // back to you automatically if:
+      //  (a) an opponent joins and the match plays out (win/lose settles
+      //      normally), or
+      //  (b) no opponent joins within the contract's refund timeout
+      //      (10 min by default) — after that, call selfRefundIfExpired()
+      //      to reclaim it yourself, or the resolver refunds it for you.
+      await supabaseClient.rpc('secure_leave_waiting_match', {
         p_match_id: matchId, p_wallet: myAddress
       });
-
-      if (result && result.refunded) {
-        if (showAlert) alert(`Search cancelled. ${result.amount} WLD entry fee has been refunded.`);
-      } else {
-        if (showAlert) alert(`Search cancelled.`);
+      if (showAlert) {
+        alert(`Search cancelled. Your ${selectedFee} WLD is still locked on-chain — it's automatically reclaimable after the match timeout if no opponent joined, or once the match resolves.`);
       }
     } catch(e) {}
   }
@@ -1001,16 +1072,21 @@ async function finalizeGame(){
   if (myAddress && !sessionStorage.getItem(`settled_${matchId}_${myAddress}`)) {
       sessionStorage.setItem(`settled_${matchId}_${myAddress}`, "true");
       try {
-          if (isWin) {
-              await supabaseClient.rpc('settle_match_result', {
-                  p_match_id: matchId,
-                  p_winner_address: myAddress,
-                  p_payout: exactChipEarn,
-                  p_admin_fee: adminFeeAmount
-              });
+          // NOTE: This no longer moves any WLD itself — that would be
+          // fake now that real WLD lives in the DiceDuelEscrow contract,
+          // not in a Supabase number. This just records the outcome for
+          // your resolver backend to pick up and call settleMatch() /
+          // refundMatch() on-chain. Until that backend exists and is
+          // running, matches will complete in the UI but the real WLD
+          // will stay locked in the contract — build the resolver next.
+          await supabaseClient.rpc('queue_match_settlement', {
+              p_match_id: matchId,
+              p_reporter_address: myAddress,
+              p_is_win: isWin,
+          });
 
-              await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match (${matchFee} WLD duel)`);
-              await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', adminFeeAmount, `Platform fee from match`);
+          if (isWin) {
+              await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match (${matchFee} WLD duel) — pending on-chain settlement`);
           } else {
               await logMatchHistory(myAddress, 'DEFEAT', -matchFee, `Lost match (${matchFee} WLD duel)`);
           }
