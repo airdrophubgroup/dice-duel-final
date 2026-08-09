@@ -12,8 +12,8 @@ const WORLDCHAIN_RPC = "https://worldchain-mainnet.g.alchemy.com/public";
 // PROXY ENDPOINT (Frontend ab direct RPC/API call ke bajaye is proxy URL ko use karega)
 const PROXY_API_URL = "/api/proxy-request";
 
-// TODO: fill this in after you deploy DiceDuelEscrow.sol!
-const DICE_DUEL_CONTRACT = "0xF5Fc412E1aE71924fd7C6bD44A3cDADa8e69fd37";
+// Fixed contract (front-running gap closed via lockedOpponent).
+const DICE_DUEL_CONTRACT = "0xF1A04eBa219f951ada3dC6eE8948855EeF804bd9";
 
 // BACKGROUND MUSIC SETUP
 let bgMusic = new Audio('assets/bg-music.mp3'); 
@@ -793,7 +793,38 @@ async function handlePlayButtonClick(){
 
   matchId = matchRow.id;
   isP1 = (matchRow.p1_address === myAddress);
-  const opponentAddress = isP1 ? (matchRow.p2_address || null) : matchRow.p1_address;
+  let opponentAddress = isP1 ? (matchRow.p2_address || null) : matchRow.p1_address;
+
+  // If we created the match and don't know our opponent yet, WAIT until
+  // Supabase confirms someone has actually paired with us before we ever
+  // touch the contract. Depositing with an unknown opponent leaves the
+  // on-chain p2 slot open to anyone until the real opponent's tx lands —
+  // waiting here closes that window, since we can then lock the exact
+  // allowed address via `lockedOpponent` in the (updated) contract.
+  if (!opponentAddress) {
+    $('wait-status').innerText = `Waiting for opponent to be matched...`;
+    opponentAddress = await new Promise((resolve) => {
+      let waited = 0;
+      const iv = setInterval(async () => {
+        waited += 1;
+        if (!matchmakingActive) { clearInterval(iv); resolve(null); return; }
+        const { data } = await supabaseClient.from('matches').select('p2_address, status').eq('id', matchId).maybeSingle();
+        if (data && data.p2_address) {
+          clearInterval(iv);
+          resolve(data.p2_address);
+        } else if (!data || data.status !== 'waiting' || waited > 60) {
+          clearInterval(iv);
+          resolve(null);
+        }
+      }, 1000);
+    });
+
+    if (!opponentAddress) {
+      try { await supabaseClient.rpc('secure_leave_waiting_match', { p_match_id: matchId, p_wallet: myAddress }); } catch(e) {}
+      resetToHome();
+      return;
+    }
+  }
 
   $('wait-status').innerText = `Confirm payment in World App...`;
 
@@ -821,7 +852,7 @@ async function handlePlayButtonClick(){
           address: DICE_DUEL_CONTRACT,
           abi: DICE_DUEL_ABI,
           functionName: 'joinMatch',
-          args: [matchIdBytes32, feeWei, opponentAddress || ZERO_ADDRESS],
+          args: [matchIdBytes32, feeWei, opponentAddress],
         },
       ],
     });
