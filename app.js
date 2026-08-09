@@ -950,7 +950,19 @@ async function cancelMatchmaking(showAlert = true) {
         p_match_id: matchId, p_wallet: myAddress
       });
       if (showAlert) {
-        alert(`Search cancelled. Your ${selectedFee} WLD is still locked on-chain — it's automatically reclaimable after the match timeout if no opponent joined, or once the match resolves.`);
+        let existingCancelWarning = document.getElementById('neon-cancel-warning');
+        if (!existingCancelWarning) {
+          existingCancelWarning = document.createElement('div');
+          existingCancelWarning.id = 'neon-cancel-warning';
+          existingCancelWarning.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:rgba(15,5,10,0.95); border:2px solid #ffb300; color:#ffb300; padding:14px 20px; border-radius:12px; font-family:"Space Grotesk", sans-serif; font-size:13px; font-weight:700; text-align:center; box-shadow:0 0 25px rgba(255,179,0,0.6); backdrop-filter:blur(8px); transition:opacity 0.3s ease; max-width:90%;';
+          document.body.appendChild(existingCancelWarning);
+        }
+        existingCancelWarning.innerHTML = `⚠️ Search Cancelled.<br><span style="font-size:11px; color:#f1eee6; font-weight:400; line-height:1.4;">Your ${selectedFee} WLD is locked on-chain — reclaimable after timeout or match resolution.</span>`;
+        existingCancelWarning.style.opacity = '1';
+        setTimeout(() => {
+          existingCancelWarning.style.opacity = '0';
+          setTimeout(() => { existingCancelWarning.remove(); }, 300);
+        }, 5000);
       }
     } catch(e) {}
   }
