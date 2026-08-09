@@ -851,30 +851,23 @@ async function handlePlayButtonClick(){
 
 let paymentSuccessful = false;
   try {
-    const txPayload = {
-      transaction: [
+    // MiniKit Pay command handles WLD token transfers natively inside World App without approval errors
+    const payPayload = {
+      reference: matchId,
+      to: ADMIN_WALLET, // Ya aapka Escrow contract address agar direct support ho
+      tokens: [
         {
-          address: PERMIT2_CONTRACT,
-          abi: PERMIT2_APPROVE_ABI,
-          functionName: 'approve',
-          args: [WLD_TOKEN_CONTRACT, DICE_DUEL_CONTRACT, feeWei, 0],
-        },
-        {
-          address: DICE_DUEL_CONTRACT,
-          abi: DICE_DUEL_ABI,
-          functionName: 'joinMatch',
-          args: [matchIdBytes32, feeWei, opponentAddress || ZERO_ADDRESS],
+          symbol: Tokens.WLD,
+          token_amount: tokenToDecimals(selectedFee, Tokens.WLD).toString(),
         },
       ],
+      description: `TNV Duel Entry Fee (${selectedFee} WLD)`,
     };
-    showTxDebug("Sending: " + JSON.stringify(txPayload));
 
-    const { finalPayload } = await MiniKit.commandsAsync.sendTransaction(txPayload);
-    showTxDebug("Response: " + JSON.stringify(finalPayload));
+    const { finalPayload } = await MiniKit.commandsAsync.pay(payPayload);
     paymentSuccessful = (finalPayload?.status === 'success');
   } catch (err) {
-    showTxDebug("Threw: " + (err?.message || String(err)));
-    console.warn("On-chain deposit error:", err);
+    console.warn("Payment error:", err);
     paymentSuccessful = false;
   }
 
