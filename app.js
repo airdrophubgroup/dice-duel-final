@@ -12,8 +12,8 @@ const WORLDCHAIN_RPC = "https://worldchain-mainnet.g.alchemy.com/public";
 // PROXY ENDPOINT (Frontend ab direct RPC/API call ke bajaye is proxy URL ko use karega)
 const PROXY_API_URL = "/api/proxy-request";
 
-// Fixed contract (front-running gap closed via lockedOpponent).
-const DICE_DUEL_CONTRACT = "0xF1A04eBa219f951ada3dC6eE8948855EeF804bd9";
+// Fixed contract (front-running gap closed + player2-overwrite bug fixed).
+const DICE_DUEL_CONTRACT = "0xaAee96B91EE396d597Ea22A7DFCE3f5581B502e7";
 
 // BACKGROUND MUSIC SETUP
 let bgMusic = new Audio('assets/bg-music.mp3'); 
