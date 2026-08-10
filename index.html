@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>World Marketplace - Web3 Classifieds</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <h1>🌍 World Market</h1>
+      <button id="loginBtn" class="btn-primary">Connect Wallet</button>
+    </header>
+
+    <!-- Post Ad Section Button -->
+    <div class="action-bar">
+      <button id="openModalBtn" class="btn-success" style="display:none;">+ Sell Item (1 WLD)</button>
+    </div>
+
+    <!-- Product Feed -->
+    <main class="feed-section">
+      <h2>Explore Listings</h2>
+      <div id="listingsContainer" class="listings-grid">
+        <p class="loading-text">Loading marketplace items...</p>
+      </div>
+    </main>
+
+    <!-- Modal for Posting Ad -->
+    <div id="adModal" class="modal" style="display:none;">
+      <div class="modal-content">
+        <span id="closeModalBtn" class="close">&times;</span>
+        <h2>Post New Ad</h2>
+        <form id="adForm">
+          <input type="text" id="title" placeholder="Product Title (e.g. iPhone 13)" required>
+          <textarea id="description" placeholder="Description details..." required></textarea>
+          <input type="number" id="price" placeholder="Price in WLD / INR" required>
+          <input type="text" id="category" placeholder="Category (Electronics, Fashion...)" required>
+          <input type="text" id="imageUrl" placeholder="Image URL" required>
+          <button type="submit" class="btn-pay">Pay 1 WLD & Post Ad</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
