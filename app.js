@@ -40,15 +40,17 @@ function stopBackgroundMusic() {
 // ERC-20 approve() calls (error: disallowed_operation).
 const PERMIT2_CONTRACT = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 
-const PERMIT2_APPROVE_ABI = [{
-  type: "function", name: "approve", stateMutability: "nonpayable",
+const ERC20_APPROVE_ABI = [{
+  type: "function",
+  name: "approve",
+  stateMutability: "nonpayable",
   inputs: [
-    { name: "token", type: "address" },
     { name: "spender", type: "address" },
-    { name: "amount", type: "uint160" },
-    { name: "expiration", type: "uint48" }
+    { name: "amount", type: "uint256" }
   ],
-  outputs: []
+  outputs: [
+    { name: "", type: "bool" }
+  ]
 }];
 
 // World App's transaction filter appears to block ANY call literally
@@ -862,34 +864,47 @@ async function handlePlayButtonClick(){
   dbg.scrollTop = dbg.scrollHeight;
 }
 
+```js
 let paymentSuccessful = false;
-  try {
-    const txPayload = {
-      transaction: [
-        {
-          address: PERMIT2_CONTRACT,
-          abi: PERMIT2_APPROVE_ABI,
-          functionName: 'approve',
-          args: [WLD_TOKEN_CONTRACT, DICE_DUEL_CONTRACT, feeWei, 0],
-        },
-        {
-          address: DICE_DUEL_CONTRACT,
-          abi: DICE_DUEL_ABI,
-          functionName: 'joinMatch',
-          args: [matchIdBytes32, feeWei, opponentAddress || ZERO_ADDRESS],
-        },
-      ],
-    };
-    showTxDebug("Sending: " + JSON.stringify(txPayload));
 
-    const { finalPayload } = await MiniKit.commandsAsync.sendTransaction(txPayload);
-    showTxDebug("Response: " + JSON.stringify(finalPayload));
-    paymentSuccessful = (finalPayload?.status === 'success');
-  } catch (err) {
-    showTxDebug("Threw: " + (err?.message || String(err)));
-    console.warn("On-chain deposit error:", err);
-    paymentSuccessful = false;
-  }
+try {
+  const txPayload = {
+    transaction: [
+      {
+        address: WLD_TOKEN_CONTRACT,
+        abi: ERC20_APPROVE_ABI,
+        functionName: "approve",
+        args: [DICE_DUEL_CONTRACT, feeWei],
+      },
+      {
+        address: DICE_DUEL_CONTRACT,
+        abi: DICE_DUEL_ABI,
+        functionName: "joinMatch",
+        args: [
+          matchIdBytes32,
+          feeWei,
+          opponentAddress || ZERO_ADDRESS
+        ],
+      },
+    ],
+  };
+
+  showTxDebug("Sending: " + JSON.stringify(txPayload));
+
+  const { finalPayload } =
+    await MiniKit.commandsAsync.sendTransaction(txPayload);
+
+  showTxDebug("Response: " + JSON.stringify(finalPayload));
+
+  paymentSuccessful = finalPayload?.status === "success";
+
+} catch (err) {
+  showTxDebug("Threw: " + (err?.message || String(err)));
+  console.warn("On-chain deposit error:", err);
+  paymentSuccessful = false;
+}
+```
+
 
   if (!paymentSuccessful) {
     let existingWarning = document.getElementById('neon-payment-warning');
