@@ -2,26 +2,37 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>World Marketplace - Web3 Classifieds</title>
   <link rel="stylesheet" href="style.css">
+  <title>Want Sell On World</title>
 </head>
 <body>
   <div class="app-container">
-    <!-- Header -->
     <header class="header">
-      <h1>🌍 World Market</h1>
-      <button id="loginBtn" class="btn-primary">Connect Wallet</button>
+      <h1>🌍 Want Sell On World</h1>
+      <button id="loginBtn">Connect Wallet</button>
     </header>
 
-    <!-- Post Ad Section Button -->
-    <div class="action-bar">
-      <button id="openModalBtn" class="btn-success" style="display:none;">+ Sell Item (1 WLD)</button>
+    <!-- Action Bar: Post Ad & View My Ads -->
+    <div class="action-bar" style="display:flex; gap:10px;">
+      <button id="openModalBtn" class="btn-success" style="display:none; flex:1;">+ Sell Item (1 WLD)</button>
+      <button id="viewMyAdsBtn" class="btn-primary" style="display:none;">📦 My Ads</button>
+    </div>
+
+    <!-- Filters Bar: Country Selection -->
+    <div class="filter-bar" style="margin-bottom: 15px;">
+      <select id="countryFilter" class="glass-select">
+        <option value="ALL">🌐 All Countries (Global)</option>
+        <option value="IN">🇮🇳 India</option>
+        <option value="US">🇺🇸 United States</option>
+        <option value="AE">🇦🇪 UAE</option>
+        <option value="GB">🇬🇧 United Kingdom</option>
+        <option value="SG">🇸🇬 Singapore</option>
+      </select>
     </div>
 
     <!-- Product Feed -->
     <main class="feed-section">
-      <h2>Explore Listings</h2>
+      <h2>Explore Marketplace</h2>
       <div id="listingsContainer" class="listings-grid">
         <p class="loading-text">Loading marketplace items...</p>
       </div>
@@ -31,313 +42,35 @@
     <div id="adModal" class="modal" style="display:none;">
       <div class="modal-content">
         <span id="closeModalBtn" class="close">&times;</span>
-        <h2>Post New Ad</h2>
+        <h2>Post New Ad (1 WLD)</h2>
         <form id="adForm">
           <input type="text" id="title" placeholder="Product Title (e.g. iPhone 13)" required>
           <textarea id="description" placeholder="Description details..." required></textarea>
-          <input type="number" id="price" placeholder="Price in WLD / INR" required>
+          <input type="number" id="price" placeholder="Price in WLD" required>
           <input type="text" id="category" placeholder="Category (Electronics, Fashion...)" required>
+          <select id="adCountry" class="glass-select" required style="width:100%; padding:12px; border-radius:10px; background:#222; color:#fff; border:1px solid rgba(255,255,255,0.1);">
+            <option value="IN">🇮🇳 India</option>
+            <option value="US">🇺🇸 United States</option>
+            <option value="AE">🇦🇪 UAE</option>
+            <option value="GB">🇬🇧 United Kingdom</option>
+            <option value="SG">🇸🇬 Singapore</option>
+          </select>
           <input type="text" id="imageUrl" placeholder="Image URL" required>
           <button type="submit" class="btn-pay">Pay 1 WLD & Post Ad</button>
         </form>
-=======
-<html lang="hi">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
-<meta name="world-app-id" content="app_74bd2499a35b025efb62d99125df7883" />
-<title>TNV Duel Arena</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<!-- MiniKit is now imported as an ES module directly in app.js -->
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
-
-<div id="app">
-  <div class="support-container">
-    <button class="support-btn-main" onclick="toggleSupportDropdown(event)">💬 Support ▼</button>
-    <div id="support-dropdown" class="support-dropdown">
-      <a href="https://t.me/TNVTEAMWLD" target="_blank" class="support-link">Telegram</a>
-      <div class="support-link">Discord <span class="coming-soon">Soon</span></div>
-      <div class="support-link">Twitter <span class="coming-soon">Soon</span></div>
-      <div class="support-link">Instagram <span class="coming-soon">Soon</span></div>
-    </div>
-  </div>
-
-  <div class="chat-toggle-container">
-    <button class="chat-btn-main" onclick="openChatModal()">🌐 Global Chat (<span id="online-count">1</span>)</button>
-  </div>
-
-  <header class="topbar">
-    <h1 class="brand">TNV Duel Arena 🎲</h1>
-    <div class="user-card">Logged in as: <span id="display-username">Tap Play Now to Connect</span></div>
-    
-    <div style="font-family:'JetBrains Mono', monospace; font-size: 11px; color: var(--slate); margin-top: 6px;">
-      Progress to Withdraw: <span id="progress-text" style="color: var(--photon); font-weight:600;">0 / 5,000 TNV</span>
-    </div>
-    <div class="progress-bar"><div id="p-fill" class="progress-fill"></div></div>
-    
-    <div id="balance-area" style="display:flex; flex-direction:column; gap:6px; align-items:center; margin-top:8px;">
-      <div>
-        <span>Balance: <span id="balance-num">0</span> TNV</span>
-        <button id="withdraw-btn" class="withdraw-btn" disabled onclick="openWithdrawModal()">WITHDRAW</button>
-      </div>
-      <div style="font-size: 12px; color: var(--gold); font-weight: 600;">
-      <div>WLD Balance: <span id="wld-balance-num">0.00</span> WLD</div>
       </div>
     </div>
 
-    <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:10px;">
-      <button class="btn btn-ghost" style="font-size:10.5px; padding:6px 12px; border:1px solid rgba(41,217,194,0.4); color:var(--photon);" onclick="openUserHistoryModal()">📜 Match History</button>
-      <button class="btn btn-ghost" style="font-size:10.5px; padding:6px 12px; border:1px solid rgba(41,217,194,0.4); color:var(--photon);" onclick="openUserWithdrawalsModal()">💸 My Withdrawals</button>
-      <button id="admin-history-nav-btn" class="btn btn-ghost" style="font-size:10.5px; padding:6px 12px; border:1px solid rgba(243,156,18,0.4); color:var(--gold); display:none;" onclick="openAdminEarningsModal()">🛡️ Admin Revenue</button>
-    </div>
-
-    <div id="auth-banner"></div>
-  </header>
-
-  <main>
-    <section id="setup-screen">
-      <div class="scanner idle" id="idleScanner" style="opacity:0.5;">
-        <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div>
-        <div class="sweep"></div><div class="core"></div>
-      </div>
-
-      <div class="fee-title">Select Entry Amount</div>
-      <div class="fee-container">
-        <div class="fee-chip" data-fee="0.1">0.1 WLD<span class="chip-earn">+0.17</span></div>
-        <div class="fee-chip" data-fee="0.2">0.2 WLD<span class="chip-earn">+0.34</span></div>
-        <div class="fee-chip active" data-fee="0.5">0.5 WLD<span class="chip-earn">+0.80</span></div>
-        <div class="fee-chip" data-fee="1">1 WLD<span class="chip-earn">+1.60</span></div>
-        <div class="fee-chip" data-fee="2">2 WLD<span class="chip-earn">+3.20</span></div>
-        <div class="fee-chip" data-fee="5">5 WLD<span class="chip-earn">+8.80</span></div>
-        <div class="fee-chip" data-fee="10">10 WLD<span class="chip-earn">+17.8</span></div>
-        <div class="fee-chip" data-fee="20">20 WLD<span class="chip-earn">+36.0</span></div>
-        <div class="fee-chip" data-fee="30">30 WLD<span class="chip-earn">+54.0</span></div>
-        <div class="fee-chip" data-fee="40">40 WLD<span class="chip-earn">+72.0</span></div>
-        <div class="fee-chip" data-fee="50">50 WLD<span class="chip-earn">+90.0</span></div>
-      </div>
-
-      <button class="btn btn-primary" id="start-btn">PLAY NOW (0.5 WLD)</button>
-      
-      <div class="rules-card">
-        <h3>📖 Game Rules & Rewards</h3>
-        <div class="rules-grid">
-          <div class="rule-item">• <span>Match Duration:</span> 32 seconds total (30s gameplay + 2s result display).</div>
-          <div class="rule-item">• <span>Turn Timing Mechanic:</span> Keep an eye on the screen! Tap once every 2 seconds, otherwise your time will decrease and any missed taps cannot be used again. Total 15 taps per user limit.</div>
-          <div class="rule-item">• <span>Turn Timing Mechanic:</span> Strictly 2-second alternating cooldown per tap. Total 15 taps per user limit.</div>
-          <div class="rule-item">• <span>Winner & Defeat:</span> Higher score wins the WLD pool and TNV coins.</div>
-          <div class="rule-item">• <span>Auto-Clicker Block:</span> Protected via built-in 2-second per-tap timing lock.</div>
-          <div class="rule-item">• <span>WLD to TNV Earnings:</span> 0.1 WLD (+5 TNV) | 0.2 WLD (+10 TNV) | 0.5 WLD (+15 TNV) | 1 WLD (+25 TNV) | 2 WLD (+50 TNV) | 5 WLD (+125 TNV) | 10 WLD (+250 TNV) | 20 WLD (+500 TNV) | 30 WLD (+750 TNV) | 40 WLD (+1,000 TNV) | 50 WLD (+1,250 TNV).</div>
-          <div class="rule-item">• <span>Defeat / Consolation Reward:</span> Even on defeat, you receive consolation TNV coins (1/3rd of winning rewards) so you never leave empty-handed.</div>
-          <div class="rule-item">• <span>Support & Community:</span> Connect via Telegram or Global Chat.</div>
-        </div>
-      </div>
-
-      <div id="admin-panel">
-        <div class="admin-header">
-          <span>🛡️ ADMIN WITHDRAWAL REQUESTS</span>
-          <span style="font-size:10px; color:var(--signal);">Live Panel</span>
-        </div>
-        <div class="admin-list" id="admin-req-container">
-          <div style="font-size:11px; color:var(--slate); text-align:center;">Checking requests...</div>
-        </div>
-      </div>
-
-      <div id="admin-cheaters-panel">
-        <div class="admin-header">
-          <span>⚠️ AUTO-CLICKER DETECTIONS</span>
-          <span style="font-size:10px; color:var(--signal);">Security Log</span>
-        </div>
-        <div class="admin-list" id="admin-cheaters-container">
-          <div style="font-size:11px; color:var(--slate); text-align:center;">No suspicious activity</div>
-        </div>
-      </div>
-
-      <div class="leaderboard-section">
-        <div class="lb-header">
-          <span>⚡ TNV ELITE LEADERBOARD</span>
-          <span style="font-size:10px; color:var(--slate);">Top 10</span>
-        </div>
-        <div class="lb-list" id="lb-container">
-          <div class="lb-item" style="justify-content:center; color:var(--slate);">Loading leaders...</div>
-        </div>
-      </div>
-
-      <div class="airdrop-custom-card">
-        <div class="airdrop-icon">🎁</div>
-        <div class="airdrop-content">
-          <h3>COMMUNITY AIRDROP PORTAL</h3>
-          <p>Complete future tasks and claim exclusive tokens directly to your wallet.</p>
-          <span class="badge-coming">COMING SOON</span>
-        </div>
-      </div>
-
-      <div class="rules-card" style="margin-top: 18px; text-align: left;">
-        <h3>💎 TNV COIN LEADERSHIP DISTRIBUTION</h3>
-        <div class="rules-grid" style="margin-bottom: 14px;">
-          <div class="rule-item">• <span>Rank 1st:</span> Coming Soon</div>
-          <div class="rule-item">• <span>Rank 2nd - 5th:</span> Coming Soon</div>
-          <div class="rule-item">• <span>Rank 6th - 10th:</span> Coming Soon</div>
-          <div class="rule-item">• <span>Active Holders:</span> Coming Soon</div>
-        </div>
-        
-        <div class="neon-coming-soon-box">
-          <span class="neon-text">🚀 COMING SOON: TNV STAKING & MAINNET LAUNCH</span>
-        </div>
-      </div>
-
-      <div class="fineprint" id="landingHint" style="text-align:center; margin-top:14px; font-size:11px; color:#8b8ba3;">requires World App</div>
-    </section>
-
-    <section id="game-screen" style="display:none;">
-      <div class="stats-box">
-        <div><div class="who" id="my-name-tag">ME</div><div class="score" id="my-score">0</div></div>
-        <div id="game-timer">32s</div>
-        <div><div class="who" id="opp-name-tag">OPP</div><div class="score" id="opp-score">0</div></div>
-      </div>
-
-      <div class="scene" id="dice-scene">
-        <div class="cube" id="dice-cube">
-          <div class="cube__face front"><span class="pip red"></span></div>
-          <div class="cube__face back"><div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;"><span class="pip"></span><span class="pip"></span></div></div>
-          <div class="cube__face right"><div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;"><span class="pip"></span><span class="pip"></span><span class="pip" style="grid-column:span 2; justify-self:center;"></span></div></div>
-          <div class="cube__face left"><div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;"><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span></div></div>
-          <div class="cube__face top"><div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;"><span class="pip"></span><span class="pip"></span><span class="pip" style="grid-column:span 2; justify-self:center;"></span><span class="pip"></span><span class="pip"></span></div></div>
-          <div class="cube__face bottom"><div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;"><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span></div></div>
-        </div>
-      </div>
-      <div class="tap-hint" id="turn-indicator">tap the die to roll (2s Timing Lock per Tap)</div>
-    </section>
-  </main>
-
-  <div id="chat-modal" class="custom-modal">
-    <div class="modal-card chat-card">
-      <div class="chat-header">
-        <span>💬 Community Global Chat</span>
-        <button class="chat-close-btn" onclick="closeChatModal()">✕</button>
-      </div>
-      <div id="chat-messages-container" class="chat-messages">
-        <div style="text-align:center; color:var(--slate); font-size:11px;">Messages are saved for 24 hours. Chat freely!</div>
-      </div>
-      <div class="chat-input-area">
-        <input type="text" id="chat-input-field" class="chat-input" placeholder="Type a message..." maxlength="150" />
-        <button class="chat-send-btn" onclick="sendChatMessage()">Send</button>
->>>>>>> 6fad372c1e32fa274eda02e20373d8a8571f12ad
+    <!-- Modal for My Ads -->
+    <div id="myAdsModal" class="modal" style="display:none;">
+      <div class="modal-content">
+        <span id="closeMyAdsModal" class="close">&times;</span>
+        <h2>My Posted Ads</h2>
+        <div id="myAdsContainer" style="max-height: 350px; overflow-y: auto; margin-top: 10px;"></div>
       </div>
     </div>
   </div>
 
-<<<<<<< HEAD
   <script type="module" src="app.js"></script>
-=======
-  <div id="user-history-modal" class="custom-modal">
-    <div class="modal-card" style="max-width:420px; width:92%;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h3 style="margin:0; color:var(--photon);">📜 Match & Refund History</h3>
-        <button class="chat-close-btn" onclick="closeUserHistoryModal()">✕</button>
-      </div>
-      <div id="user-history-list" style="max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; text-align:left; font-size:11.5px; padding-right:4px;">
-        <div style="text-align:center; color:var(--slate);">Loading history...</div>
-      </div>
-      <button class="btn btn-ghost" style="margin-top:16px; width:100%;" onclick="closeUserHistoryModal()">CLOSE</button>
-    </div>
-  </div>
-
-  <div id="user-withdrawals-modal" class="custom-modal">
-    <div class="modal-card" style="max-width:420px; width:92%;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h3 style="margin:0; color:var(--photon);">💸 Withdrawal Requests</h3>
-        <button class="chat-close-btn" onclick="closeUserWithdrawalsModal()">✕</button>
-      </div>
-      <div id="user-withdrawals-list" style="max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; text-align:left; font-size:11.5px; padding-right:4px;">
-        <div style="text-align:center; color:var(--slate);">Loading requests...</div>
-      </div>
-      <button class="btn btn-ghost" style="margin-top:16px; width:100%;" onclick="closeUserWithdrawalsModal()">CLOSE</button>
-    </div>
-  </div>
-
-  <div id="admin-earnings-modal" class="custom-modal">
-    <div class="modal-card" style="max-width:450px; width:92%;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h3 style="margin:0; color:var(--gold);">🛡️ Admin Revenue Ledger</h3>
-        <button class="chat-close-btn" onclick="closeAdminEarningsModal()">✕</button>
-      </div>
-      <div style="font-size:11px; color:var(--slate); margin-bottom:10px;">Total collected fees from all user matches:</div>
-      <div id="admin-earnings-list" style="max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; text-align:left; font-size:11.5px; padding-right:4px;">
-        <div style="text-align:center; color:var(--slate);">Loading admin revenue...</div>
-      </div>
-      <button class="btn btn-ghost" style="margin-top:16px; width:100%;" onclick="closeAdminEarningsModal()">CLOSE</button>
-    </div>
-  </div>
-
-  <div id="blocked-screen">
-    <div class="blocked-card">
-      <div style="font-size: 52px; margin-bottom: 12px;">🚫</div>
-      <h2 style="font-family:'Space Grotesk', sans-serif; color:var(--signal); margin:0 0 8px; font-size:22px;">ACCOUNT SUSPENDED</h2>
-      <p style="font-size:12.5px; color:var(--slate); margin:0 0 24px; line-height: 1.5;">Your account has been restricted due to automated tapping or policy violation.</p>
-      <a href="https://t.me/TNVTEAMWLD" target="_blank" class="btn btn-primary" style="text-decoration:none; display:flex; justify-content:center; align-items:center; gap:8px;">
-        💬 Contact Support on Telegram
-      </a>
-    </div>
-  </div>
-
-  <div id="withdraw-modal" class="custom-modal">
-    <div class="modal-card">
-      <h3>⚡ WITHDRAW TNV</h3>
-      <p style="font-size:12px; color:var(--slate); margin:4px 0 16px;">Available: <span id="modal-bal" style="color:var(--gold);">0</span> TNV</p>
-      
-      <div id="withdraw-input-container" style="display:none;">
-        <input type="number" id="withdraw-amount-input" class="modal-input" placeholder="Enter amount (Min 5000)" min="5000" />
-      </div>
-
-      <div class="modal-actions">
-        <button class="btn btn-ghost" style="margin-top:0;" onclick="closeWithdrawModal()">CANCEL</button>
-        <button class="btn btn-primary" style="padding:12px;" onclick="submitWithdrawRequest()">CONFIRM</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="admin-approve-modal" class="custom-modal">
-    <div class="modal-card">
-      <h3>🛡️ APPROVE WITHDRAWAL</h3>
-      <p id="admin-modal-info" style="font-size:12px; color:var(--slate); margin:4px 0 12px;"></p>
-      
-      <input type="text" id="admin-tx-input" class="modal-input" placeholder="Enter Tx Hash or Proof URL" />
-
-      <div class="modal-actions">
-        <button class="btn btn-ghost" style="margin-top:0;" onclick="closeAdminModal()">CANCEL</button>
-        <button class="btn btn-primary" style="padding:12px;" onclick="confirmAdminApproval()">SUBMIT & COMPLETE</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="waiting-overlay">
-    <div class="scanner" id="searchScanner">
-      <div class="rules-card" style="display:none"></div>
-      <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div>
-      <div class="sweep"></div><div class="core"></div>
-      <div class="radar-dot dot-1"></div>
-      <div class="radar-dot dot-2"></div>
-      <div class="radar-dot dot-target" id="target-dot"></div>
-    </div>
-    <h2 id="wait-status">SEARCHING...</h2>
-  </div>
-
-  <div id="result-overlay">
-    <div class="result-card" id="result-card">
-      <div id="result-icon">🏆</div>
-      <h2 id="result-title">VICTORY!</h2>
-      <p id="result-msg">Rewards credited</p>
-      <p id="result-debug" style="display:none; font-family:'JetBrains Mono', monospace; font-size: 10.5px; color: var(--signal); text-align:left; background: rgba(255,95,109,0.08); border: 1px solid rgba(255,95,109,0.3); border-radius: 10px; padding: 8px 10px; margin: -18px 0 22px; word-break: break-word;"></p>
-      <button class="btn btn-primary" onclick="location.reload()">PLAY AGAIN</button>
-    </div>
-  </div>
-</div>
-
-<script type="module" src="app.js"></script>
->>>>>>> 6fad372c1e32fa274eda02e20373d8a8571f12ad
 </body>
 </html>
