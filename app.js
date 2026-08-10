@@ -834,10 +834,11 @@ async function finalizeGame(){
   if (myAddress && !sessionStorage.getItem(`settled_${matchId}_${myAddress}`)) {
       sessionStorage.setItem(`settled_${matchId}_${myAddress}`, "true");
       try {
-          if (isWin) {
+if (isWin) {
               await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match (${matchFee} WLD duel)`);
               
-              await fetch('/api/settle-match', {
+              // Background mein fetch call karein taaki screen freeze na ho
+              fetch('/api/settle-match', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
@@ -846,7 +847,8 @@ async function finalizeGame(){
                       loserAddress: isP1 ? finalRow.p2_address : finalRow.p1_address,
                       fee: matchFee
                   })
-              });
+              }).catch(err => console.error("Background payout error:", err));
+
           } else {
               await logMatchHistory(myAddress, 'DEFEAT', -matchFee, `Lost match (${matchFee} WLD duel)`);
           }
