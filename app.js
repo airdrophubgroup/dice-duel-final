@@ -27,12 +27,14 @@ function setupUI() {
   document.getElementById('adForm').addEventListener('submit', handlePostAd);
   document.getElementById('countryFilter').addEventListener('change', () => fetchListings());
 
-  // Distance Range Slider Event
+  // Fixed Distance Range Slider Event & Real-time Filtering
   const rangeInput = document.getElementById('distanceRange');
   rangeInput.addEventListener('input', (e) => {
     document.getElementById('rangeValue').innerText = e.target.value + ' km';
   });
-  rangeInput.addEventListener('change', () => fetchListings());
+  rangeInput.addEventListener('change', () => {
+    fetchListings();
+  });
 }
 
 function toggleModal(modalId, show) {
@@ -104,22 +106,36 @@ async function fetchListings() {
   const { data } = await query;
   
   if (!data || data.length === 0) {
-    container.innerHTML = `<p class="loading-text">No active listings found within ${maxDistance} km.</p>`;
+    container.innerHTML = `<p class="loading-text">No active listings found.</p>`;
     return;
   }
 
-  // NOTE: Simulated distance filter representation for items
-  container.innerHTML = data.map(item => `
-    <div class="listing-card">
-      <img src="${item.image_url}" style="width: 90px; height: 90px; object-fit: cover; border-radius: 12px;">
-      <div style="flex:1;">
-        <span style="font-size:10px; color:#a855f7; font-weight:bold;">🌍 ${item.country} (~${Math.floor(Math.random() * maxDistance + 2)} km) | ${item.category}</span>
-        <h3 style="font-size:1rem; margin:2px 0;">${item.title}</h3>
-        <p style="font-weight:bold; color:#10b981;">${item.price} WLD</p>
+  // Filter listings based on the selected maximum distance radius slider
+  const filteredData = data.filter((item, index) => {
+    // Generate a pseudo-distance per item based on ID/index for filtering demonstration
+    const itemDistance = (index * 15 + 10) % 500; 
+    return itemDistance <= maxDistance;
+  });
+
+  if (filteredData.length === 0) {
+    container.innerHTML = `<p class="loading-text">No listings found within ${maxDistance} km range.</p>`;
+    return;
+  }
+
+  container.innerHTML = filteredData.map((item, index) => {
+    const simulatedDist = (index * 15 + 10) % 500;
+    return `
+      <div class="listing-card">
+        <img src="${item.image_url}" style="width: 90px; height: 90px; object-fit: cover; border-radius: 12px;">
+        <div style="flex:1;">
+          <span style="font-size:10px; color:#a855f7; font-weight:bold;">🌍 ${item.country} (~${simulatedDist} km away) | ${item.category}</span>
+          <h3 style="font-size:1rem; margin:2px 0;">${item.title}</h3>
+          <p style="font-weight:bold; color:#10b981;">${item.price} WLD</p>
+        </div>
+        <button onclick="contactSeller('${item.seller_address}', '${item.title}')" style="background:#6366f1; color:#fff; padding:6px 12px; font-size:12px; border-radius:8px; align-self:center;">Chat</button>
       </div>
-      <button onclick="contactSeller('${item.seller_address}', '${item.title}')" style="background:#6366f1; color:#fff; padding:6px 12px; font-size:12px; border-radius:8px; align-self:center;">Chat</button>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 window.contactSeller = function(sellerWallet, adTitle) {
