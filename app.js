@@ -599,7 +599,7 @@ async function handlePlayButtonClick(){
   if (freshBalance !== null) currentWldBalance = freshBalance;
 
   if (currentWldBalance < selectedFee) {
-    alert(`Insufficient WLD balance. You have ${userBalance} WLD, need ${requiredAmount} WLD.`);
+    alert("Insufficient balance!");
     $('start-btn').disabled = false;
     return;
   }
