@@ -58,7 +58,23 @@
           <input type="text" id="title" placeholder="Product Title (e.g. iPhone 13)" required>
           <textarea id="description" placeholder="Description details..." required></textarea>
           <input type="number" id="price" placeholder="Price in WLD" required>
-          <input type="text" id="category" placeholder="Category (Electronics, Fashion...)" required>
+          
+          <!-- Category Selection with Multiple Options & Other at End -->
+          <select id="category" class="glass-select" required style="width:100%; padding:12px; border-radius:10px; background:#222; color:#fff; border:1px solid rgba(255,255,255,0.1);">
+            <option value="" disabled selected>Select Category</option>
+            <option value="Electronics">🔌 Electronics</option>
+            <option value="Phones">📱 Phones & Tablets</option>
+            <option value="Laptops">💻 Laptops & Computers</option>
+            <option value="Games">🎮 Games & Consoles</option>
+            <option value="Clothes">👕 Clothes & Fashion</option>
+            <option value="Shoes">👟 Shoes & Footwear</option>
+            <option value="Bags">🎒 Bags & Luggage</option>
+            <option value="Home Appliances">🏠 Home Appliances</option>
+            <option value="Books & Sports">⚽ Books & Sports Equipment</option>
+            <option value="Automotive">🚗 Cars & Bikes</option>
+            <option value="Other">📦 Other</option>
+          </select>
+
           <select id="adCountry" class="glass-select" required style="width:100%; padding:12px; border-radius:10px; background:#222; color:#fff; border:1px solid rgba(255,255,255,0.1);">
             <option value="IN">🇮🇳 India</option>
             <option value="US">🇺🇸 United States</option>

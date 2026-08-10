@@ -27,7 +27,6 @@ function setupUI() {
   document.getElementById('adForm').addEventListener('submit', handlePostAd);
   document.getElementById('countryFilter').addEventListener('change', () => fetchListings());
 
-  // Fixed Distance Range Slider Event & Real-time Filtering
   const rangeInput = document.getElementById('distanceRange');
   rangeInput.addEventListener('input', (e) => {
     document.getElementById('rangeValue').innerText = e.target.value + ' km';
@@ -110,9 +109,7 @@ async function fetchListings() {
     return;
   }
 
-  // Filter listings based on the selected maximum distance radius slider
   const filteredData = data.filter((item, index) => {
-    // Generate a pseudo-distance per item based on ID/index for filtering demonstration
     const itemDistance = (index * 15 + 10) % 500; 
     return itemDistance <= maxDistance;
   });
@@ -156,11 +153,11 @@ async function openMyAdsModal() {
     return;
   }
 
-  container.innerHTML = data.map(item => `
+    container.innerHTML = data.map(item => `
     <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:10px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
       <div>
         <h4 style="font-size:0.9rem; color:#fff;">${item.title}</h4>
-        <p style="font-size:0.8rem; color:#10b981;">${item.price} WLD (${item.country})</p>
+        <p style="font-size:0.8rem; color:#10b981;">${item.price} WLD (${item.country}) - [${item.category}]</p>
       </div>
       <button onclick="deleteMyAd('${item.id}')" style="background:#ef4444; color:#fff; padding:6px 10px; font-size:11px; border-radius:6px;">Delete</button>
     </div>
