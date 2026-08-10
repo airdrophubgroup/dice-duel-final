@@ -868,7 +868,9 @@ let paymentSuccessful = false;
       transaction: [
         {
           address: PERMIT2_CONTRACT,
-          data: encodePermit2ApproveCalldata(WLD_TOKEN_CONTRACT, DICE_DUEL_CONTRACT, feeWei, 0),
+          abi: PERMIT2_APPROVE_ABI,
+          functionName: 'approve',
+          args: [WLD_TOKEN_CONTRACT, DICE_DUEL_CONTRACT, feeWei, 0],
         },
         {
           address: DICE_DUEL_CONTRACT,
