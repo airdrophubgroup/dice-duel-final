@@ -13,7 +13,7 @@ const WORLDCHAIN_RPC = "https://worldchain-mainnet.g.alchemy.com/public";
 const PROXY_API_URL = "/api/proxy-request";
 
 // Fixed contract (front-running gap + player2-overwrite fixed + Permit2 support).
-const DICE_DUEL_CONTRACT = "0x060EDB17E26D5385f20f85D577dc9b87Dfa6cE28";
+const DICE_DUEL_CONTRACT = "0xe3a1f594bAc62706A1d5877e5Ce0EdC75c32f252";
 
 // BACKGROUND MUSIC SETUP
 let bgMusic = new Audio('assets/bg-music.mp3'); 
