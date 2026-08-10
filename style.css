@@ -1,18 +1,215 @@
 :root {
-  --bg-color: #0b0f19;
-  --card-bg: rgba(255, 255, 255, 0.03);
-  --border-color: rgba(255, 255, 255, 0.08);
-  --accent-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  --bg-color: #050508;
+  --glass-bg: rgba(255, 255, 255, 0.04);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-card: rgba(255, 255, 255, 0.03);
+  --accent-color: #ffffff;
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
   --success-color: #10b981;
 }
 
-body { background: var(--bg-color); color: var(--text-main); font-family: sans-serif; }
-.app-container { max-width: 480px; margin: auto; padding: 20px; }
-.header { display: flex; justify-content: space-between; padding: 20px 0; }
-.modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; }
-.modal-content { background: #111; padding: 20px; border-radius: 20px; width: 90%; }
-.listing-card { background: #1a1a1a; padding: 15px; margin-top: 10px; border-radius: 12px; display: flex; gap: 10px; }
-input, textarea { width: 100%; padding: 10px; margin: 5px 0; background: #222; color: #fff; border: none; border-radius: 8px; }
-button { padding: 10px 20px; border-radius: 10px; border: none; background: var(--accent-gradient); color: white; cursor: pointer; }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+body {
+  background-color: var(--bg-color);
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(255, 255, 255, 0.03) 0%, transparent 40%),
+    radial-gradient(circle at 90% 80%, rgba(255, 255, 255, 0.02) 0%, transparent 40%);
+  color: var(--text-main);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.app-container {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Glass Header */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  margin-bottom: 20px;
+}
+
+.header h1 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.5px;
+}
+
+/* Glass Buttons */
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#loginBtn {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  backdrop-filter: blur(10px);
+}
+
+#loginBtn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+#openModalBtn {
+  width: 100%;
+  background: #ffffff;
+  color: #000000;
+  padding: 14px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  box-shadow: 0 8px 32px rgba(255, 255, 255, 0.1);
+  margin-bottom: 20px;
+}
+
+#openModalBtn:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-2px);
+}
+
+/* Glass Listing Cards */
+.listings-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.listing-card {
+  background: var(--glass-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 14px;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  transition: all 0.3s ease;
+}
+
+.listing-card:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+}
+
+.listing-card img {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.listing-card h3 {
+  font-size: 0.95rem;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.listing-card p {
+  font-size: 0.9rem;
+  color: #10b981;
+  font-weight: 700;
+}
+
+/* Glass Modal Overlay */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: rgba(18, 18, 24, 0.85);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  width: 90%;
+  max-width: 400px;
+  padding: 24px;
+  border-radius: 24px;
+  position: relative;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+}
+
+.close {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  font-size: 1.4rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.close:hover {
+  color: #fff;
+}
+
+.modal-content form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.modal-content input, 
+.modal-content textarea {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 12px;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.modal-content input:focus, 
+.modal-content textarea:focus {
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.modal-content button[type="submit"] {
+  background: #ffffff;
+  color: #000000;
+  padding: 14px;
+  font-weight: 700;
+  margin-top: 10px;
+  border-radius: 12px;
+}
+
+.loading-text {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  padding: 30px 0;
+}
