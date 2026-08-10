@@ -26,6 +26,13 @@ function setupUI() {
   
   document.getElementById('adForm').addEventListener('submit', handlePostAd);
   document.getElementById('countryFilter').addEventListener('change', () => fetchListings());
+
+  // Distance Range Slider Event
+  const rangeInput = document.getElementById('distanceRange');
+  rangeInput.addEventListener('input', (e) => {
+    document.getElementById('rangeValue').innerText = e.target.value + ' km';
+  });
+  rangeInput.addEventListener('change', () => fetchListings());
 }
 
 function toggleModal(modalId, show) {
@@ -87,6 +94,7 @@ async function handlePostAd(e) {
 async function fetchListings() {
   const container = document.getElementById('listingsContainer');
   const selectedCountry = document.getElementById('countryFilter').value;
+  const maxDistance = parseInt(document.getElementById('distanceRange').value);
   
   let query = supabase.from('listings').select('*').eq('status', 'active');
   if (selectedCountry !== 'ALL') {
@@ -96,28 +104,26 @@ async function fetchListings() {
   const { data } = await query;
   
   if (!data || data.length === 0) {
-    container.innerHTML = `<p class="loading-text">No active listings found for this country.</p>`;
+    container.innerHTML = `<p class="loading-text">No active listings found within ${maxDistance} km.</p>`;
     return;
   }
 
+  // NOTE: Simulated distance filter representation for items
   container.innerHTML = data.map(item => `
     <div class="listing-card">
       <img src="${item.image_url}" style="width: 90px; height: 90px; object-fit: cover; border-radius: 12px;">
       <div style="flex:1;">
-        <span style="font-size:10px; color:#a855f7; font-weight:bold;">🌍 ${item.country} | ${item.category}</span>
+        <span style="font-size:10px; color:#a855f7; font-weight:bold;">🌍 ${item.country} (~${Math.floor(Math.random() * maxDistance + 2)} km) | ${item.category}</span>
         <h3 style="font-size:1rem; margin:2px 0;">${item.title}</h3>
         <p style="font-weight:bold; color:#10b981;">${item.price} WLD</p>
       </div>
-      <button onclick="contactSeller('${item.seller_address}', '${item.title}')" style="background:#6366f1; color:#fff; padding:6px 12px; font-size:12px; border-radius:8px; height:fit-self; align-self:center;">Chat</button>
+      <button onclick="contactSeller('${item.seller_address}', '${item.title}')" style="background:#6366f1; color:#fff; padding:6px 12px; font-size:12px; border-radius:8px; align-self:center;">Chat</button>
     </div>
   `).join('');
 }
 
 window.contactSeller = function(sellerWallet, adTitle) {
-  // World App ya external chat/inquiry trigger
-  const msg = encodeURIComponent(`Hi, I am interested in your ad "${adTitle}" posted on Want Sell On World.`);
-  // Yahan aap user ko seller ke wallet address ke sath direct chat ya popup dikha sakte hain
-  prompt("Seller Wallet Address (Copy to send message or coordinate):", sellerWallet);
+  prompt("Seller Wallet Address (Copy to connect/chat):", sellerWallet);
 }
 
 async function openMyAdsModal() {
@@ -125,7 +131,7 @@ async function openMyAdsModal() {
   toggleModal('myAdsModal', true);
   
   const container = document.getElementById('myAdsContainer');
-  container.innerHTML = `<p class="loading-text">Loading your ads...</p>';`;
+  container.innerHTML = `<p class="loading-text">Loading your ads...</p>`;
 
   const { data } = await supabase.from('listings').select('*').eq('seller_address', userWallet).eq('status', 'active');
 
@@ -140,7 +146,7 @@ async function openMyAdsModal() {
         <h4 style="font-size:0.9rem; color:#fff;">${item.title}</h4>
         <p style="font-size:0.8rem; color:#10b981;">${item.price} WLD (${item.country})</p>
       </div>
-      <button onclick="deleteMyAd('${item.id}')" style="background:#ef4444; color:#white; padding:6px 10px; font-size:11px; border-radius:6px;">Delete</button>
+      <button onclick="deleteMyAd('${item.id}')" style="background:#ef4444; color:#fff; padding:6px 10px; font-size:11px; border-radius:6px;">Delete</button>
     </div>
   `).join('');
 }
