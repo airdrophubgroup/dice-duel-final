@@ -26,6 +26,7 @@ function setupUI() {
   
   document.getElementById('adForm').addEventListener('submit', handlePostAd);
   document.getElementById('countryFilter').addEventListener('change', () => fetchListings());
+  document.getElementById('categoryFilter').addEventListener('change', () => fetchListings());
 
   const rangeInput = document.getElementById('distanceRange');
   rangeInput.addEventListener('input', (e) => {
@@ -95,17 +96,22 @@ async function handlePostAd(e) {
 async function fetchListings() {
   const container = document.getElementById('listingsContainer');
   const selectedCountry = document.getElementById('countryFilter').value;
+  const selectedCategory = document.getElementById('categoryFilter').value;
   const maxDistance = parseInt(document.getElementById('distanceRange').value);
   
   let query = supabase.from('listings').select('*').eq('status', 'active');
+  
   if (selectedCountry !== 'ALL') {
     query = query.eq('country', selectedCountry);
+  }
+  if (selectedCategory !== 'ALL') {
+    query = query.eq('category', selectedCategory);
   }
 
   const { data } = await query;
   
   if (!data || data.length === 0) {
-    container.innerHTML = `<p class="loading-text">No active listings found.</p>`;
+    container.innerHTML = `<p class="loading-text">No active listings found for this filter.</p>`;
     return;
   }
 
@@ -125,7 +131,7 @@ async function fetchListings() {
       <div class="listing-card">
         <img src="${item.image_url}" style="width: 90px; height: 90px; object-fit: cover; border-radius: 12px;">
         <div style="flex:1;">
-          <span style="font-size:10px; color:#a855f7; font-weight:bold;">🌍 ${item.country} (~${simulatedDist} km away) | ${item.category}</span>
+          <span style="font-size:10px; color:#a855f7; font-weight:bold;">🌍 ${item.country} (~${simulatedDist} km) | ${item.category}</span>
           <h3 style="font-size:1rem; margin:2px 0;">${item.title}</h3>
           <p style="font-weight:bold; color:#10b981;">${item.price} WLD</p>
         </div>
@@ -153,7 +159,7 @@ async function openMyAdsModal() {
     return;
   }
 
-    container.innerHTML = data.map(item => `
+  container.innerHTML = data.map(item => `
     <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:10px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
       <div>
         <h4 style="font-size:0.9rem; color:#fff;">${item.title}</h4>
