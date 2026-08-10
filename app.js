@@ -599,7 +599,7 @@ async function handlePlayButtonClick(){
   if (freshBalance !== null) currentWldBalance = freshBalance;
 
   if (currentWldBalance < selectedFee) {
-    alert(`Insufficient WLD balance. You have ${currentWldBalance.toFixed(2)} WLD, need ${selectedFee} WLD.`);
+    showNeonAlert('INSUFFICIENT BALANCE', `Insufficient WLD balance. You have ${userBalance} WLD, need ${requiredAmount} WLD.`, true);
     $('start-btn').disabled = false;
     return;
   }
@@ -624,7 +624,7 @@ async function handlePlayButtonClick(){
   }
 
   if (!paymentSuccessful) {
-    alert('Payment was cancelled or failed.');
+    showNeonAlert('FAILED', 'Payment was cancelled or failed.', true);
     resetToHome();
     return;
   }
@@ -702,7 +702,7 @@ async function cancelMatchmaking(showAlert = true) {
   if (matchId) {
     try {
       await supabaseClient.rpc('secure_leave_waiting_match', { p_match_id: matchId, p_wallet: myAddress });
-      if (showAlert) alert(`Search cancelled.`);
+      if (showAlert) showNeonAlert('CANCELLED', 'Search cancelled successfully.');
     } catch(e) {}
   }
   resetToHome();

@@ -1,35 +1,42 @@
-const express = require('express');
-const { createClient } = require('@supabase/supabase-js');
-const { ethers } = require('ethers');
+import express from 'express';
+import { createClient } from '@supabase/supabase-js';
+import { ethers } from 'ethers';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
 app.use(express.json());
 
-const SUPABASE_URL = "https://efmkazyrxllcyvcwmewd.supabase.co";
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://efmkazyrxllcyvcwmewd.supabase.co";
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || "YOUR_SUPABASE_SERVICE_ROLE_KEY";
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
+// Worldchain RPC & Wallet Setup
 const WORLDCHAIN_RPC = "https://worldchain-mainnet.g.alchemy.com/public";
 const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";
+const WALLET_PRIVATE_KEY = process.env.WALLET_PRIVATE_KEY || "YOUR_WALLET_PRIVATE_KEY";
 
-const provider = new ethers.JsonRpcProvider(WORLDCHAIN_RPC);
-let wallet = null;
-let wldContract = null;
+let provider, wallet, wldContract;
 
-if (process.env.WALLET_PRIVATE_KEY) {
-  try {
-    wallet = new ethers.Wallet(process.env.WALLET_PRIVATE_KEY, provider);
-    const erc20Abi = ["function transfer(address to, uint256 value) public returns (bool)"];
-    wldContract = new ethers.Contract(WLD_TOKEN_CONTRACT, erc20Abi, wallet);
-    console.log("Wallet loaded successfully for auto-refunds!");
-  } catch (err) {
-    console.log("Wallet initialization failed, check private key.");
-  }
+try {
+  provider = new ethers.JsonRpcProvider(WORLDCHAIN_RPC);
+  wallet = new ethers.Wallet(WALLET_PRIVATE_KEY, provider);
+  
+  const ERC20_ABI = [
+    "function transfer(address to, uint256 value) public returns (bool)",
+    "function balanceOf(address account) view returns (uint256)"
+  ];
+
+  wldContract = new ethers.Contract(WLD_TOKEN_CONTRACT, ERC20_ABI, wallet);
+} catch (e) {
+  console.error("Blockchain/Wallet initialization error:", e.message);
 }
 
+// AUTOMATIC REFUND BACKGROUND LOOP (Runs every 30 seconds)
 async function processAutomaticRefunds() {
   if (!wldContract) return;
-
   try {
     const { data: expiredMatches, error } = await supabase.rpc('get_expired_waiting_matches');
     
@@ -47,16 +54,16 @@ async function processAutomaticRefunds() {
 
         console.log(`Refund success! Tx Hash: ${tx.hash}`);
 
-        // 2. History me log entry add karein
+        // 2. History table mein log entry add karein
         await supabase.from('match_history').insert({
           wallet_address: match.p1_address.toLowerCase(),
           action_type: 'AUTO_REFUND',
           amount: match.fee,
-          description: `Automatic timeout refund for match ${match.id}`,
+          description: `Automatic refund for match ${match.id}`,
           created_at: new Date().toISOString()
         });
 
-        // 3. Refund successful hone ke baad active matches table se row delete kar dein
+        // 3. Refund successful hone ke baad matches table se row delete kar dein
         await supabase
           .from('matches')
           .delete()
@@ -65,41 +72,22 @@ async function processAutomaticRefunds() {
         console.log(`Match ${match.id} refunded and cleaned up from matches table.`);
 
       } catch (err) {
-        console.error(`Failed to refund match ${match.id}:`, err);
+        console.error(`Failed to refund match ${match.id}:`, err.message);
       }
     }
   } catch (e) {
-    console.error("Error in auto refund loop:", e);
+    console.error("Error in auto refund loop:", e.message);
   }
 }
 
+// Run check every 30 seconds
 setInterval(processAutomaticRefunds, 30000);
 
-app.post('/api/proxy-request', async (req, res) => {
-  try {
-    const { action, to, data } = req.body;
-
-    if (action === 'eth_call') {
-      const response = await fetch(WORLDCHAIN_RPC, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'eth_call',
-          params: [{ to, data }, 'latest'],
-          id: 1
-        })
-      });
-
-      const result = await response.json();
-      return res.json(result);
-    }
-
-    return res.status(400).json({ error: 'Invalid action' });
-  } catch (error) {
-    return res.status(500).json({ error: 'Proxy server error' });
-  }
+app.get('/', (req, res) => {
+  res.send('TNV Duel Arena Backend & Auto-Refund Server is Running!');
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Proxy & Auto-Refund server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server is successfully running on port ${PORT}`);
+});
