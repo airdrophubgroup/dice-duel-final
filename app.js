@@ -1,20 +1,16 @@
-import { MiniKit, Tokens, tokenToDecimals } from "https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@1.9.6/+esm";
+import { MiniKit, Tokens, tokenToDecimals } from "https://cdn.jsdelivr.5net/npm/@worldcoin/minikit-js@1.9.6/+esm";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
 const SB_URL = "https://efmkazyrxllcyvcwmewd.supabase.co";
 const SB_KEY = "sb_publishable_px6Myv6S29bTXRYmYLAkgQ_WDHDb7da";
 const WORLD_APP_ID = "app_74bd2499a35b025efb62d99125df7883";
 
-// Admin Panel Access Wallet (Ye wallet sirf admin dashboard aur ledger kholenay ke liye hai)
-const ADMIN_WALLET = "0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1"; 
-
-// Payment & Payout/Refund Wallet (Yahan saari entry fees aayengi aur refunds honge)
+const ADMIN_WALLET = "0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1";
 const PAYMENT_RECV_WALLET = "0x8FB70CDFb545C7D9b842cBE37B9aba84059Bf14b";
 
 const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";
 const WORLDCHAIN_RPC = "https://worldchain-mainnet.g.alchemy.com/public";
 
-// BACKGROUND MUSIC SETUP
 let bgMusic = new Audio('assets/bg-music.mp3'); 
 bgMusic.loop = true; 
 bgMusic.volume = 0.4; 
@@ -568,6 +564,22 @@ async function performWalletAuth(silent = false){
   }
 }
 
+async function checkActiveMatchBeforePlay(walletAddress) {
+  try {
+    const { data } = await supabaseClient
+      .from('matches')
+      .select('*')
+      .or(`p1_address.eq.${walletAddress},p2_address.eq.${walletAddress}`)
+      .in('status', ['waiting', 'playing'])
+      .maybeSingle();
+
+    if (data) {
+      return true; 
+    }
+  } catch (e) {}
+  return false;
+}
+
 async function handlePlayButtonClick(){
   if (!checkWorldAppEnvironment()) return;
   if (matchmakingActive) return;
@@ -575,6 +587,12 @@ async function handlePlayButtonClick(){
   if (!myAddress || !realWorldIdUser) {
     const signedIn = await performWalletAuth(false);
     if (!signedIn) return;
+  }
+
+  const hasActive = await checkActiveMatchBeforePlay(myAddress);
+  if (hasActive) {
+    alert("⚠️ You already have an active match or pending search/refund in progress. Please wait until it completes or expires!");
+    return;
   }
 
   $('start-btn').disabled = true;
