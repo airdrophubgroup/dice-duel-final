@@ -568,6 +568,22 @@ async function performWalletAuth(silent = false){
   }
 }
 
+async function checkActiveMatchBeforePlay(walletAddress) {
+  try {
+    const { data, error } = await supabaseClient
+      .from('matches')
+      .select('*')
+      .or(`p1_address.eq.${walletAddress},p2_address.eq.${walletAddress}`)
+      .in('status', ['waiting', 'playing'])
+      .maybeSingle();
+
+    if (data) {
+      return true; // Matlab user ka pehle se match chal raha hai ya waiting me hai
+    }
+  } catch (e) {}
+  return false;
+}
+
 async function handlePlayButtonClick(){
   if (!checkWorldAppEnvironment()) return;
   if (matchmakingActive) return;
