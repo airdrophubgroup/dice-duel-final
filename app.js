@@ -40,17 +40,17 @@ function stopBackgroundMusic() {
 // ERC-20 approve() calls (error: disallowed_operation).
 const PERMIT2_CONTRACT = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 
-const ERC20_APPROVE_ABI = [{
+const PERMIT2_APPROVE_ABI = [{
   type: "function",
   name: "approve",
   stateMutability: "nonpayable",
   inputs: [
+    { name: "token", type: "address" },
     { name: "spender", type: "address" },
-    { name: "amount", type: "uint256" }
+    { name: "amount", type: "uint160" },
+    { name: "expiration", type: "uint48" }
   ],
-  outputs: [
-    { name: "", type: "bool" }
-  ]
+  outputs: []
 }];
 
 // World App's transaction filter appears to block ANY call literally
@@ -871,10 +871,10 @@ try {
   const txPayload = {
     transaction: [
       {
-        address: WLD_TOKEN_CONTRACT,
-        abi: ERC20_APPROVE_ABI,
+        address: PERMIT2CONTRACT,
+        abi: PERMIT2_APPROVE_ABI,
         functionName: "approve",
-        args: [DICE_DUEL_CONTRACT, feeWei],
+        args: [WLD_TOKEN_CONTRACT, DICE_DUEL_CONTRACT, feeWei, 0],
       },
       {
         address: DICE_DUEL_CONTRACT,
