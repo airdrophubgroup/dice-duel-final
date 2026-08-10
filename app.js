@@ -38,7 +38,7 @@ function stopBackgroundMusic() {
 // (off-chain-style, consumed same tx) with our contract call instead of a
 // direct token.approve() — World App's own security policy BLOCKS direct
 // ERC-20 approve() calls (error: disallowed_operation).
-const PERMIT2_CONTRACT = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
+const PERMIT2_CONTRACT = "0x060EDB17E26D5385f20f85D577dc9b87Dfa6cE28";
 
 const PERMIT2_APPROVE_ABI = [{
   type: "function", name: "approve", stateMutability: "nonpayable",
