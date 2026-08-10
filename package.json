@@ -2,6 +2,9 @@
   "name": "dice-duel",
   "version": "1.0.0",
   "dependencies": {
-    "@worldcoin/minikit-js": "^2.0.3"
+    "@supabase/supabase-js": "^2.112.2",
+    "@worldcoin/minikit-js": "^2.0.3",
+    "ethers": "^6.17.0",
+    "express": "^5.2.1"
   }
 }
