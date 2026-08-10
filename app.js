@@ -41,9 +41,7 @@ function stopBackgroundMusic() {
 const PERMIT2_CONTRACT = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 
 const PERMIT2_APPROVE_ABI = [{
-  type: "function",
-  name: "approve",
-  stateMutability: "nonpayable",
+  type: "function", name: "approve", stateMutability: "nonpayable",
   inputs: [
     { name: "token", type: "address" },
     { name: "spender", type: "address" },
@@ -864,47 +862,34 @@ async function handlePlayButtonClick(){
   dbg.scrollTop = dbg.scrollHeight;
 }
 
-```js
 let paymentSuccessful = false;
+  try {
+    const txPayload = {
+      transaction: [
+        {
+          address: PERMIT2_CONTRACT,
+          abi: PERMIT2_APPROVE_ABI,
+          functionName: 'approve',
+          args: [WLD_TOKEN_CONTRACT, DICE_DUEL_CONTRACT, feeWei, 0],
+        },
+        {
+          address: DICE_DUEL_CONTRACT,
+          abi: DICE_DUEL_ABI,
+          functionName: 'joinMatch',
+          args: [matchIdBytes32, feeWei, opponentAddress || ZERO_ADDRESS],
+        },
+      ],
+    };
+    showTxDebug("Sending: " + JSON.stringify(txPayload));
 
-try {
-  const txPayload = {
-    transaction: [
-      {
-        address: PERMIT2CONTRACT,
-        abi: PERMIT2_APPROVE_ABI,
-        functionName: "approve",
-        args: [WLD_TOKEN_CONTRACT, DICE_DUEL_CONTRACT, feeWei, 0],
-      },
-      {
-        address: DICE_DUEL_CONTRACT,
-        abi: DICE_DUEL_ABI,
-        functionName: "joinMatch",
-        args: [
-          matchIdBytes32,
-          feeWei,
-          opponentAddress || ZERO_ADDRESS
-        ],
-      },
-    ],
-  };
-
-  showTxDebug("Sending: " + JSON.stringify(txPayload));
-
-  const { finalPayload } =
-    await MiniKit.commandsAsync.sendTransaction(txPayload);
-
-  showTxDebug("Response: " + JSON.stringify(finalPayload));
-
-  paymentSuccessful = finalPayload?.status === "success";
-
-} catch (err) {
-  showTxDebug("Threw: " + (err?.message || String(err)));
-  console.warn("On-chain deposit error:", err);
-  paymentSuccessful = false;
-}
-```
-
+    const { finalPayload } = await MiniKit.commandsAsync.sendTransaction(txPayload);
+    showTxDebug("Response: " + JSON.stringify(finalPayload));
+    paymentSuccessful = (finalPayload?.status === 'success');
+  } catch (err) {
+    showTxDebug("Threw: " + (err?.message || String(err)));
+    console.warn("On-chain deposit error:", err);
+    paymentSuccessful = false;
+  }
 
   if (!paymentSuccessful) {
     let existingWarning = document.getElementById('neon-payment-warning');
