@@ -836,38 +836,31 @@ async function finalizeGame(){
       try {
           if (isWin) {
               await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match (${matchFee} WLD duel)`);
+              
+              await fetch('/api/settle-match', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      matchId: matchId,
+                      winnerAddress: myAddress,
+                      loserAddress: isP1 ? finalRow.p2_address : finalRow.p1_address,
+                      fee: matchFee
+                  })
+              });
           } else {
               await logMatchHistory(myAddress, 'DEFEAT', -matchFee, `Lost match (${matchFee} WLD duel)`);
           }
-      } catch(e){}
+      } catch(e){
+          console.error("Payout trigger error:", e);
+      }
   }
 
   let winTnv = getTnvRewardForFee(matchFee);
   let earnedTnv = isWin ? winTnv : Math.floor(winTnv / 3);
 
   if (myAddress && !sessionStorage.getItem(`tnv_settled_${matchId}_${myAddress}`)) {
-    sessionStorage.setItem(`tnv_settled_${matchId}_${myAddress}`, "true");
-    try {
-      const { data: tnvResult } = await supabaseClient.rpc('secure_credit_tnv', { p_match_id: matchId, p_wallet: myAddress });
-      if (tnvResult && tnvResult.earnedTnv !== undefined) earnedTnv = tnvResult.earnedTnv;
-    } catch(e) {}
+      sessionStorage.setItem(`tnv_settled_${matchId}_${myAddress}`, "true");
   }
-
-  if (isWin){
-    $('result-icon').innerText = '🏆';
-    $('result-title').innerText = 'VICTORY!';
-    $('result-msg').innerText = `+${exactChipEarn} WLD & +${earnedTnv} TNV`;
-    $('result-card').className = 'result-card result-victory';
-    playVictorySound();
-  } else {
-    $('result-icon').innerText = '💀';
-    $('result-title').innerText = 'DEFEAT!';
-    $('result-msg').innerText = `Fee deducted & +${earnedTnv} TNV (Consolation)`;
-    $('result-card').className = 'result-card result-defeat';
-  }
-
-  $('result-overlay').style.display = 'flex';
-  fetchUserBalanceAndLeaderboard(myAddress);
 }
 
 function resetToHome(){
