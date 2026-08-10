@@ -18,7 +18,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function setupUI() {
   document.getElementById('loginBtn').addEventListener('click', handleLogin);
-  document.getElementById('openModalBtn').addEventListener('click', () => toggleModal('adModal', true));
   document.getElementById('closeModalBtn').addEventListener('click', () => toggleModal('adModal', false));
   
   document.getElementById('viewMyAdsBtn').addEventListener('click', openMyAdsModal);
@@ -37,7 +36,7 @@ function setupUI() {
   });
 }
 
-function toggleModal(modalId, show) {
+window.toggleModal = function(modalId, show) {
   document.getElementById(modalId).style.display = show ? 'flex' : 'none';
 }
 
@@ -52,7 +51,6 @@ async function handleLogin() {
   if (res.finalPayload?.status === 'success') {
     userWallet = res.finalPayload.address;
     document.getElementById('loginBtn').innerText = `Connected: ${userWallet.substring(0, 6)}...`;
-    document.getElementById('openModalBtn').style.display = 'block';
     document.getElementById('viewMyAdsBtn').style.display = 'block';
   }
 }
@@ -131,11 +129,11 @@ async function fetchListings() {
       <div class="listing-card">
         <img src="${item.image_url}" style="width: 90px; height: 90px; object-fit: cover; border-radius: 12px;">
         <div style="flex:1;">
-          <span style="font-size:10px; color:#a855f7; font-weight:bold;">🌍 ${item.country} (~${simulatedDist} km) | ${item.category}</span>
+          <span style="font-size:10px; color:#4f46e5; font-weight:bold;">🌍 ${item.country} (~${simulatedDist} km) | ${item.category}</span>
           <h3 style="font-size:1rem; margin:2px 0;">${item.title}</h3>
           <p style="font-weight:bold; color:#10b981;">${item.price} WLD</p>
         </div>
-        <button onclick="contactSeller('${item.seller_address}', '${item.title}')" style="background:#6366f1; color:#fff; padding:6px 12px; font-size:12px; border-radius:8px; align-self:center;">Chat</button>
+        <button onclick="contactSeller('${item.seller_address}', '${item.title}')" style="background:#4f46e5; color:#fff; padding:6px 12px; font-size:12px; border-radius:8px; align-self:center;">Chat</button>
       </div>
     `;
   }).join('');
@@ -155,14 +153,14 @@ async function openMyAdsModal() {
   const { data } = await supabase.from('listings').select('*').eq('seller_address', userWallet).eq('status', 'active');
 
   if (!data || data.length === 0) {
-    container.innerHTML = `<p style="text-align:center; color:#94a3b8; padding:20px;">You haven't posted any ads yet.</p>`;
+    container.innerHTML = `<p style="text-align:center; color:#64748b; padding:20px;">You haven't posted any ads yet.</p>`;
     return;
   }
 
   container.innerHTML = data.map(item => `
-    <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:10px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+    <div style="background:rgba(0,0,0,0.03); padding:10px; border-radius:10px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
       <div>
-        <h4 style="font-size:0.9rem; color:#fff;">${item.title}</h4>
+        <h4 style="font-size:0.9rem; color:#1e293b;">${item.title}</h4>
         <p style="font-size:0.8rem; color:#10b981;">${item.price} WLD (${item.country}) - [${item.category}]</p>
       </div>
       <button onclick="deleteMyAd('${item.id}')" style="background:#ef4444; color:#fff; padding:6px 10px; font-size:11px; border-radius:6px;">Delete</button>
