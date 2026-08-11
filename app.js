@@ -21,19 +21,17 @@ window.showNeonPopup = function(title, text, icon = '🔔', isConfirm = false) {
   return new Promise((resolve) => {
     document.getElementById('neonPopupIcon').innerText = icon;
     document.getElementById('neonPopupTitle').innerText = title;
-    document.getElementById('neonPopupText').innerHTML = text; // Supports HTML for styled text
+    document.getElementById('neonPopupText').innerHTML = text;
 
     if (isConfirm) {
       document.getElementById('neonPopupAlertBtnContainer').style.display = 'none';
       document.getElementById('neonPopupConfirmBtnContainer').style.display = 'flex';
-      // Red styling for delete confirmation
       document.getElementById('neonPopupBox').style.borderColor = '#ef4444';
       document.getElementById('neonPopupBox').style.boxShadow = '0 0 30px rgba(239, 68, 68, 0.4)';
       document.getElementById('neonPopupTitle').style.color = '#ef4444';
     } else {
       document.getElementById('neonPopupAlertBtnContainer').style.display = 'block';
       document.getElementById('neonPopupConfirmBtnContainer').style.display = 'none';
-      // Blue neon for standard alerts
       document.getElementById('neonPopupBox').style.borderColor = '#38bdf8';
       document.getElementById('neonPopupBox').style.boxShadow = '0 0 30px rgba(56, 189, 248, 0.4)';
       document.getElementById('neonPopupTitle').style.color = '#38bdf8';
@@ -311,7 +309,6 @@ async function handlePostAd(e) {
     document.getElementById('adForm').reset();
     fetchListings();
 
-    // The beautiful success popup!
     await showNeonPopup('Awesome! 🎉', `Your ad was posted successfully!<br><span style="color: #10b981; font-weight: 800; font-size: 1.2rem; display: block; margin-top: 8px; text-shadow: 0 0 10px rgba(16, 185, 129, 0.4);">+1 SOW Coin Earned!</span>`, '🪙');
   } else {
     await showNeonPopup('Database Error', 'Error saving ad: ' + insertError.message, '⚠️');
@@ -411,7 +408,11 @@ window.openAdDetails = async function(id) {
       <h4 style="font-size:0.95rem; color:#475569; margin-bottom:6px;">Product Description</h4>
       <p style="font-size:0.95rem; color:#334155; background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:16px; white-space:pre-wrap; line-height:1.4;">${data.description}</p>
 
-      <button onclick="event.stopPropagation(); window.openChat('${data.seller_address}', '${data.title}'); document.getElementById('adDetailsModal').style.display='none';" style="background:#4f46e5; color:#fff; width:100%; padding:12px; border:none; border-radius:10px; font-size:1rem; font-weight:bold; cursor:pointer;">Chat with Seller</button>
+      <!-- Replaced single button with side-by-side Back and Chat buttons -->
+      <div style="display: flex; gap: 8px; margin-top: 16px;">
+        <button onclick="document.getElementById('adDetailsModal').style.display='none';" style="background: #e2e8f0; color: #475569; flex: 1; padding: 12px; border: none; border-radius: 10px; font-size: 1rem; font-weight: bold; cursor: pointer;">⬅️ Back</button>
+        <button onclick="event.stopPropagation(); window.openChat('${data.seller_address}', '${data.title}'); document.getElementById('adDetailsModal').style.display='none';" style="background: #4f46e5; color: #fff; flex: 1.5; padding: 12px; border: none; border-radius: 10px; font-size: 1rem; font-weight: bold; cursor: pointer;">💬 Chat</button>
+      </div>
     </div>
   `;
   document.getElementById('adDetailsModal').style.display = 'flex';
@@ -478,7 +479,6 @@ async function openMyAdsModal() {
 }
 
 window.markAsSoldOut = async function(id) {
-  // Using the new Animated Confirm Popup instead of native window.confirm!
   const isConfirmed = await showNeonPopup('Delete Ad?', 'Are you sure this item is Sold Out? This will permanently delete the ad.', '🗑️', true);
   
   if (isConfirmed) {
