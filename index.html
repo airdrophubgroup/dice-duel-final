@@ -12,134 +12,71 @@
       <button id="loginBtn">Connect Wallet</button>
     </header>
 
-    <!-- Action Bar: View My Ads -->
     <div class="action-bar" style="display:flex; gap:10px;">
       <button id="viewMyAdsBtn" class="btn-primary" style="display:none; width: 100%;">📦 My Ads</button>
     </div>
 
-    <!-- Direct Inline Click Trigger -->
-    <button type="button" onclick="document.getElementById('adModal').style.display='flex'" class="btn-success" style="width:100%; padding:16px; font-size:1rem; font-weight:700; border-radius:16px; margin-bottom:18px; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow: 0 10px 25px -5px rgba(79,70,229,0.4); cursor:pointer;">
-      ✨ Post an Ad & Sell (1 WLD)
+    <button type="button" onclick="document.getElementById('adModal').style.display='flex'" class="btn-success" style="width:100%; padding:16px; font-size:1rem; font-weight:700; border-radius:16px; margin-bottom:18px; cursor:pointer;">
+      ✨ Post an Ad & Sell (0.1 WLD)
     </button>
 
-    <!-- Filters Bar: Country, Category & Distance Radius Slider -->
-    <div class="filter-box" style="background:rgba(255,255,255,0.85); border:1px solid var(--border-color); padding:12px; border-radius:14px; margin-bottom: 15px; display:flex; flex-direction:column; gap:8px;">
-      
-      <!-- Country & Category Row -->
+    <div class="filter-box" style="background:rgba(255,255,255,0.85); border:1px solid var(--border-color); padding:12px; border-radius:14px; margin-bottom: 15px;">
       <div style="display:flex; gap:8px;">
         <select id="countryFilter" class="glass-select" style="flex:1; padding:8px; border-radius:8px;">
           <option value="ALL">🌐 All Countries</option>
           <option value="IN">🇮🇳 India</option>
           <option value="US">🇺🇸 United States</option>
-          <option value="AE">🇦🇪 UAE</option>
-          <option value="GB">🇬🇧 United Kingdom</option>
-          <option value="SG">🇸🇬 Singapore</option>
         </select>
-
         <select id="categoryFilter" class="glass-select" style="flex:1; padding:8px; border-radius:8px;">
           <option value="ALL">📂 All Categories</option>
           <option value="Electronics">🔌 Electronics</option>
           <option value="Phones">📱 Phones</option>
-          <option value="Laptops">💻 Laptops</option>
-          <option value="Games">🎮 Games</option>
-          <option value="Clothes">👕 Clothes</option>
-          <option value="Shoes">👟 Shoes</option>
-          <option value="Bags">🎒 Bags</option>
-          <option value="Home Appliances">🏠 Appliances</option>
-          <option value="Books & Sports">⚽ Sports/Books</option>
-          <option value="Automotive">🚗 Automotive</option>
           <option value="Other">📦 Other</option>
         </select>
       </div>
-      
-      <!-- Distance Range Filter -->
-      <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
-        <div style="display:flex; justify-content:space-between; font-size:11px; color:#64748b;">
-          <span>Radius Range:</span>
-          <span id="rangeValue" style="color:#10b981; font-weight:bold;">50 km</span>
-        </div>
-        <input type="range" id="distanceRange" min="5" max="500" value="50" step="5" style="width:100%; cursor:pointer;">
-      </div>
+      <input type="range" id="distanceRange" min="5" max="500" value="50" step="5" style="width:100%; margin-top:10px;">
     </div>
 
-    <!-- Product Feed -->
     <main class="feed-section">
-      <h2>Explore Marketplace</h2>
-      <div id="listingsContainer" class="listings-grid">
-        <p class="loading-text">Loading marketplace items...</p>
-      </div>
+      <div id="listingsContainer" class="listings-grid"></div>
     </main>
 
-    <!-- Modal for Posting Ad -->
     <div id="adModal" class="modal" style="display:none;">
       <div class="modal-content">
         <span class="close" onclick="document.getElementById('adModal').style.display='none'">&times;</span>
         <h2>Post New Ad</h2>
         <form id="adForm">
-          <div style="display:flex; flex-direction:column; gap:4px; text-align:left;">
-            <label style="font-size:12px; font-weight:600; color:#334155;">Product Title</label>
-            <input type="text" id="title" placeholder="e.g. iPhone 13 Pro" required>
+          <input type="text" id="title" placeholder="Product Title" required>
+          <select id="category" required>
+            <option value="Electronics">Electronics</option>
+            <option value="Phones">Phones</option>
+            <option value="Other">Other</option>
+          </select>
+          <select id="adCountry" required>
+            <option value="IN">India</option>
+            <option value="US">United States</option>
+          </select>
+          <textarea id="description" placeholder="Description" required></textarea>
+          <input type="number" id="price" placeholder="Price in WLD" required>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
+            <input type="text" id="img1" placeholder="Image 1 URL" required>
+            <input type="text" id="img2" placeholder="Image 2 URL" required>
+            <input type="text" id="img3" placeholder="Image 3 URL" required>
+            <input type="text" id="img4" placeholder="Image 4 URL" required>
           </div>
-
-          <div style="display:flex; flex-direction:column; gap:4px; text-align:left;">
-            <label style="font-size:12px; font-weight:600; color:#334155;">Category</label>
-            <select id="category" required>
-              <option value="" disabled selected>Select Category</option>
-              <option value="Electronics">🔌 Electronics</option>
-              <option value="Phones">📱 Phones & Tablets</option>
-              <option value="Laptops">💻 Laptops & Computers</option>
-              <option value="Games">🎮 Games & Consoles</option>
-              <option value="Clothes">👕 Clothes & Fashion</option>
-              <option value="Shoes">👟 Shoes & Footwear</option>
-              <option value="Bags">🎒 Bags & Luggage</option>
-              <option value="Home Appliances">🏠 Home Appliances</option>
-              <option value="Books & Sports">⚽ Books & Sports Equipment</option>
-              <option value="Automotive">🚗 Cars & Bikes</option>
-              <option value="Other">📦 Other</option>
-            </select>
-          </div>
-
-          <div style="display:flex; flex-direction:column; gap:4px; text-align:left;">
-            <label style="font-size:12px; font-weight:600; color:#334155;">Location / Country</label>
-            <select id="adCountry" required>
-              <option value="IN">🇮🇳 India</option>
-              <option value="US">🇺🇸 United States</option>
-              <option value="AE">🇦🇪 UAE</option>
-              <option value="GB">🇬🇧 United Kingdom</option>
-              <option value="SG">🇸🇬 Singapore</option>
-            </select>
-          </div>
-
-          <div style="display:flex; flex-direction:column; gap:4px; text-align:left;">
-            <label style="font-size:12px; font-weight:600; color:#334155;">Description</label>
-            <textarea id="description" placeholder="Write item details..." required style="resize:none; height:70px;"></textarea>
-          </div>
-
-          <div style="display:flex; flex-direction:column; gap:4px; text-align:left;">
-            <label style="font-size:12px; font-weight:600; color:#334155;">Price (WLD)</label>
-            <input type="number" id="price" placeholder="Price in WLD" required>
-          </div>
-
-          <div style="display:flex; flex-direction:column; gap:4px; text-align:left;">
-            <label style="font-size:12px; font-weight:600; color:#334155;">Image URL</label>
-            <input type="text" id="imageUrl" placeholder="Paste image direct link" required>
-          </div>
-
-          <button type="submit" class="btn-pay">Post Now with 1 WLD</button>
+          <button type="submit" class="btn-pay">Post Now (0.1 WLD)</button>
         </form>
       </div>
     </div>
 
-    <!-- Modal for My Ads -->
     <div id="myAdsModal" class="modal" style="display:none;">
       <div class="modal-content">
         <span class="close" onclick="document.getElementById('myAdsModal').style.display='none'">&times;</span>
-        <h2>My Posted Ads</h2>
-        <div id="myAdsContainer" style="max-height: 350px; overflow-y: auto; margin-top: 10px;"></div>
+        <h2>My Ads</h2>
+        <div id="myAdsContainer"></div>
       </div>
     </div>
   </div>
-
   <script type="module" src="app.js"></script>
 </body>
 </html>
