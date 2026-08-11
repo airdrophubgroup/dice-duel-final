@@ -8,7 +8,7 @@ const APP_ID = 'app_06db98c492a19f80177b8d633f056982';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 let userWallet = null;
-let currentUsername = null; // Storing Username globally
+let currentUsername = null; 
 let currentChatSeller = null;
 let currentLat = 28.6139; 
 let currentLng = 77.2090;
@@ -17,8 +17,6 @@ let currentLng = 77.2090;
 // UNIVERSAL NEON POPUP SYSTEM
 // ==========================================
 let popupResolve = null;
-
-// 'type' can be: 'alert' (default), 'confirm', or 'prompt'
 window.showNeonPopup = function(title, text, icon = '🔔', type = 'alert') {
   return new Promise((resolve) => {
     document.getElementById('neonPopupIcon').innerText = icon;
@@ -48,7 +46,6 @@ window.showNeonPopup = function(title, text, icon = '🔔', type = 'alert') {
       popupBox.style.boxShadow = '0 0 30px rgba(16, 185, 129, 0.4)';
       document.getElementById('neonPopupTitle').style.color = '#10b981';
     } else {
-      // standard alert
       alertBtns.style.display = 'block';
       document.getElementById('neonPopupAlertBtn').innerText = 'OK';
       popupBox.style.borderColor = '#38bdf8';
@@ -59,15 +56,11 @@ window.showNeonPopup = function(title, text, icon = '🔔', type = 'alert') {
     document.getElementById('neonPopup').style.display = 'flex';
     popupResolve = resolve;
 
-    // Action Overrides
     document.getElementById('neonPopupAlertBtn').onclick = function() {
       if (type === 'prompt') {
         const val = document.getElementById('neonPopupInput').value.trim();
-        if(!val) {
-          closeNeonPopup("User_" + Math.floor(Math.random()*10000)); // Default if empty
-        } else {
-          closeNeonPopup(val);
-        }
+        if(!val) closeNeonPopup("User_" + Math.floor(Math.random()*10000));
+        else closeNeonPopup(val);
       } else {
         closeNeonPopup(true);
       }
@@ -98,11 +91,41 @@ window.copyAddress = async function(address) {
     try {
       document.execCommand('copy');
       await showNeonPopup('Copied!', 'Wallet Address copied to clipboard.', '📋');
-    } catch (ex) {
-      await showNeonPopup('Error', 'Could not copy address directly.', '⚠️');
-    }
+    } catch (ex) {}
     document.body.removeChild(textArea);
   }
+}
+
+// ==========================================
+// FULL-SCREEN IMAGE SLIDER SYSTEM
+// ==========================================
+let viewerImages = [];
+let currentImageIndex = 0;
+
+window.openImageViewer = function(imagesStr, index) {
+  viewerImages = imagesStr.split('|');
+  currentImageIndex = parseInt(index);
+  updateViewer();
+  document.getElementById('imageViewerModal').style.display = 'flex';
+}
+
+window.prevImage = function() {
+  if (currentImageIndex > 0) {
+    currentImageIndex--;
+    updateViewer();
+  }
+}
+
+window.nextImage = function() {
+  if (currentImageIndex < viewerImages.length - 1) {
+    currentImageIndex++;
+    updateViewer();
+  }
+}
+
+function updateViewer() {
+  document.getElementById('viewerImage').src = viewerImages[currentImageIndex];
+  document.getElementById('imageCounter').innerText = `${currentImageIndex + 1} / ${viewerImages.length}`;
 }
 // ==========================================
 
@@ -186,19 +209,15 @@ async function handleLogin() {
     if (finalPayload?.status === 'success' && finalPayload?.address) {
       userWallet = finalPayload.address;
       
-      // Username Logic: Check DB First
       const { data: userData } = await supabase.from('users').select('username').eq('wallet_address', userWallet).single();
       
       if (userData && userData.username) {
         currentUsername = userData.username;
       } else {
-        // If new user, Prompt them to choose a Username
         currentUsername = await showNeonPopup('Welcome! 👋', 'Choose a stylish Username for your marketplace profile:', '👤', 'prompt');
-        // Save to DB
         await supabase.from('users').upsert([{ wallet_address: userWallet, username: currentUsername }]);
       }
 
-      // Display the Username proudly in Top Right Corner!
       document.getElementById('loginBtn').innerText = `👤 ${currentUsername}`;
       document.getElementById('viewMyAdsBtn').style.display = 'block';
     } else {
@@ -316,6 +335,16 @@ async function handlePostAd(e) {
     return;
   }
 
+  // ==========================================
+  // IMAGE SIZE VALIDATION (Max 50 KB per image)
+  // ==========================================
+  for (let i = 0; i < files.length; i++) {
+    if (files[i].size > 50 * 1024) { // 50 KB in bytes
+      await showNeonPopup('Size Exceeded', 'Please upload image under 50 KB per image. If exceed please use online image size reduce tool on Google.', '⚠️');
+      return;
+    }
+  }
+
   let paymentSuccessful = false;
   try {
     const payPayload = {
@@ -327,9 +356,7 @@ async function handlePostAd(e) {
 
     const { finalPayload } = await MiniKit.commandsAsync.pay(payPayload);
     paymentSuccessful = (finalPayload?.status === 'success');
-  } catch (err) {
-    console.error(err);
-  }
+  } catch (err) {}
 
   if (!paymentSuccessful) {
     await showNeonPopup('Payment Cancelled', 'Payment failed or was cancelled by you.', '💸');
@@ -354,7 +381,7 @@ async function handlePostAd(e) {
 
   const { error: insertError } = await supabase.from('listings').insert([{
     seller_address: userWallet,
-    seller_name: currentUsername, // Save Username in Listings Table
+    seller_name: currentUsername,
     title,
     description,
     price: document.getElementById('price').value,
@@ -424,7 +451,7 @@ async function fetchListings() {
 
   container.innerHTML = filteredData.map((item) => {
     const thumbImg = item.image1 || 'https://via.placeholder.com/90';
-    const displaySellerName = item.seller_name || 'User'; // Get Username
+    const displaySellerName = item.seller_name || 'User';
     
     return `
       <div class="listing-card" onclick="window.openAdDetails('${item.id}')" style="cursor:pointer; display:flex; gap:12px; background:#fff; padding:12px; border-radius:14px; border:1px solid #e2e8f0; margin-bottom:10px; align-items:center;">
@@ -449,8 +476,10 @@ window.openAdDetails = async function(id) {
   }
 
   const allImages = [data.image1, data.image2, data.image3, data.image4].filter(img => img && img.trim() !== "");
-  const imagesHtml = allImages.map(img => `
-    <img src="${img}" style="width:100%; height:240px; object-fit:cover; border-radius:10px; margin-bottom:8px; border:1px solid #e2e8f0;">
+  const imagesUrlsJoined = allImages.join('|');
+
+  const imagesHtml = allImages.map((img, index) => `
+    <img src="${img}" onclick="window.openImageViewer('${imagesUrlsJoined}', ${index})" style="width:100%; height:240px; object-fit:contain; background:#0f172a; border-radius:10px; margin-bottom:8px; border:1px solid #e2e8f0; cursor:zoom-in;">
   `).join('');
 
   const displaySellerName = data.seller_name || 'User';
@@ -478,7 +507,7 @@ window.openAdDetails = async function(id) {
 
       <hr style="border:0; border-top:1px solid #e2e8f0; margin-bottom:14px;">
       
-      <h4 style="font-size:0.95rem; color:#475569; margin-bottom:6px;">Uploaded Photos (${allImages.length})</h4>
+      <h4 style="font-size:0.95rem; color:#475569; margin-bottom:6px;">Uploaded Photos (${allImages.length}) - Tap to Zoom</h4>
       <div style="max-height:280px; overflow-y:auto; margin-bottom:14px; padding-right:4px;">
         ${imagesHtml}
       </div>
@@ -501,23 +530,55 @@ window.openChat = async function(sellerWallet, adTitle, sellerName) {
     return;
   }
   currentChatSeller = sellerWallet;
+  window.currentChatAdTitle = adTitle; 
   
-  // Show Seller Username in Chat UI
   document.getElementById('chatTitle').innerText = `Chat with ${sellerName || 'Seller'}`;
-  
-  document.getElementById('chatMessages').innerHTML = `<div style="background:#e2e8f0; padding:8px 12px; border-radius:8px; font-size:12px; align-self:flex-start; color:#334155;">Hello! I am interested in your ad: ${adTitle}</div>`;
+  const chatBox = document.getElementById('chatMessages');
+  chatBox.innerHTML = `<p class="loading-text" style="text-align:center;">Loading chat history...</p>`;
   document.getElementById('chatModal').style.display = 'flex';
+
+  const { data, error } = await supabase.from('chats')
+    .select('*')
+    .eq('ad_title', adTitle)
+    .order('created_at', { ascending: true });
+
+  let chatHtml = `<div style="background:#e2e8f0; padding:8px 12px; border-radius:8px; font-size:12px; align-self:flex-start; color:#334155; margin-bottom:4px;">Hello! I am interested in your ad: ${adTitle}</div>`;
+  
+  if (data && data.length > 0) {
+    const filteredChats = data.filter(m => 
+      (m.sender === userWallet && m.receiver === sellerWallet) || 
+      (m.sender === sellerWallet && m.receiver === userWallet)
+    );
+
+    filteredChats.forEach(msg => {
+      if (msg.sender === userWallet) {
+        chatHtml += `<div style="background:#4f46e5; color:#fff; padding:8px 12px; border-radius:8px; font-size:12px; align-self:flex-end; max-width:80%; margin-bottom:4px;">${msg.message}</div>`;
+      } else {
+        chatHtml += `<div style="background:#e2e8f0; padding:8px 12px; border-radius:8px; font-size:12px; align-self:flex-start; color:#334155; max-width:80%; margin-bottom:4px;">${msg.message}</div>`;
+      }
+    });
+  }
+
+  chatBox.innerHTML = chatHtml;
+  chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-window.sendMessage = function() {
+window.sendMessage = async function() {
   const input = document.getElementById('chatInput');
   const msg = input.value.trim();
-  if (!msg) return;
+  if (!msg || !currentChatSeller || !window.currentChatAdTitle) return;
 
   const chatBox = document.getElementById('chatMessages');
-  chatBox.innerHTML += `<div style="background:#4f46e5; color:#fff; padding:8px 12px; border-radius:8px; font-size:12px; align-self:flex-end; max-width:80%;">${msg}</div>`;
+  chatBox.innerHTML += `<div style="background:#4f46e5; color:#fff; padding:8px 12px; border-radius:8px; font-size:12px; align-self:flex-end; max-width:80%; margin-bottom:4px;">${msg}</div>`;
   input.value = '';
   chatBox.scrollTop = chatBox.scrollHeight;
+
+  await supabase.from('chats').insert([{
+    sender: userWallet,
+    receiver: currentChatSeller,
+    ad_title: window.currentChatAdTitle,
+    message: msg
+  }]);
 }
 
 async function openMyAdsModal() {
@@ -573,37 +634,22 @@ window.markAsSoldOut = async function(id) {
   }
 }
 
-// ==========================================
-// LEADERBOARD SYSTEM (NEW)
-// ==========================================
 window.openLeaderboard = async function() {
   document.getElementById('leaderboardModal').style.display = 'flex';
   const container = document.getElementById('leaderboardContainer');
   container.innerHTML = `<p class="loading-text">Fetching top earners...</p>`;
 
-  // Top 50 logon ka balance mangwao
-  const { data: balances, error: balError } = await supabase.from('sow_balances')
-    .select('*')
-    .order('balance', { ascending: false })
-    .limit(50);
-
+  const { data: balances, error: balError } = await supabase.from('sow_balances').select('*').order('balance', { ascending: false }).limit(50);
   if (balError || !balances || balances.length === 0) {
     container.innerHTML = `<p style="text-align:center; color:#64748b; padding:20px;">No data yet. Be the first to earn SOW! 🚀</p>`;
     return;
   }
 
-  // Ab unke usernames mangwao
   const wallets = balances.map(b => b.wallet_address);
   const { data: usersData } = await supabase.from('users').select('*').in('wallet_address', wallets);
-  
   const userMap = {};
-  if (usersData) {
-    usersData.forEach(u => {
-      userMap[u.wallet_address] = u.username;
-    });
-  }
+  if (usersData) { usersData.forEach(u => { userMap[u.wallet_address] = u.username; }); }
 
-  // HTML format karke dikhao
   container.innerHTML = balances.map((item, index) => {
     let rankMedal = `#${index + 1}`;
     if(index === 0) rankMedal = '🥇 1st';
