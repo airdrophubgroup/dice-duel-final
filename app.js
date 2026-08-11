@@ -217,32 +217,39 @@ async function fetchListings() {
   }).join('');
 }
 
-// OLX Style Full Ad Details Popup View
+// Complete OLX Style Full Ad Details View (Showing Title, Category, Country, Price, Seller, Description & All Images)
 window.openAdDetails = async function(id) {
   const { data, error } = await supabase.from('listings').select('*').eq('id', id).single();
   if (error || !data) return alert("Ad details not found.");
 
-  // Collect all available images
   const allImages = [data.image1, data.image2, data.image3, data.image4].filter(img => img && img.trim() !== "");
   
   const imagesHtml = allImages.map(img => `
-    <img src="${img}" style="width:100%; height:220px; object-fit:cover; border-radius:10px; margin-bottom:8px; border:1px solid #e2e8f0;">
+    <img src="${img}" style="width:100%; height:240px; object-fit:cover; border-radius:10px; margin-bottom:8px; border:1px solid #e2e8f0;">
   `).join('');
 
   document.getElementById('adDetailsBody').innerHTML = `
     <div style="text-align:left;">
-      <span style="background:#e0e7ff; color:#4f46e5; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:bold;">📂 ${data.category} | 🌍 ${data.country}</span>
-      <h2 style="font-size:1.3rem; margin:8px 0 4px 0; color:#1e293b;">${data.title}</h2>
-      <h3 style="font-size:1.4rem; color:#10b981; margin-bottom:14px;">${data.price} WLD</h3>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <span style="background:#e0e7ff; color:#4f46e5; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:bold;">📂 ${data.category}</span>
+        <span style="font-size:12px; color:#64748b; font-weight:bold;">🌍 Country: ${data.country}</span>
+      </div>
+
+      <h2 style="font-size:1.4rem; margin:6px 0; color:#1e293b;">${data.title}</h2>
+      <h3 style="font-size:1.45rem; color:#10b981; margin-bottom:12px;">${data.price} WLD</h3>
       
+      <div style="background:#f1f5f9; padding:8px 12px; border-radius:8px; font-size:12px; color:#475569; margin-bottom:14px;">
+        👤 <b>Seller Address:</b> <span style="font-family:monospace; color:#334155;">${data.seller_address}</span>
+      </div>
+
       <hr style="border:0; border-top:1px solid #e2e8f0; margin-bottom:14px;">
       
-      <h4 style="font-size:0.95rem; color:#475569; margin-bottom:6px;">Photos (${allImages.length})</h4>
-      <div style="max-height:300px; overflow-y:auto; margin-bottom:14px; padding-right:4px;">
+      <h4 style="font-size:0.95rem; color:#475569; margin-bottom:6px;">Uploaded Photos (${allImages.length})</h4>
+      <div style="max-height:280px; overflow-y:auto; margin-bottom:14px; padding-right:4px;">
         ${imagesHtml}
       </div>
 
-      <h4 style="font-size:0.95rem; color:#475569; margin-bottom:6px;">Description</h4>
+      <h4 style="font-size:0.95rem; color:#475569; margin-bottom:6px;">Product Description</h4>
       <p style="font-size:0.95rem; color:#334155; background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:16px; white-space:pre-wrap; line-height:1.4;">${data.description}</p>
 
       <button onclick="event.stopPropagation(); window.openChat('${data.seller_address}', '${data.title}'); document.getElementById('adDetailsModal').style.display='none';" style="background:#4f46e5; color:#fff; width:100%; padding:12px; border:none; border-radius:10px; font-size:1rem; font-weight:bold; cursor:pointer;">Chat with Seller</button>
