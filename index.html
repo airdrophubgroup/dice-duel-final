@@ -46,7 +46,17 @@
           <option value="Other">📦 Other</option>
         </select>
       </div>
+
       <input type="text" id="searchInput" placeholder="🔍 Search ads..." style="width:100%; padding:8px; border-radius:8px; border:1px solid #cbd5e1;">
+
+      <!-- Distance Slider Restored -->
+      <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
+        <div style="display:flex; justify-content:space-between; font-size:11px; color:#64748b;">
+          <span>Radius Range:</span>
+          <span id="rangeValue" style="color:#10b981; font-weight:bold;">50 km</span>
+        </div>
+        <input type="range" id="distanceRange" min="5" max="500" value="50" step="5" style="width:100%; cursor:pointer;">
+      </div>
     </div>
 
     <main class="feed-section">
@@ -61,7 +71,7 @@
       <div class="modal-content">
         <span class="close" onclick="document.getElementById('adModal').style.display='none'">&times;</span>
         <h2>Post New Ad</h2>
-        <p style="font-size: 11px; color: #ef4444; margin-bottom: 8px; font-weight: 600;">⚠️ Note: Ads cannot be edited later. Phone numbers/contacts are strictly not allowed.</p>
+        <p style="font-size: 11px; color: #ef4444; margin-bottom: 8px; font-weight: 600;">⚠️ Note: Ads cannot be edited later. Phone numbers are strictly not allowed.</p>
         <form id="adForm">
           <input type="text" id="title" placeholder="Product Title" required>
           <select id="category" required>
@@ -79,7 +89,6 @@
             <option value="Other">Other</option>
           </select>
           
-          <!-- Added All Countries / Other Option -->
           <select id="adCountry" required>
             <option value="" disabled selected>Select Country / Region</option>
             <option value="ALL">🌐 All Countries / Other</option>
@@ -90,7 +99,10 @@
             <option value="SG">🇸🇬 Singapore</option>
           </select>
 
-          <textarea id="description" placeholder="Description (No Phone Numbers)" required style="resize:none; height:70px;"></textarea>
+          <!-- Real Address Field -->
+          <input type="text" id="adAddress" placeholder="Enter your full address (e.g. Street, City)" required>
+
+          <textarea id="description" placeholder="Description (No Phone Numbers)" required style="resize:none; height:60px;"></textarea>
           <input type="number" id="price" placeholder="Price in WLD" required>
           <input type="file" id="imageInput" multiple accept="image/*" required style="padding: 6px; border: 1px solid #cbd5e1; border-radius: 8px;">
           <button type="submit" class="btn-pay">Post Now (0.1 WLD)</button>

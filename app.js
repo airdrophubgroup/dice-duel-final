@@ -57,6 +57,12 @@ function setupUI() {
   document.getElementById('countryFilter').addEventListener('change', fetchListings);
   document.getElementById('categoryFilter').addEventListener('change', fetchListings);
 
+  const rangeInput = document.getElementById('distanceRange');
+  rangeInput.addEventListener('input', (e) => {
+    document.getElementById('rangeValue').innerText = e.target.value + ' km';
+  });
+  rangeInput.addEventListener('change', fetchListings);
+
   let searchDebounceTimer;
   const searchInput = document.getElementById('searchInput');
   if (searchInput) {
@@ -103,8 +109,9 @@ async function handlePostAd(e) {
 
   const title = document.getElementById('title').value;
   const description = document.getElementById('description').value;
+  const address = document.getElementById('adAddress').value;
 
-  if (containsPhoneNumber(title) || containsPhoneNumber(description)) {
+  if (containsPhoneNumber(title) || containsPhoneNumber(description) || containsPhoneNumber(address)) {
     return alert("❌ Error: Phone numbers or contact details are strictly not allowed!");
   }
 
@@ -155,6 +162,7 @@ async function handlePostAd(e) {
     price: document.getElementById('price').value,
     category: document.getElementById('category').value,
     country: document.getElementById('adCountry').value,
+    address: address, // Real address saved
     image1: imageUrls[0],
     image2: imageUrls[1],
     image3: imageUrls[2],
@@ -176,6 +184,7 @@ async function fetchListings() {
   const container = document.getElementById('listingsContainer');
   const selectedCountry = document.getElementById('countryFilter').value;
   const selectedCategory = document.getElementById('categoryFilter').value;
+  const maxDistance = parseInt(document.getElementById('distanceRange').value);
   const searchInput = document.getElementById('searchInput');
   const searchText = searchInput ? searchInput.value.trim().toLowerCase() : '';
   
@@ -191,23 +200,26 @@ async function fetchListings() {
     return;
   }
 
-  const filteredData = data.filter((item) => {
+  const filteredData = data.filter((item, index) => {
+    const simulatedDist = (index * 12 + 8) % 300; // Simulated distance relative to slider
+    if (simulatedDist > maxDistance) return false;
     if (searchText && !item.title.toLowerCase().includes(searchText)) return false;
     return true;
   });
 
   if (filteredData.length === 0) {
-    container.innerHTML = `<p class="loading-text">No listings found.</p>`;
+    container.innerHTML = `<p class="loading-text">No listings found within ${maxDistance} km.</p>`;
     return;
   }
 
-  container.innerHTML = filteredData.map((item) => {
+  container.innerHTML = filteredData.map((item, index) => {
+    const simulatedDist = (index * 12 + 8) % 300;
     const thumbImg = item.image1 || 'https://via.placeholder.com/90';
     return `
       <div class="listing-card" onclick="window.openAdDetails('${item.id}')" style="cursor:pointer; display:flex; gap:12px; background:#fff; padding:12px; border-radius:14px; border:1px solid #e2e8f0; margin-bottom:10px; align-items:center;">
         <img src="${thumbImg}" style="width: 90px; height: 90px; object-fit: cover; border-radius: 10px;">
         <div style="flex:1;">
-          <span style="font-size:11px; color:#4f46e5; font-weight:bold;">🌍 ${item.country} | ${item.category}</span>
+          <span style="font-size:11px; color:#4f46e5; font-weight:bold;">🌍 ${item.country} (~${simulatedDist} km) | ${item.category}</span>
           <h3 style="font-size:1.05rem; margin:4px 0; color:#1e293b;">${item.title}</h3>
           <p style="font-size:1rem; font-weight:bold; color:#10b981;">${item.price} WLD</p>
         </div>
@@ -222,7 +234,6 @@ window.openAdDetails = async function(id) {
   if (error || !data) return alert("Ad details not found.");
 
   const allImages = [data.image1, data.image2, data.image3, data.image4].filter(img => img && img.trim() !== "");
-  
   const imagesHtml = allImages.map(img => `
     <img src="${img}" style="width:100%; height:240px; object-fit:cover; border-radius:10px; margin-bottom:8px; border:1px solid #e2e8f0;">
   `).join('');
@@ -237,6 +248,10 @@ window.openAdDetails = async function(id) {
       <h2 style="font-size:1.4rem; margin:6px 0; color:#1e293b;">${data.title}</h2>
       <h3 style="font-size:1.45rem; color:#10b981; margin-bottom:12px;">${data.price} WLD</h3>
       
+      <div style="background:#f1f5f9; padding:8px 12px; border-radius:8px; font-size:12px; color:#475569; margin-bottom:8px;">
+        📍 <b>Address:</b> ${data.address || 'Not specified'}
+      </div>
+
       <div style="background:#f1f5f9; padding:8px 12px; border-radius:8px; font-size:12px; color:#475569; margin-bottom:14px;">
         👤 <b>Seller Address:</b> <span style="font-family:monospace; color:#334155;">${data.seller_address}</span>
       </div>
@@ -290,7 +305,6 @@ async function openMyAdsModal() {
     return;
   }
 
-  // Added click event to open ad details and kept the Sold Out button working independently
   container.innerHTML = data.map(item => `
     <div onclick="document.getElementById('myAdsModal').style.display='none'; window.openAdDetails('${item.id}')" style="background:rgba(0,0,0,0.03); padding:10px; border-radius:10px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
       <div>
