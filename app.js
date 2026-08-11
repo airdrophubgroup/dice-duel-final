@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // BUG THA YAHAN: pehle `isInstalled()` check ho raha tha aur uske TRUE hone par
   // hi `install()` call hota tha. Lekin isInstalled() sirf install() ke baad hi
   // kaam karta hai — isliye install() kabhi chalta hi nahi tha aur wallet connect
-  // fail ho raha tha. Fix: install() ko seedha, unconditionally, sabse pehle call karo.
+  // fail ho raha تھا. Fix: install() ko seedha, unconditionally, sabse pehle call karo.
   let installError = null;
   try { MiniKit.install(APP_ID); } catch (e) { installError = e.message; console.error('MiniKit install error:', e); }
 
@@ -197,14 +197,15 @@ async function handlePostAd(e) {
     const fileExt = file.name.split('.').pop();
     const fileName = `${Date.now()}_${Math.random()}.${fileExt}`;
     
-    const { error: uploadError } = await supabase.storage.from('listings').upload(fileName, file);
+    // BUCKET NAME FIXED: changed from 'listings' to 'listing' matching your Supabase storage
+    const { error: uploadError } = await supabase.storage.from('listing').upload(fileName, file);
     
     if (uploadError) {
       alert("Image upload failed: " + uploadError.message);
       return;
     }
 
-    const { data: publicURLData } = supabase.storage.from('listings').getPublicUrl(fileName);
+    const { data: publicURLData } = supabase.storage.from('listing').getPublicUrl(fileName);
     imageUrls[i] = publicURLData.publicUrl;
   }
 
