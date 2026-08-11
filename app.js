@@ -9,7 +9,7 @@ const APP_ID = 'app_06db98c492a19f80177b8d633f056982';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 let userWallet = null;
 let currentChatSeller = null;
-let currentLat = 28.6139; 
+let currentLat = 28.6139; // Default Delhi Fallback
 let currentLng = 77.2090;
 
 function checkWorldAppEnvironment() {
@@ -100,6 +100,7 @@ async function handleLogin() {
   }
 }
 
+// Fixed location accuracy issue
 function detectUserCurrentPosition() {
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition((position) => {
@@ -107,25 +108,14 @@ function detectUserCurrentPosition() {
       currentLng = position.coords.longitude;
     }, (err) => {
       console.log("GPS position default used");
-    }, { timeout: 10000 });
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
   }
 }
 
+// Fixed High-Accuracy Location Detection
 window.detectLocation = async function() {
   const addressField = document.getElementById('adAddress');
-  addressField.value = "Detecting location...";
-
-  try {
-    const res = await fetch('https://ipapi.co/json/');
-    const locData = await res.json();
-    
-    if (locData && locData.city) {
-      addressField.value = `${locData.city}, ${locData.region}, ${locData.country_name}`;
-      return;
-    }
-  } catch (err) {
-    console.log("IP fallback error:", err);
-  }
+  addressField.value = "Detecting precise location...";
 
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(async (position) => {
@@ -136,17 +126,30 @@ window.detectLocation = async function() {
         const data = await response.json();
         if (data && data.display_name) {
           addressField.value = data.display_name;
-          return;
+        } else {
+          addressField.value = `Lat: ${currentLat.toFixed(4)}, Lng: ${currentLng.toFixed(4)}`;
         }
       } catch (e) {
-        console.error(e);
+        addressField.value = `Lat: ${currentLat.toFixed(4)}, Lng: ${currentLng.toFixed(4)}`;
       }
-      addressField.value = "";
-      alert("Could not auto-detect. Please type your location manually.");
-    }, (error) => {
-      addressField.value = "";
-      alert("Location permission denied or timeout. Please type manually.");
-    }, { timeout: 5000 });
+    }, async (error) => {
+      // Fallback: If GPS fails, use IP API but also update the Lat/Lng
+      try {
+        const res = await fetch('https://ipapi.co/json/');
+        const locData = await res.json();
+        if (locData && locData.city) {
+          currentLat = locData.latitude; // Fixed: updating coords from IP
+          currentLng = locData.longitude;
+          addressField.value = `${locData.city}, ${locData.region}, ${locData.country_name}`;
+        } else {
+          addressField.value = "";
+          alert("Could not auto-detect. Please type manually.");
+        }
+      } catch (err) {
+        addressField.value = "";
+        alert("Location permissions denied and fallback failed. Please type manually.");
+      }
+    }, { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 });
   } else {
     addressField.value = "";
     alert("Geolocation not supported. Please type manually.");
@@ -246,7 +249,6 @@ async function handlePostAd(e) {
   }]);
 
   if (!insertError) {
-    // SOW Balance logic (Independent of ad deletion)
     const { data: balData } = await supabase.from('sow_balances').select('balance').eq('wallet_address', userWallet).single();
     let newBal = (balData && balData.balance) ? balData.balance + 1 : 1;
     await supabase.from('sow_balances').upsert([{ wallet_address: userWallet, balance: newBal }]);
@@ -382,7 +384,6 @@ async function openMyAdsModal() {
   const container = document.getElementById('myAdsContainer');
   container.innerHTML = `<p class="loading-text">Loading your ads & balance...</p>`;
 
-  // SOW balance ab alag table se aa raha hai
   const { data: balData } = await supabase.from('sow_balances').select('balance').eq('wallet_address', userWallet).single();
   const earnedSow = balData ? balData.balance : 0;
 
@@ -393,7 +394,6 @@ async function openMyAdsModal() {
     </div>
   `;
 
-  // Fetch only active ads
   const { data: activeAds } = await supabase.from('listings').select('*').eq('seller_address', userWallet).eq('status', 'active');
 
   if (!activeAds || activeAds.length === 0) {
@@ -414,7 +414,6 @@ async function openMyAdsModal() {
 
 window.markAsSoldOut = async function(id) {
   if (confirm("Are you sure this item is Sold Out? This will permanently delete the ad.")) {
-    // Ad wapas database se delete ho raha hai, SOW balance par koi asar nahi hoga!
     const { error } = await supabase.from('listings').delete().match({ id });
     if (!error) {
       alert("Ad deleted successfully! Your SOW balance is safe.");
