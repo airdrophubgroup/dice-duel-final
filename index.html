@@ -30,11 +30,13 @@
   <div class="app-container">
     <header class="header">
       <h1>🌍 Want Sell On World</h1>
-      <!-- Ye button ab connect hone par Username show karega -->
       <button id="loginBtn">Connect Wallet</button>
     </header>
 
-    <div class="action-bar" style="display:flex; gap:10px;">
+    <div class="action-bar" style="display:flex; gap:10px; margin-bottom: 12px;">
+      <!-- Chhota sa Leaderboard Button (Space save karne ke liye) -->
+      <button onclick="window.openLeaderboard()" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: none; padding: 10px 16px; border-radius: 12px; font-size: 1.2rem; cursor: pointer; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3);">🏆</button>
+      
       <button id="viewMyAdsBtn" class="btn-primary" style="display:none; width: 100%;">📦 My Ads & Balance</button>
     </div>
 
@@ -149,6 +151,22 @@
       </div>
     </div>
 
+    <!-- Leaderboard Modal (New) -->
+    <div id="leaderboardModal" class="modal" style="display:none; z-index: 1000;">
+      <div class="modal-content">
+        <span class="close" onclick="document.getElementById('leaderboardModal').style.display='none'">&times;</span>
+        <h2 style="color: #f59e0b; margin-top: 0; display: flex; align-items: center; gap: 8px;">🏆 SOW Leaderboard</h2>
+        <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 10px;">Top sellers earning SOW Coins</p>
+        
+        <div id="leaderboardContainer" style="max-height: 400px; overflow-y: auto; margin-top: 10px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;">
+          <!-- Realtime users render here -->
+        </div>
+        
+        <!-- Back Button for Homepage -->
+        <button onclick="document.getElementById('leaderboardModal').style.display='none'" style="background: #e2e8f0; color: #475569; width: 100%; padding: 12px; border: none; border-radius: 10px; font-weight: bold; font-size: 1rem; cursor: pointer;">⬅️ Back to Home</button>
+      </div>
+    </div>
+
     <!-- Universal Neon Animated Popup -->
     <div id="neonPopup" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10000; align-items: center; justify-content: center; background: rgba(0,0,0,0.75); backdrop-filter: blur(5px);">
       <div id="neonPopupBox" style="background: linear-gradient(135deg, #1e293b, #0f172a); border: 2px solid #38bdf8; border-radius: 20px; padding: 30px; text-align: center; max-width: 320px; width: 90%; box-shadow: 0 0 30px rgba(56, 189, 248, 0.4); animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
@@ -156,7 +174,6 @@
         <h2 id="neonPopupTitle" style="color: #38bdf8; margin: 0 0 10px 0; font-size: 1.6rem; font-weight: 800;">Notice</h2>
         <p id="neonPopupText" style="color: #cbd5e1; font-size: 0.95rem; line-height: 1.5; margin: 0 0 20px 0;">Message goes here</p>
         
-        <!-- Input for prompts (like Username selection) -->
         <div id="neonPopupInputContainer" style="display:none; width: 100%;">
           <input type="text" id="neonPopupInput" placeholder="Type your username..." style="width: 100%; box-sizing: border-box; padding: 12px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #38bdf8; background: rgba(0,0,0,0.3); color: #fff; font-size: 1rem; outline: none; text-align: center;">
         </div>

@@ -572,3 +572,66 @@ window.markAsSoldOut = async function(id) {
     }
   }
 }
+
+// ==========================================
+// LEADERBOARD SYSTEM (NEW)
+// ==========================================
+window.openLeaderboard = async function() {
+  document.getElementById('leaderboardModal').style.display = 'flex';
+  const container = document.getElementById('leaderboardContainer');
+  container.innerHTML = `<p class="loading-text">Fetching top earners...</p>`;
+
+  // Top 50 logon ka balance mangwao
+  const { data: balances, error: balError } = await supabase.from('sow_balances')
+    .select('*')
+    .order('balance', { ascending: false })
+    .limit(50);
+
+  if (balError || !balances || balances.length === 0) {
+    container.innerHTML = `<p style="text-align:center; color:#64748b; padding:20px;">No data yet. Be the first to earn SOW! 🚀</p>`;
+    return;
+  }
+
+  // Ab unke usernames mangwao
+  const wallets = balances.map(b => b.wallet_address);
+  const { data: usersData } = await supabase.from('users').select('*').in('wallet_address', wallets);
+  
+  const userMap = {};
+  if (usersData) {
+    usersData.forEach(u => {
+      userMap[u.wallet_address] = u.username;
+    });
+  }
+
+  // HTML format karke dikhao
+  container.innerHTML = balances.map((item, index) => {
+    let rankMedal = `#${index + 1}`;
+    if(index === 0) rankMedal = '🥇 1st';
+    if(index === 1) rankMedal = '🥈 2nd';
+    if(index === 2) rankMedal = '🥉 3rd';
+    
+    const username = userMap[item.wallet_address] || 'Unknown User';
+    const shortWallet = item.wallet_address.substring(0, 6) + '...';
+
+    let specialStyle = index < 3 
+      ? 'border: 2px solid #38bdf8; background: linear-gradient(135deg, #0f172a, #1e293b); color: #fff; box-shadow: 0 4px 10px rgba(56, 189, 248, 0.2);' 
+      : 'background: rgba(0,0,0,0.03); border: 1px solid #e2e8f0;';
+    let nameStyle = index < 3 ? 'color: #38bdf8;' : 'color: #1e293b;';
+    let rankStyle = index < 3 ? 'color: #f59e0b; font-size: 1.1rem;' : 'color: #64748b; font-size: 0.95rem;';
+
+    return `
+      <div style="padding:10px 14px; border-radius:12px; display:flex; justify-content:space-between; align-items:center; ${specialStyle}">
+        <div style="display:flex; align-items:center; gap: 12px;">
+          <span style="font-weight: 800; min-width: 45px; ${rankStyle}">${rankMedal}</span>
+          <div>
+            <h4 style="margin: 0; font-size: 0.95rem; ${nameStyle}">${username}</h4>
+            <p style="margin: 2px 0 0 0; font-size: 0.7rem; color: #94a3b8; font-family: monospace;">${shortWallet}</p>
+          </div>
+        </div>
+        <div style="font-weight: bold; font-size: 1rem; color: #10b981; text-align:right;">
+          ${item.balance} <br><span style="font-size:0.7rem; color:#94a3b8;">SOW</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
