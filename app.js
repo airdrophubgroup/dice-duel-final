@@ -33,23 +33,32 @@ function setupUI() {
 }
 
 async function handleLogin() {
-  const res = await MiniKit.commandsAsync.walletAuth({
-    nonce: '12345678',
-    requestId: '0',
-    expirationTime: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000),
-    statement: 'Sign in to Want Sell On World',
-  });
+  try {
+    const res = await MiniKit.commandsAsync.walletAuth({
+      nonce: '12345678',
+      requestId: '0',
+      expirationTime: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000),
+      statement: 'Sign in to Want Sell On World',
+    });
 
-  if (res.finalPayload?.status === 'success') {
-    userWallet = res.finalPayload.address;
-    
-    if (MiniKit.user && MiniKit.user.username) {
-      userName = MiniKit.user.username;
+    if (res?.finalPayload?.status === 'success') {
+      const payload = res.finalPayload;
+      userWallet = payload.address;
+      
+      // World App username capture logic from payload if provided by MiniKit
+      if (payload.username) {
+        userName = payload.username;
+      } else if (MiniKit.user && MiniKit.user.username) {
+        userName = MiniKit.user.username;
+      }
+
+      const displayName = userName ? `@${userName}` : `${userWallet.substring(0, 6)}...`;
+      document.getElementById('loginBtn').innerText = `👤 ${displayName}`;
+      document.getElementById('viewMyAdsBtn').style.display = 'block';
     }
-
-    const displayName = userName ? `@${userName}` : `${userWallet.substring(0, 6)}...`;
-    document.getElementById('loginBtn').innerText = `👤 ${displayName}`;
-    document.getElementById('viewMyAdsBtn').style.display = 'block';
+  } catch (error) {
+    console.error("Wallet login error:", error);
+    alert("Wallet connection failed. Please open inside World App.");
   }
 }
 
@@ -81,7 +90,7 @@ async function handlePostAd(e) {
     description: 'Listing Fee: 0.1 WLD',
   });
 
-  if (paymentResponse.finalPayload?.status !== 'success') {
+  if (paymentResponse?.finalPayload?.status !== 'success') {
     return alert('Payment failed or cancelled.');
   }
 
@@ -92,7 +101,6 @@ async function handlePostAd(e) {
     const fileExt = file.name.split('.').pop();
     const fileName = `${Date.now()}_${Math.random()}.${fileExt}`;
     
-    // Updated bucket name to 'listing' matching your Supabase storage
     const { error: uploadError } = await supabase.storage.from('listing').upload(fileName, file);
     
     if (uploadError) {
