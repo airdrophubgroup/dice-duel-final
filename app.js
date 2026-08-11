@@ -217,7 +217,6 @@ async function fetchListings() {
   }).join('');
 }
 
-// Complete OLX Style Full Ad Details View (Showing Title, Category, Country, Price, Seller, Description & All Images)
 window.openAdDetails = async function(id) {
   const { data, error } = await supabase.from('listings').select('*').eq('id', id).single();
   if (error || !data) return alert("Ad details not found.");
@@ -291,13 +290,14 @@ async function openMyAdsModal() {
     return;
   }
 
+  // Added click event to open ad details and kept the Sold Out button working independently
   container.innerHTML = data.map(item => `
-    <div style="background:rgba(0,0,0,0.03); padding:10px; border-radius:10px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+    <div onclick="document.getElementById('myAdsModal').style.display='none'; window.openAdDetails('${item.id}')" style="background:rgba(0,0,0,0.03); padding:10px; border-radius:10px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
       <div>
         <h4 style="font-size:0.9rem; color:#1e293b;">${item.title}</h4>
         <p style="font-size:0.8rem; color:#10b981;">${item.price} WLD (${item.country})</p>
       </div>
-      <button onclick="window.markAsSoldOut('${item.id}')" style="background:#10b981; color:#fff; padding:6px 10px; font-size:11px; border-radius:6px; font-weight:bold; cursor:pointer;">Sold Out</button>
+      <button onclick="event.stopPropagation(); window.markAsSoldOut('${item.id}')" style="background:#10b981; color:#fff; padding:6px 10px; font-size:11px; border-radius:6px; font-weight:bold; cursor:pointer;">Sold Out</button>
     </div>
   `).join('');
 }
