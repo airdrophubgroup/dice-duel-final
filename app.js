@@ -97,33 +97,49 @@ async function handleLogin() {
   }
 }
 
-// Location detection helper function
-window.detectLocation = function() {
-  if (!navigator.geolocation) {
-    return alert("Geolocation is not supported by your browser");
+// Fast & Safe Location Detection with IP Fallback (Won't freeze)
+window.detectLocation = async function() {
+  const addressField = document.getElementById('adAddress');
+  addressField.value = "Detecting location...";
+
+  try {
+    // Fast IP-based location lookup (Works everywhere without hanging)
+    const res = await fetch('https://ipapi.co/json/');
+    const locData = await res.json();
+    
+    if (locData && locData.city) {
+      addressField.value = `${locData.city}, ${locData.region}, ${locData.country_name}`;
+      return;
+    }
+  } catch (err) {
+    console.log("IP fallback error:", err);
   }
 
-  alert("Detecting your location...");
-  navigator.geolocation.getCurrentPosition(async (position) => {
-    const lat = position.coords.latitude;
-    const lng = position.coords.longitude;
-
-    try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-      const data = await response.json();
-      if (data && data.display_name) {
-        document.getElementById('adAddress').value = data.display_name;
-        alert("Location detected successfully!");
-      } else {
-        alert("Could not fetch address from coordinates.");
+  // Fallback to browser geolocation with a strict timeout so it never hangs
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      try {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+        const data = await response.json();
+        if (data && data.display_name) {
+          addressField.value = data.display_name;
+          return;
+        }
+      } catch (e) {
+        console.error(e);
       }
-    } catch (err) {
-      console.error(err);
-      alert("Error fetching address.");
-    }
-  }, () => {
-    alert("Unable to retrieve your location. Please check permissions.");
-  });
+      addressField.value = "";
+      alert("Could not auto-detect. Please type your location manually.");
+    }, (error) => {
+      addressField.value = "";
+      alert("Location permission denied or timeout. Please type manually.");
+    }, { timeout: 5000 });
+  } else {
+    addressField.value = "";
+    alert("Geolocation not supported. Please type manually.");
+  }
 }
 
 function containsPhoneNumber(text) {
