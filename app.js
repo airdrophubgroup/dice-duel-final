@@ -8,11 +8,12 @@ const APP_ID = 'app_06db98c492a19f80177b8d633f056982';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 let userWallet = null;
+let currentChatSeller = null;
 
 function checkWorldAppEnvironment() {
   const isWorldApp = (typeof MiniKit !== 'undefined' && MiniKit.isInstalled());
   if (!isWorldApp) {
-    alert('⚠️ Yeh app sirf World App ke andar kaam karta hai. Kripya World App mein open karein.');
+    alert('⚠️ Yeh app sirf World App ke andar kaam karta hai.');
     return false;
   }
   return true;
@@ -43,7 +44,7 @@ function randomAlphaNumeric(len) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  try { MiniKit.install(APP_ID); } catch (e) { console.error('MiniKit install error:', e); }
+  try { MiniKit.install(APP_ID); } catch (e) { console.error(e); }
   await waitForMiniKitReady();
   setupUI();
   fetchListings();
@@ -86,7 +87,7 @@ async function handleLogin() {
       alert('❌ Wallet connect nahi ho paaya.');
     }
   } catch (err) {
-    alert('❌ Wallet connect mein error aaya.');
+    alert('❌ Wallet connect error.');
   }
 }
 
@@ -124,7 +125,7 @@ async function handlePostAd(e) {
     const { finalPayload } = await MiniKit.commandsAsync.pay(payPayload);
     paymentSuccessful = (finalPayload?.status === 'success');
   } catch (err) {
-    console.error('pay exception:', err);
+    console.error(err);
   }
 
   if (!paymentSuccessful) {
@@ -167,7 +168,7 @@ async function handlePostAd(e) {
     document.getElementById('adForm').reset();
     fetchListings();
   } else {
-    alert('Error saving ad to database: ' + insertError.message);
+    alert('Error saving ad: ' + insertError.message);
   }
 }
 
@@ -180,12 +181,8 @@ async function fetchListings() {
   
   let query = supabase.from('listings').select('*').eq('status', 'active');
   
-  if (selectedCountry !== 'ALL') {
-    query = query.eq('country', selectedCountry);
-  }
-  if (selectedCategory !== 'ALL') {
-    query = query.eq('category', selectedCategory);
-  }
+  if (selectedCountry !== 'ALL') query = query.eq('country', selectedCountry);
+  if (selectedCategory !== 'ALL') query = query.eq('category', selectedCategory);
 
   const { data, error } = await query;
   
@@ -207,21 +204,58 @@ async function fetchListings() {
   container.innerHTML = filteredData.map((item) => {
     const thumbImg = item.image1 || 'https://via.placeholder.com/90';
     return `
-      <div class="listing-card">
+      <div class="listing-card" onclick="window.openAdDetails('${item.id}')" style="cursor:pointer;">
         <img src="${thumbImg}" style="width: 90px; height: 90px; object-fit: cover; border-radius: 12px;">
         <div style="flex:1;">
           <span style="font-size:10px; color:#4f46e5; font-weight:bold;">🌍 ${item.country} | ${item.category}</span>
           <h3 style="font-size:1rem; margin:2px 0;">${item.title}</h3>
           <p style="font-weight:bold; color:#10b981;">${item.price} WLD</p>
         </div>
-        <button onclick="window.contactSeller('${item.seller_address}', '${item.title}')" style="background:#4f46e5; color:#fff; padding:6px 12px; font-size:12px; border-radius:8px; align-self:center;">Chat</button>
+        <button onclick="event.stopPropagation(); window.openChat('${item.seller_address}', '${item.title}')" style="background:#4f46e5; color:#fff; padding:6px 12px; font-size:12px; border-radius:8px; align-self:center;">Chat</button>
       </div>
     `;
   }).join('');
 }
 
-window.contactSeller = function(sellerWallet) {
-  prompt("Seller Wallet Address:", sellerWallet);
+// Open Full Ad Details in a Popup Window/Modal
+window.openAdDetails = async function(id) {
+  const { data, error } = await supabase.from('listings').select('*').eq('id', id).single();
+  if (error || !data) return alert("Ad details not found.");
+
+  const imagesHtml = [data.image1, data.image2, data.image3, data.image4]
+    .filter(img => img)
+    .map(img => `<img src="${img}" style="width:100%; height:180px; object-fit:cover; border-radius:8px; margin-bottom:5px;">`)
+    .join('');
+
+  document.getElementById('adDetailsBody').innerHTML = `
+    <h2 style="margin-bottom:5px;">${data.title}</h2>
+    <p style="font-size:12px; color:#64748b; margin-bottom:10px;">🌍 ${data.country} | Category: ${data.category}</p>
+    <div style="max-height:250px; overflow-y:auto; margin-bottom:10px;">${imagesHtml}</div>
+    <p style="font-size:1.1rem; font-weight:bold; color:#10b981; margin-bottom:8px;">Price: ${data.price} WLD</p>
+    <p style="font-size:0.9k; color:#334155; background:#f8fafc; padding:8px; border-radius:6px; margin-bottom:12px;">${data.description}</p>
+    <button onclick="event.stopPropagation(); window.openChat('${data.seller_address}', '${data.title}'); document.getElementById('adDetailsModal').style.display='none';" style="background:#4f46e5; color:#fff; width:100%; padding:10px; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">Chat with Seller</button>
+  `;
+  document.getElementById('adDetailsModal').style.display = 'flex';
+}
+
+// Open Chat Window Instead of Prompt
+window.openChat = function(sellerWallet, adTitle) {
+  if (!userWallet) return alert("Please connect your wallet first to chat!");
+  currentChatSeller = sellerWallet;
+  document.getElementById('chatTitle').innerText = `Chat about: ${adTitle}`;
+  document.getElementById('chatMessages').innerHTML = `<div style="background:#e2e8f0; padding:6px 10px; border-radius:6px; font-size:12px; align-self:flex-start;">Hello! I am interested in your ad: ${adTitle}</div>`;
+  document.getElementById('chatModal').style.display = 'flex';
+}
+
+window.sendMessage = function() {
+  const input = document.getElementById('chatInput');
+  const msg = input.value.trim();
+  if (!msg) return;
+
+  const chatBox = document.getElementById('chatMessages');
+  chatBox.innerHTML += `<div style="background:#4f46e5; color:#fff; padding:6px 10px; border-radius:6px; font-size:12px; align-self:flex-end; max-width:80%;">${msg}</div>`;
+  input.value = '';
+  chatBox.scrollTop = chatBox.scrollHeight;
 }
 
 async function openMyAdsModal() {
