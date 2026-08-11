@@ -204,46 +204,58 @@ async function fetchListings() {
   container.innerHTML = filteredData.map((item) => {
     const thumbImg = item.image1 || 'https://via.placeholder.com/90';
     return `
-      <div class="listing-card" onclick="window.openAdDetails('${item.id}')" style="cursor:pointer;">
-        <img src="${thumbImg}" style="width: 90px; height: 90px; object-fit: cover; border-radius: 12px;">
+      <div class="listing-card" onclick="window.openAdDetails('${item.id}')" style="cursor:pointer; display:flex; gap:12px; background:#fff; padding:12px; border-radius:14px; border:1px solid #e2e8f0; margin-bottom:10px; align-items:center;">
+        <img src="${thumbImg}" style="width: 90px; height: 90px; object-fit: cover; border-radius: 10px;">
         <div style="flex:1;">
-          <span style="font-size:10px; color:#4f46e5; font-weight:bold;">🌍 ${item.country} | ${item.category}</span>
-          <h3 style="font-size:1rem; margin:2px 0;">${item.title}</h3>
-          <p style="font-weight:bold; color:#10b981;">${item.price} WLD</p>
+          <span style="font-size:11px; color:#4f46e5; font-weight:bold;">🌍 ${item.country} | ${item.category}</span>
+          <h3 style="font-size:1.05rem; margin:4px 0; color:#1e293b;">${item.title}</h3>
+          <p style="font-size:1rem; font-weight:bold; color:#10b981;">${item.price} WLD</p>
         </div>
-        <button onclick="event.stopPropagation(); window.openChat('${item.seller_address}', '${item.title}')" style="background:#4f46e5; color:#fff; padding:6px 12px; font-size:12px; border-radius:8px; align-self:center;">Chat</button>
+        <button onclick="event.stopPropagation(); window.openChat('${item.seller_address}', '${item.title}')" style="background:#4f46e5; color:#fff; padding:8px 14px; font-size:12px; border-radius:8px; border:none; cursor:pointer; font-weight:bold;">Chat</button>
       </div>
     `;
   }).join('');
 }
 
-// Open Full Ad Details in a Popup Window/Modal
+// OLX Style Full Ad Details Popup View
 window.openAdDetails = async function(id) {
   const { data, error } = await supabase.from('listings').select('*').eq('id', id).single();
   if (error || !data) return alert("Ad details not found.");
 
-  const imagesHtml = [data.image1, data.image2, data.image3, data.image4]
-    .filter(img => img)
-    .map(img => `<img src="${img}" style="width:100%; height:180px; object-fit:cover; border-radius:8px; margin-bottom:5px;">`)
-    .join('');
+  // Collect all available images
+  const allImages = [data.image1, data.image2, data.image3, data.image4].filter(img => img && img.trim() !== "");
+  
+  const imagesHtml = allImages.map(img => `
+    <img src="${img}" style="width:100%; height:220px; object-fit:cover; border-radius:10px; margin-bottom:8px; border:1px solid #e2e8f0;">
+  `).join('');
 
   document.getElementById('adDetailsBody').innerHTML = `
-    <h2 style="margin-bottom:5px;">${data.title}</h2>
-    <p style="font-size:12px; color:#64748b; margin-bottom:10px;">🌍 ${data.country} | Category: ${data.category}</p>
-    <div style="max-height:250px; overflow-y:auto; margin-bottom:10px;">${imagesHtml}</div>
-    <p style="font-size:1.1rem; font-weight:bold; color:#10b981; margin-bottom:8px;">Price: ${data.price} WLD</p>
-    <p style="font-size:0.9k; color:#334155; background:#f8fafc; padding:8px; border-radius:6px; margin-bottom:12px;">${data.description}</p>
-    <button onclick="event.stopPropagation(); window.openChat('${data.seller_address}', '${data.title}'); document.getElementById('adDetailsModal').style.display='none';" style="background:#4f46e5; color:#fff; width:100%; padding:10px; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">Chat with Seller</button>
+    <div style="text-align:left;">
+      <span style="background:#e0e7ff; color:#4f46e5; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:bold;">📂 ${data.category} | 🌍 ${data.country}</span>
+      <h2 style="font-size:1.3rem; margin:8px 0 4px 0; color:#1e293b;">${data.title}</h2>
+      <h3 style="font-size:1.4rem; color:#10b981; margin-bottom:14px;">${data.price} WLD</h3>
+      
+      <hr style="border:0; border-top:1px solid #e2e8f0; margin-bottom:14px;">
+      
+      <h4 style="font-size:0.95rem; color:#475569; margin-bottom:6px;">Photos (${allImages.length})</h4>
+      <div style="max-height:300px; overflow-y:auto; margin-bottom:14px; padding-right:4px;">
+        ${imagesHtml}
+      </div>
+
+      <h4 style="font-size:0.95rem; color:#475569; margin-bottom:6px;">Description</h4>
+      <p style="font-size:0.95rem; color:#334155; background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:16px; white-space:pre-wrap; line-height:1.4;">${data.description}</p>
+
+      <button onclick="event.stopPropagation(); window.openChat('${data.seller_address}', '${data.title}'); document.getElementById('adDetailsModal').style.display='none';" style="background:#4f46e5; color:#fff; width:100%; padding:12px; border:none; border-radius:10px; font-size:1rem; font-weight:bold; cursor:pointer;">Chat with Seller</button>
+    </div>
   `;
   document.getElementById('adDetailsModal').style.display = 'flex';
 }
 
-// Open Chat Window Instead of Prompt
 window.openChat = function(sellerWallet, adTitle) {
   if (!userWallet) return alert("Please connect your wallet first to chat!");
   currentChatSeller = sellerWallet;
   document.getElementById('chatTitle').innerText = `Chat about: ${adTitle}`;
-  document.getElementById('chatMessages').innerHTML = `<div style="background:#e2e8f0; padding:6px 10px; border-radius:6px; font-size:12px; align-self:flex-start;">Hello! I am interested in your ad: ${adTitle}</div>`;
+  document.getElementById('chatMessages').innerHTML = `<div style="background:#e2e8f0; padding:8px 12px; border-radius:8px; font-size:12px; align-self:flex-start; color:#334155;">Hello! I am interested in your ad: ${adTitle}</div>`;
   document.getElementById('chatModal').style.display = 'flex';
 }
 
@@ -253,7 +265,7 @@ window.sendMessage = function() {
   if (!msg) return;
 
   const chatBox = document.getElementById('chatMessages');
-  chatBox.innerHTML += `<div style="background:#4f46e5; color:#fff; padding:6px 10px; border-radius:6px; font-size:12px; align-self:flex-end; max-width:80%;">${msg}</div>`;
+  chatBox.innerHTML += `<div style="background:#4f46e5; color:#fff; padding:8px 12px; border-radius:8px; font-size:12px; align-self:flex-end; max-width:80%;">${msg}</div>`;
   input.value = '';
   chatBox.scrollTop = chatBox.scrollHeight;
 }
