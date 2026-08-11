@@ -49,6 +49,27 @@ window.closeNeonPopup = function(result) {
     popupResolve = null;
   }
 };
+
+// Clipboard function that uses Neon Popup instead of native prompt!
+window.copyAddress = async function(address) {
+  try {
+    await navigator.clipboard.writeText(address);
+    await showNeonPopup('Copied!', 'Seller Wallet Address copied to clipboard.', '📋');
+  } catch (err) {
+    // Fallback for Mini-App limits
+    const textArea = document.createElement("textarea");
+    textArea.value = address;
+    document.body.appendChild(textArea);
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      await showNeonPopup('Copied!', 'Seller Wallet Address copied to clipboard.', '📋');
+    } catch (ex) {
+      await showNeonPopup('Error', 'Could not copy address directly.', '⚠️');
+    }
+    document.body.removeChild(textArea);
+  }
+}
 // ==========================================
 
 async function checkWorldAppEnvironment() {
@@ -395,7 +416,11 @@ window.openAdDetails = async function(id) {
       </div>
 
       <div style="background:#f1f5f9; padding:8px 12px; border-radius:8px; font-size:12px; color:#475569; margin-bottom:14px;">
-        👤 <b>Seller Address:</b> <span style="font-family:monospace; color:#334155;">${data.seller_address}</span>
+        <!-- Neon Copy feature added directly to the address text -->
+        👤 <b>Seller Address:</b> <br>
+        <span onclick="window.copyAddress('${data.seller_address}')" style="font-family:monospace; color:#38bdf8; font-weight:bold; cursor:pointer; text-decoration:underline;">
+          ${data.seller_address.substring(0,18)}... 📋
+        </span>
       </div>
 
       <hr style="border:0; border-top:1px solid #e2e8f0; margin-bottom:14px;">
@@ -408,7 +433,6 @@ window.openAdDetails = async function(id) {
       <h4 style="font-size:0.95rem; color:#475569; margin-bottom:6px;">Product Description</h4>
       <p style="font-size:0.95rem; color:#334155; background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:16px; white-space:pre-wrap; line-height:1.4;">${data.description}</p>
 
-      <!-- Replaced single button with side-by-side Back and Chat buttons -->
       <div style="display: flex; gap: 8px; margin-top: 16px;">
         <button onclick="document.getElementById('adDetailsModal').style.display='none';" style="background: #e2e8f0; color: #475569; flex: 1; padding: 12px; border: none; border-radius: 10px; font-size: 1rem; font-weight: bold; cursor: pointer;">⬅️ Back</button>
         <button onclick="event.stopPropagation(); window.openChat('${data.seller_address}', '${data.title}'); document.getElementById('adDetailsModal').style.display='none';" style="background: #4f46e5; color: #fff; flex: 1.5; padding: 12px; border: none; border-radius: 10px; font-size: 1rem; font-weight: bold; cursor: pointer;">💬 Chat</button>

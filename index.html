@@ -19,8 +19,8 @@
 </head>
 <body style="margin: 0; padding: 0;">
   
-  <!-- Top Support Bar -->
-  <div style="background: #0f172a; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); width: 100%; box-sizing: border-box; position: sticky; top: 0; z-index: 9999;">
+  <!-- Top Support Bar (Z-index lowered to 50 so it stays behind modals) -->
+  <div style="background: #0f172a; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); width: 100%; box-sizing: border-box; position: sticky; top: 0; z-index: 50;">
     <a href="mailto:airdrophubgroup@gmail.com" style="background: linear-gradient(135deg, #4f46e5, #06b6d4); color: #fff; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; text-decoration: none; box-shadow: 0 0 10px rgba(79, 70, 229, 0.6), 0 0 20px rgba(6, 182, 212, 0.4); border: 1px solid rgba(255, 255, 255, 0.3); display: flex; align-items: center; gap: 4px;">
       🎧 Support
     </a>
@@ -79,7 +79,6 @@
       </div>
     </div>
 
-    <!-- SOW Coin Airdrop Promo Box -->
     <div style="background: linear-gradient(135deg, #1e293b, #0f172a); border: 1px solid #334155; padding: 16px; border-radius: 14px; margin-bottom: 20px; color: #fff; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.25); position: relative; overflow: hidden;">
       <div style="position: absolute; top: -10px; right: -10px; font-size: 50px; opacity: 0.1; transform: rotate(15deg);">🪙</div>
       <h3 style="margin: 0 0 8px 0; color: #38bdf8; font-size: 1.15rem; font-weight: 800;">🚀 SOW Coin Airdrop is LIVE!</h3>
@@ -98,8 +97,8 @@
       </div>
     </main>
 
-    <!-- Post Ad Modal -->
-    <div id="adModal" class="modal" style="display:none;">
+    <!-- Post Ad Modal (Z-index 1000) -->
+    <div id="adModal" class="modal" style="display:none; z-index: 1000;">
       <div class="modal-content">
         <span class="close" onclick="document.getElementById('adModal').style.display='none'">&times;</span>
         <h2>Post New Ad</h2>
@@ -140,7 +139,6 @@
           <input type="number" id="price" placeholder="Price in WLD" required>
           <input type="file" id="imageInput" multiple accept="image/*" required style="padding: 6px; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 10px;">
           
-          <!-- Back & Post Buttons Side-by-Side -->
           <div style="display: flex; gap: 8px;">
             <button type="button" onclick="document.getElementById('adModal').style.display='none'" style="background: #e2e8f0; color: #475569; flex: 1; padding: 12px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 1rem;">Cancel</button>
             <button type="submit" class="btn-pay" style="flex: 2; margin: 0;">Post Now (0.1 WLD)</button>
@@ -149,7 +147,7 @@
       </div>
     </div>
 
-    <!-- Universal Neon Animated Popup -->
+    <!-- Universal Neon Animated Popup (Z-index 10000) -->
     <div id="neonPopup" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10000; align-items: center; justify-content: center; background: rgba(0,0,0,0.75); backdrop-filter: blur(5px);">
       <div id="neonPopupBox" style="background: linear-gradient(135deg, #1e293b, #0f172a); border: 2px solid #38bdf8; border-radius: 20px; padding: 30px; text-align: center; max-width: 320px; width: 90%; box-shadow: 0 0 30px rgba(56, 189, 248, 0.4); animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
         <div id="neonPopupIcon" style="font-size: 65px; margin-bottom: 10px; animation: iconBounce 2s infinite;">🔔</div>
@@ -167,22 +165,21 @@
       </div>
     </div>
 
-    <!-- Ad Details Modal -->
-    <div id="adDetailsModal" class="modal" style="display:none;">
+    <!-- Ad Details Modal (Z-index 1000) -->
+    <div id="adDetailsModal" class="modal" style="display:none; z-index: 1000;">
       <div class="modal-content" style="max-width:500px;">
         <span class="close" onclick="document.getElementById('adDetailsModal').style.display='none'">&times;</span>
         <div id="adDetailsBody"></div>
       </div>
     </div>
 
-    <!-- Chat Modal -->
-    <div id="chatModal" class="modal" style="display:none;">
+    <!-- Chat Modal (Z-index 1000) -->
+    <div id="chatModal" class="modal" style="display:none; z-index: 1000;">
       <div class="modal-content" style="max-width:400px;">
         <span class="close" onclick="document.getElementById('chatModal').style.display='none'">&times;</span>
         <h3 id="chatTitle">Chat with Seller</h3>
         <div id="chatMessages" style="height:200px; border:1px solid #cbd5e1; border-radius:8px; padding:10px; overflow-y:auto; margin:10px 0; background:#f8fafc; display:flex; flex-direction:column; gap:6px;"></div>
         <div style="display:flex; gap:6px;">
-          <!-- Added Back Button in Chat -->
           <button onclick="document.getElementById('chatModal').style.display='none'" style="background: #e2e8f0; color: #475569; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold;">⬅️</button>
           <input type="text" id="chatInput" placeholder="Type a message..." style="flex:1; padding:8px; border-radius:6px; border:1px solid #cbd5e1;">
           <button onclick="window.sendMessage()" style="background:#4f46e5; color:#fff; border:none; padding:8px 14px; border-radius:6px; cursor:pointer;">Send</button>
@@ -190,13 +187,12 @@
       </div>
     </div>
 
-    <!-- My Ads Modal -->
-    <div id="myAdsModal" class="modal" style="display:none;">
+    <!-- My Ads Modal (Z-index 1000) -->
+    <div id="myAdsModal" class="modal" style="display:none; z-index: 1000;">
       <div class="modal-content">
         <span class="close" onclick="document.getElementById('myAdsModal').style.display='none'">&times;</span>
         <h2>My Posted Ads</h2>
         <div id="myAdsContainer" style="max-height: 400px; overflow-y: auto; margin-top: 10px; margin-bottom: 12px;"></div>
-        <!-- Added Back Button to My Ads -->
         <button onclick="document.getElementById('myAdsModal').style.display='none'" style="background: #e2e8f0; color: #475569; width: 100%; padding: 12px; border: none; border-radius: 10px; font-weight: bold; font-size: 1rem; cursor: pointer;">⬅️ Back to Home</button>
       </div>
     </div>
