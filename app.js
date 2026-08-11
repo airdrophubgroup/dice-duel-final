@@ -9,6 +9,8 @@ const APP_ID = 'app_06db98c492a19f80177b8d633f056982';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 let userWallet = null;
 let currentChatSeller = null;
+let currentLat = 28.6139; // Default Delhi
+let currentLng = 77.2090;
 
 function checkWorldAppEnvironment() {
   const isWorldApp = (typeof MiniKit !== 'undefined' && MiniKit.isInstalled());
@@ -47,6 +49,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   try { MiniKit.install(APP_ID); } catch (e) { console.error(e); }
   await waitForMiniKitReady();
   setupUI();
+  detectUserCurrentPosition();
   fetchListings();
 });
 
@@ -97,49 +100,61 @@ async function handleLogin() {
   }
 }
 
-// Fast & Safe Location Detection with IP Fallback (Won't freeze)
-window.detectLocation = async function() {
-  const addressField = document.getElementById('adAddress');
-  addressField.value = "Detecting location...";
-
-  try {
-    // Fast IP-based location lookup (Works everywhere without hanging)
-    const res = await fetch('https://ipapi.co/json/');
-    const locData = await res.json();
-    
-    if (locData && locData.city) {
-      addressField.value = `${locData.city}, ${locData.region}, ${locData.country_name}`;
-      return;
-    }
-  } catch (err) {
-    console.log("IP fallback error:", err);
-  }
-
-  // Fallback to browser geolocation with a strict timeout so it never hangs
+// Detect user GPS coordinates automatically on startup
+function detectUserCurrentPosition() {
   if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(async (position) => {
-      try {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-        const data = await response.json();
-        if (data && data.display_name) {
-          addressField.value = data.display_name;
-          return;
-        }
-      } catch (e) {
-        console.error(e);
-      }
-      addressField.value = "";
-      alert("Could not auto-detect. Please type your location manually.");
-    }, (error) => {
-      addressField.value = "";
-      alert("Location permission denied or timeout. Please type manually.");
-    }, { timeout: 5000 });
-  } else {
-    addressField.value = "";
-    alert("Geolocation not supported. Please type manually.");
+    navigator.geolocation.getCurrentPosition((position) => {
+      currentLat = position.coords.latitude;
+      currentLng = position.coords.longitude;
+    }, (err) => {
+      console.log("GPS position default used");
+    }, { timeout: 10000 });
   }
+}
+
+// Detect location when clicking button inside Post Ad modal
+window.detectLocation = function() {
+  const addressField = document.getElementById('adAddress');
+  addressField.value = "Fetching GPS coordinates...";
+
+  if (!navigator.geolocation) {
+    alert("Geolocation is not supported by your browser");
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(async (position) => {
+    currentLat = position.coords.latitude;
+    currentLng = position.coords.longitude;
+
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${currentLat}&lon=${currentLng}`);
+      const data = await response.json();
+      if (data && data.display_name) {
+        addressField.value = data.display_name;
+      } else {
+        addressField.value = `Lat: ${currentLat}, Lng: ${currentLng}`;
+      }
+    } catch (err) {
+      addressField.value = `Lat: ${currentLat}, Lng: ${currentLng}`;
+    }
+  }, (error) => {
+    addressField.value = "";
+    alert("Unable to retrieve GPS location. Please allow location access.");
+  }, { timeout: 10000 });
+}
+
+// Haversine formula to calculate exact distance in KM between two lat/lng points
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
+  const R = 6371; // Radius of the earth in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return Math.round(R * c); // Distance in KM
 }
 
 function containsPhoneNumber(text) {
@@ -155,6 +170,10 @@ async function handlePostAd(e) {
   const title = document.getElementById('title').value;
   const description = document.getElementById('description').value;
   const address = document.getElementById('adAddress').value;
+
+  if (!address) {
+    return alert("❌ Please click '📍 Detect GPS' to capture your real location before posting!");
+  }
 
   if (containsPhoneNumber(title) || containsPhoneNumber(description) || containsPhoneNumber(address)) {
     return alert("❌ Error: Phone numbers or contact details are strictly not allowed!");
@@ -208,6 +227,8 @@ async function handlePostAd(e) {
     category: document.getElementById('category').value,
     country: document.getElementById('adCountry').value,
     address: address,
+    lat: currentLat, // Real GPS latitude saved
+    lng: currentLng, // Real GPS longitude saved
     image1: imageUrls[0],
     image2: imageUrls[1],
     image3: imageUrls[2],
@@ -245,26 +266,31 @@ async function fetchListings() {
     return;
   }
 
-  const filteredData = data.filter((item, index) => {
-    const simulatedDist = (index * 12 + 8) % 300;
-    if (simulatedDist > maxDistance) return false;
+  // Filter listings based on real Haversine geographical distance from user's current GPS location
+  const filteredData = data.filter((item) => {
+    const itemLat = item.lat || 28.6139;
+    const itemLng = item.lng || 77.2090;
+    const realDist = calculateDistance(currentLat, currentLng, itemLat, itemLng);
+
+    item.calculatedDistance = realDist; // attach for display
+
+    if (realDist > maxDistance) return false;
     if (searchText && !item.title.toLowerCase().includes(searchText)) return false;
     return true;
   });
 
   if (filteredData.length === 0) {
-    container.innerHTML = `<p class="loading-text">No listings found within ${maxDistance} km.</p>`;
+    container.innerHTML = `<p class="loading-text">No listings found within ${maxDistance} km of your location.</p>`;
     return;
   }
 
-  container.innerHTML = filteredData.map((item, index) => {
-    const simulatedDist = (index * 12 + 8) % 300;
+  container.innerHTML = filteredData.map((item) => {
     const thumbImg = item.image1 || 'https://via.placeholder.com/90';
     return `
       <div class="listing-card" onclick="window.openAdDetails('${item.id}')" style="cursor:pointer; display:flex; gap:12px; background:#fff; padding:12px; border-radius:14px; border:1px solid #e2e8f0; margin-bottom:10px; align-items:center;">
         <img src="${thumbImg}" style="width: 90px; height: 90px; object-fit: cover; border-radius: 10px;">
         <div style="flex:1;">
-          <span style="font-size:11px; color:#4f46e5; font-weight:bold;">🌍 ${item.country} (~${simulatedDist} km) | ${item.category}</span>
+          <span style="font-size:11px; color:#4f46e5; font-weight:bold;">🌍 ${item.country} (~${item.calculatedDistance} km) | ${item.category}</span>
           <h3 style="font-size:1.05rem; margin:4px 0; color:#1e293b;">${item.title}</h3>
           <p style="font-size:1rem; font-weight:bold; color:#10b981;">${item.price} WLD</p>
         </div>
@@ -294,7 +320,7 @@ window.openAdDetails = async function(id) {
       <h3 style="font-size:1.45rem; color:#10b981; margin-bottom:12px;">${data.price} WLD</h3>
       
       <div style="background:#f1f5f9; padding:8px 12px; border-radius:8px; font-size:12px; color:#475569; margin-bottom:8px;">
-        📍 <b>Address:</b> ${data.address || 'Not specified'}
+        📍 <b>GPS Address:</b> ${data.address || 'Not specified'}
       </div>
 
       <div style="background:#f1f5f9; padding:8px 12px; border-radius:8px; font-size:12px; color:#475569; margin-bottom:14px;">

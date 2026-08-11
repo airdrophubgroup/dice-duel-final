@@ -70,7 +70,7 @@
       <div class="modal-content">
         <span class="close" onclick="document.getElementById('adModal').style.display='none'">&times;</span>
         <h2>Post New Ad</h2>
-        <p style="font-size: 11px; color: #ef4444; margin-bottom: 8px; font-weight: 600;">⚠️ Note: Ads cannot be edited later. Phone numbers are strictly not allowed.</p>
+        <p style="font-size: 11px; color: #ef4444; margin-bottom: 8px; font-weight: 600;">⚠️ Note: Ads will be pinned to your current real-time GPS location.</p>
         <form id="adForm">
           <input type="text" id="title" placeholder="Product Title" required>
           <select id="category" required>
@@ -98,10 +98,9 @@
             <option value="SG">🇸🇬 Singapore</option>
           </select>
 
-          <!-- Address with Detect Button -->
           <div style="display:flex; gap:6px;">
-            <input type="text" id="adAddress" placeholder="Enter full address or click detect" required style="flex:1;">
-            <button type="button" onclick="window.detectLocation()" style="background:#10b981; color:#fff; border:none; padding:8px 12px; border-radius:8px; font-weight:bold; cursor:pointer;">📍 Detect</button>
+            <input type="text" id="adAddress" placeholder="Click detect to auto-fill address & GPS" required style="flex:1;" readonly>
+            <button type="button" onclick="window.detectLocation()" style="background:#10b981; color:#fff; border:none; padding:8px 12px; border-radius:8px; font-weight:bold; cursor:pointer;">📍 Detect GPS</button>
           </div>
 
           <textarea id="description" placeholder="Description (No Phone Numbers)" required style="resize:none; height:60px;"></textarea>
