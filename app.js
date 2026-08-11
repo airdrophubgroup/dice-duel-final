@@ -260,8 +260,15 @@ async function fetchListings() {
   const filteredData = data.filter((item, index) => {
     // "All" checked ho to distance filter skip karo — sirf country/category/search chalega.
     if (!showAllDistance) {
+   const filteredData = data.filter((item, index) => {
+    // "All" checked ho to distance filter skip karo — sirf country/category/search chalega.
+    if (!showAllDistance) {
       const itemDistance = (index * 15 + 10) % 500;
       if (itemDistance > maxDistance) return false;
+    }
+    if (searchText && !item.title.toLowerCase().includes(searchText)) return false;
+    return true;
+  });
     }
     if (searchText && !item.title.toLowerCase().includes(searchText)) return false;
     return true;
