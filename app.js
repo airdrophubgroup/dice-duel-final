@@ -416,8 +416,8 @@ async function handlePostAd(e) {
     const payPayload = {
       reference: randomAlphaNumeric(16),
       to: ADMIN_WALLET,
-      tokens: [{ symbol: Tokens.WLD, token_amount: tokenToDecimals(0.1, Tokens.WLD).toString() }],
-      description: 'Listing Fee: 0.1 WLD',
+      tokens: [{ symbol: Tokens.WLD, token_amount: tokenToDecimals(1, Tokens.WLD).toString() }],
+      description: 'Listing Fee: 1 WLD',
     };
 
     const { finalPayload } = await MiniKit.commandsAsync.pay(payPayload);
