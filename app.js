@@ -54,11 +54,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   // hi `install()` call hota tha. Lekin isInstalled() sirf install() ke baad hi
   // kaam karta hai — isliye install() kabhi chalta hi nahi tha aur wallet connect
   // fail ho raha tha. Fix: install() ko seedha, unconditionally, sabse pehle call karo.
-  try { MiniKit.install(APP_ID); } catch (e) { console.error('MiniKit install error:', e); }
+  let installError = null;
+  try { MiniKit.install(APP_ID); } catch (e) { installError = e.message; console.error('MiniKit install error:', e); }
 
   // MiniKit ko native bridge se connect hone mein thoda time lagta hai — turant
   // check karne se galat false milta hai. Yahan thoda wait karke confirm karte hain.
-  await waitForMiniKitReady();
+  const ready = await waitForMiniKitReady();
+
+  // ON-SCREEN DEBUG PANEL — taaki phone pe hi exact status dikh jaye, console
+  // kholne ki zaroorat na pade. Yeh temporary hai, baad mein hata sakte ho.
+  const debugEl = document.getElementById('debugPanel');
+  if (debugEl) {
+    debugEl.innerText =
+      'DEBUG INFO:\n' +
+      'typeof MiniKit: ' + typeof MiniKit + '\n' +
+      'MiniKit.isInstalled(): ' + (typeof MiniKit !== 'undefined' ? MiniKit.isInstalled() : 'N/A') + '\n' +
+      'waitForMiniKitReady result: ' + ready + '\n' +
+      'APP_ID used: ' + APP_ID + '\n' +
+      'install() error: ' + (installError || 'none') + '\n' +
+      'User Agent: ' + navigator.userAgent;
+  }
 
   setupUI();
   fetchListings();
@@ -80,6 +95,8 @@ function setupUI() {
 }
 
 async function handleLogin() {
+  const debugEl = document.getElementById('debugPanel');
+
   if (!checkWorldAppEnvironment()) return;
 
   try {
@@ -93,6 +110,8 @@ async function handleLogin() {
       statement: 'Sign in to Want Sell On World',
     });
 
+    if (debugEl) debugEl.innerText = 'walletAuth response:\n' + JSON.stringify(finalPayload, null, 2);
+
     if (finalPayload?.status === 'success' && finalPayload?.address) {
       userWallet = finalPayload.address;
       document.getElementById('loginBtn').innerText = `Connected: ${userWallet.substring(0, 6)}...`;
@@ -103,7 +122,8 @@ async function handleLogin() {
     }
   } catch (err) {
     console.error('walletAuth exception:', err);
-    alert('❌ Wallet connect mein error aaya. Console (F12/inspect) check karein.');
+    if (debugEl) debugEl.innerText = 'walletAuth EXCEPTION:\n' + (err?.message || String(err));
+    alert('❌ Wallet connect mein error aaya: ' + (err?.message || 'unknown'));
   }
 }
 
