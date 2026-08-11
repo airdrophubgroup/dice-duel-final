@@ -154,7 +154,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupUI();
   detectUserCurrentPosition();
   fetchListings();
-  checkExpiredAds(); // Auto Expiry Check on boot
 });
 
 function setupUI() {
@@ -301,28 +300,6 @@ function validateListingContent(title, description) {
     }
   }
   return null;
-}
-
-// ==========================================
-// FEATURE 3: AUTO AD EXPIRY (30 Days Limit)
-// ==========================================
-async function checkExpiredAds() {
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const { data: expiredAds } = await supabase.from('listings').select('id, title, image1, image2, image3, image4').lt('created_at', thirtyDaysAgo).eq('status', 'active');
-  
-  if (expiredAds && expiredAds.length > 0) {
-    for (const ad of expiredAds) {
-      const imagesList = [ad.image1, ad.image2, ad.image3, ad.image4];
-      for (const imgUrl of imagesList) {
-        if (imgUrl && imgUrl.includes('/listing/')) {
-          const filePath = imgUrl.split('/listing/')[1];
-          if (filePath) await supabase.storage.from('listing').remove([filePath]);
-        }
-      }
-      await supabase.from('chats').delete().eq('ad_title', ad.title);
-      await supabase.from('listings').delete().match({ id: ad.id });
-    }
-  }
 }
 
 // ==========================================
