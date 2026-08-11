@@ -12,12 +12,54 @@ const APP_ID = 'app_06db98c492a19f80177b8d633f056982';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 let userWallet = null;
 
-document.addEventListener('DOMContentLoaded', () => {
+// Agar app World App ke bahar khula hai to yeh screen dikhado — silently kuch na
+// hone se behtar hai user ko clearly bata dena.
+function checkWorldAppEnvironment() {
+  const isWorldApp = (typeof MiniKit !== 'undefined' && MiniKit.isInstalled());
+  if (!isWorldApp) {
+    alert('⚠️ Yeh app sirf World App ke andar kaam karta hai. Kripya World App mein open karein.');
+    return false;
+  }
+  return true;
+}
+
+// MiniKit ko ready hone mein thoda time lag sakta hai (World App webview load
+// hote waqt) — isliye turant isInstalled() check karne ke bajaye thoda wait karo.
+function waitForMiniKitReady(timeoutMs = 2000) {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    (function check() {
+      if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
+        resolve(true);
+      } else if (Date.now() - start > timeoutMs) {
+        resolve(false);
+      } else {
+        setTimeout(check, 100);
+      }
+    })();
+  });
+}
+
+function randomAlphaNumeric(len) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const bytes = new Uint8Array(len);
+  crypto.getRandomValues(bytes);
+  let out = '';
+  for (let i = 0; i < len; i++) out += chars[bytes[i] % chars.length];
+  return out;
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
   // BUG THA YAHAN: pehle `isInstalled()` check ho raha tha aur uske TRUE hone par
   // hi `install()` call hota tha. Lekin isInstalled() sirf install() ke baad hi
   // kaam karta hai — isliye install() kabhi chalta hi nahi tha aur wallet connect
   // fail ho raha tha. Fix: install() ko seedha, unconditionally, sabse pehle call karo.
-  MiniKit.install(APP_ID);
+  try { MiniKit.install(APP_ID); } catch (e) { console.error('MiniKit install error:', e); }
+
+  // MiniKit ko native bridge se connect hone mein thoda time lagta hai — turant
+  // check karne se galat false milta hai. Yahan thoda wait karke confirm karte hain.
+  await waitForMiniKitReady();
+
   setupUI();
   fetchListings();
 });
@@ -38,32 +80,26 @@ function setupUI() {
 }
 
 async function handleLogin() {
-  // Yeh app sirf World App ke webview ke andar hi wallet commands chala sakta hai.
-  // Normal mobile/desktop browser mein isInstalled() hamesha false rahega.
-  if (!MiniKit.isInstalled()) {
-    alert('⚠️ Wallet connect sirf World App ke andar kaam karta hai. Is app ko World App mein open karein.');
-    return;
-  }
+  if (!checkWorldAppEnvironment()) return;
 
   try {
-    // Random alphanumeric nonce — static nonce ('12345678') SIWE ke liye reject
-    // ho sakta hai naye minikit-js versions mein.
-    const nonce = crypto.randomUUID().replace(/-/g, '');
-
-    const res = await MiniKit.commandsAsync.walletAuth({
-      nonce,
-      requestId: '0',
-      expirationTime: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000),
+    const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
+      // Random alphanumeric nonce — static nonce ('12345678') SIWE ke liye
+      // reject ho sakta hai naye minikit-js versions mein.
+      nonce: randomAlphaNumeric(24),
+      requestId: 'req_login_' + Date.now(),
+      expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      notBefore: new Date(Date.now() - 60 * 1000),
       statement: 'Sign in to Want Sell On World',
     });
 
-    if (res.finalPayload?.status === 'success') {
-      userWallet = res.finalPayload.address;
+    if (finalPayload?.status === 'success' && finalPayload?.address) {
+      userWallet = finalPayload.address;
       document.getElementById('loginBtn').innerText = `Connected: ${userWallet.substring(0, 6)}...`;
       document.getElementById('viewMyAdsBtn').style.display = 'block';
     } else {
-      console.error('walletAuth failed:', res.finalPayload);
-      alert('❌ Wallet connect nahi ho paaya: ' + (res.finalPayload?.error_code || 'unknown error'));
+      console.error('walletAuth failed:', finalPayload);
+      alert('❌ Wallet connect nahi ho paaya: ' + (finalPayload?.error_code || 'unknown error'));
     }
   } catch (err) {
     console.error('walletAuth exception:', err);
@@ -81,7 +117,7 @@ function containsPhoneNumber(text) {
 async function handlePostAd(e) {
   e.preventDefault();
   if (!userWallet) return alert("Please connect your wallet first!");
-  if (!MiniKit.isInstalled()) return alert("⚠️ Payment sirf World App ke andar kaam karta hai.");
+  if (!checkWorldAppEnvironment()) return;
 
   const title = document.getElementById('title').value;
   const description = document.getElementById('description').value;
@@ -96,22 +132,27 @@ async function handlePostAd(e) {
   if (files.length === 0) return alert("Please select at least one image!");
   if (files.length > 4) return alert("You can upload a maximum of 4 photos!");
 
-  let paymentResponse;
+  let paymentSuccessful = false;
   try {
-    paymentResponse = await MiniKit.commandsAsync.pay({
-      reference: 'listing_fee_' + Date.now(),
+    const payPayload = {
+      reference: randomAlphaNumeric(16),
       to: ADMIN_WALLET,
       tokens: [{ symbol: Tokens.WLD, token_amount: tokenToDecimals(0.1, Tokens.WLD).toString() }],
       description: 'Listing Fee: 0.1 WLD',
-    });
+    };
+
+    const { finalPayload } = await MiniKit.commandsAsync.pay(payPayload);
+    paymentSuccessful = (finalPayload?.status === 'success');
+
+    if (!paymentSuccessful) {
+      console.error('Payment failed:', finalPayload);
+    }
   } catch (err) {
     console.error('pay exception:', err);
-    return alert('❌ Payment command chalane mein error aaya. Console check karein.');
   }
 
-  if (paymentResponse.finalPayload?.status !== 'success') {
-    console.error('Payment failed:', paymentResponse.finalPayload);
-    return alert('❌ Payment failed ya cancel ho gaya: ' + (paymentResponse.finalPayload?.error_code || ''));
+  if (!paymentSuccessful) {
+    return alert('❌ Payment failed ya cancel ho gaya. Dobara try karein.');
   }
 
   let imageUrls = ['', '', '', ''];
