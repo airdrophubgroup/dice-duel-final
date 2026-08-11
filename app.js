@@ -162,7 +162,7 @@ async function handlePostAd(e) {
     price: document.getElementById('price').value,
     category: document.getElementById('category').value,
     country: document.getElementById('adCountry').value,
-    address: address, // Real address saved
+    address: address,
     image1: imageUrls[0],
     image2: imageUrls[1],
     image3: imageUrls[2],
@@ -201,7 +201,7 @@ async function fetchListings() {
   }
 
   const filteredData = data.filter((item, index) => {
-    const simulatedDist = (index * 12 + 8) % 300; // Simulated distance relative to slider
+    const simulatedDist = (index * 12 + 8) % 300;
     if (simulatedDist > maxDistance) return false;
     if (searchText && !item.title.toLowerCase().includes(searchText)) return false;
     return true;
