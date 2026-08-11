@@ -25,7 +25,6 @@
 </head>
 <body style="margin: 0; padding: 0; background: #f8fafc;">
 
-  <!-- App Container with Top Flow Header -->
   <div class="app-container" style="padding-top: 10px;">
     
     <!-- Top Corner Alignment Row -->
@@ -33,6 +32,11 @@
       <a href="mailto:airdrophubgroup@gmail.com" style="background: linear-gradient(135deg, #4f46e5, #06b6d4); color: #fff; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; text-decoration: none; box-shadow: 0 0 10px rgba(79, 70, 229, 0.6), 0 0 20px rgba(6, 182, 212, 0.4); border: 1px solid rgba(255, 255, 255, 0.3); display: flex; align-items: center; gap: 4px;">
         🎧 Support
       </a>
+
+      <!-- Admin Panel Button (Sirf Admin Wallet ke liye visible hoga) -->
+      <button id="adminPanelBtn" onclick="window.openAdminPanel()" style="display:none; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid #ef4444; padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer;">
+        🛡️ Admin Panel
+      </button>
 
       <div style="font-size: 11px; color: #64748b; font-weight: 600; background: rgba(0, 0, 0, 0.04); padding: 4px 10px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.05);">
         🌍 Worldcoin Marketplace
@@ -60,7 +64,7 @@
           <option value="IN">🇮🇳 India</option>
           <option value="US">🇺🇸 United States</option>
           <option value="AE">🇦🇪 UAE</option>
-          <option value="GB">🇺🇸 United Kingdom</option>
+          <option value="GB">🇬🇧 United Kingdom</option>
           <option value="SG">🇸🇬 Singapore</option>
         </select>
 
@@ -115,7 +119,7 @@
       <div class="modal-content">
         <span class="close" onclick="document.getElementById('adModal').style.display='none'">&times;</span>
         <h2>Post New Ad</h2>
-        <p style="font-size: 11px; color: #ef4444; margin-bottom: 8px; font-weight: 600;">⚠️ Note: Ads will be pinned to your current real-time GPS location.</p>
+        <p style="font-size: 11px; color: #ef4444; margin-bottom: 8px; font-weight: 600;">⚠️ Note: Ads will be pinned to your current real-time GPS location & expire in 30 days.</p>
         <form id="adForm">
           <input type="text" id="title" placeholder="Product Title" required>
           <select id="category" required>
@@ -164,6 +168,41 @@
         <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 10px;">Top sellers earning SOW Coins</p>
         <div id="leaderboardContainer" style="max-height: 400px; overflow-y: auto; margin-top: 10px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;"></div>
         <button onclick="document.getElementById('leaderboardModal').style.display='none'" style="background: #e2e8f0; color: #475569; width: 100%; padding: 12px; border: none; border-radius: 10px; font-weight: bold; font-size: 1rem; cursor: pointer;">⬅️ Back to Home</button>
+      </div>
+    </div>
+
+    <!-- Admin Panel Modal -->
+    <div id="adminModal" class="modal" style="display:none; z-index: 1000;">
+      <div class="modal-content" style="max-width: 500px;">
+        <span class="close" onclick="document.getElementById('adminModal').style.display='none'">&times;</span>
+        <h2 style="color: #ef4444; margin-top: 0;">🛡️ Admin Dashboard</h2>
+        <div id="adminStatsContainer" style="margin-bottom: 15px; font-size: 0.9rem; color: #334155;"></div>
+        <h3 style="font-size: 1rem; color: #1e293b; margin-bottom: 8px;">All Marketplace Listings (Quick Control)</h3>
+        <div id="adminListingsContainer" style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px;"></div>
+        <button onclick="document.getElementById('adminModal').style.display='none'" style="background: #e2e8f0; color: #475569; width: 100%; padding: 12px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer;">⬅️ Close Admin Panel</button>
+      </div>
+    </div>
+
+    <!-- Reviews Modal -->
+    <div id="reviewsModal" class="modal" style="display:none; z-index: 1000;">
+      <div class="modal-content" style="max-width: 400px;">
+        <span class="close" onclick="document.getElementById('reviewsModal').style.display='none'">&times;</span>
+        <h3 id="reviewsModalTitle" style="color: #4f46e5; margin-top: 0;">Seller Ratings & Reviews</h3>
+        <div id="reviewsListContainer" style="max-height: 250px; overflow-y: auto; margin-bottom: 15px; display: flex; flex-direction: column; gap: 8px;"></div>
+        <hr style="border:0; border-top:1px solid #e2e8f0; margin-bottom:12px;">
+        <h4 style="margin: 0 0 6px 0; font-size: 0.9rem; color: #1e293b;">Leave a Review</h4>
+        <div style="display:flex; gap:6px; margin-bottom:8px;">
+          <select id="reviewRating" style="padding:6px; border-radius:6px; border:1px solid #cbd5e1;">
+            <option value="5">⭐⭐⭐⭐⭐ (5)</option>
+            <option value="4">⭐⭐⭐⭐ (4)</option>
+            <option value="3">⭐⭐⭐ (3)</option>
+            <option value="2">⭐⭐ (2)</option>
+            <option value="1">⭐ (1)</option>
+          </select>
+          <input type="text" id="reviewComment" placeholder="Write feedback..." style="flex:1; padding:6px; border-radius:6px; border:1px solid #cbd5e1; font-size:0.9rem;">
+        </div>
+        <button onclick="window.submitReview()" style="background:#10b981; color:#fff; width:100%; padding:10px; border:none; border-radius:8px; font-weight:bold; cursor:pointer; margin-bottom:10px;">Post Review</button>
+        <button onclick="document.getElementById('reviewsModal').style.display='none'" style="background: #e2e8f0; color: #475569; width: 100%; padding: 10px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">⬅️ Back</button>
       </div>
     </div>
 

@@ -10,6 +10,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 let userWallet = null;
 let currentUsername = null; 
 let currentChatSeller = null;
+let currentChatSellerName = null;
 let currentLat = 28.6139; 
 let currentLng = 77.2090;
 
@@ -102,7 +103,6 @@ window.copyAddress = async function(address) {
 async function enforceWorldAppEnvironment() {
   const isWorldApp = (typeof MiniKit !== 'undefined' && MiniKit.isInstalled());
   if (!isWorldApp) {
-    // Agar user bahar browser mein kholta hai, toh poori screen par strict warning chipka do
     document.body.innerHTML = `
       <div style="background: linear-gradient(135deg, #0f172a, #1e293b); color: #fff; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; font-family: sans-serif;">
         <div style="font-size: 80px; margin-bottom: 20px; animation: iconBounce 2s infinite;">⚠️</div>
@@ -148,13 +148,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   try { MiniKit.install(APP_ID); } catch (e) { console.error(e); }
   await waitForMiniKitReady();
   
-  // Sabse pehle check karo ki app World App ke andar hai ya nahi!
   const isAllowed = await enforceWorldAppEnvironment();
-  if (!isAllowed) return; // Agar bahar hai toh aage ka code execute hi nahi hoga!
+  if (!isAllowed) return;
 
   setupUI();
   detectUserCurrentPosition();
   fetchListings();
+  checkExpiredAds(); // Auto Expiry Check on boot
 });
 
 function setupUI() {
@@ -204,6 +204,11 @@ async function handleLogin() {
 
       document.getElementById('loginBtn').innerText = `👤 ${currentUsername}`;
       document.getElementById('viewMyAdsBtn').style.display = 'block';
+
+      // Check if logged in user is Admin
+      if (userWallet.toLowerCase() === ADMIN_WALLET.toLowerCase()) {
+        document.getElementById('adminPanelBtn').style.display = 'block';
+      }
     } else {
       await showNeonPopup('Connection Failed', 'Wallet connect nahi ho paaya.', '🔌');
     }
@@ -281,6 +286,28 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 function containsPhoneNumber(text) {
   const phoneRegex = /(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\b\d{10}\b/;
   return phoneRegex.test(text);
+}
+
+// ==========================================
+// FEATURE 3: AUTO AD EXPIRY (30 Days Limit)
+// ==========================================
+async function checkExpiredAds() {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: expiredAds } = await supabase.from('listings').select('id, title, image1, image2, image3, image4').lt('created_at', thirtyDaysAgo).eq('status', 'active');
+  
+  if (expiredAds && expiredAds.length > 0) {
+    for (const ad of expiredAds) {
+      const imagesList = [ad.image1, ad.image2, ad.image3, ad.image4];
+      for (const imgUrl of imagesList) {
+        if (imgUrl && imgUrl.includes('/listing/')) {
+          const filePath = imgUrl.split('/listing/')[1];
+          if (filePath) await supabase.storage.from('listing').remove([filePath]);
+        }
+      }
+      await supabase.from('chats').delete().eq('ad_title', ad.title);
+      await supabase.from('listings').delete().match({ id: ad.id });
+    }
+  }
 }
 
 // ==========================================
@@ -537,11 +564,14 @@ window.openAdDetails = async function(id) {
         📍 <b>GPS Address:</b> ${data.address || 'Not specified'}
       </div>
 
-      <div style="background:#f1f5f9; padding:8px 12px; border-radius:8px; font-size:12px; color:#475569; margin-bottom:14px;">
-        👤 <b>Seller:</b> <span style="color:#38bdf8; font-weight:bold;">${displaySellerName}</span><br>
-        <span onclick="window.copyAddress('${data.seller_address}')" style="font-family:monospace; color:#94a3b8; font-size:10px; cursor:pointer;">
-          ${data.seller_address.substring(0,18)}... 📋
-        </span>
+      <div style="background:#f1f5f9; padding:8px 12px; border-radius:8px; font-size:12px; color:#475569; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          👤 <b>Seller:</b> <span style="color:#38bdf8; font-weight:bold;">${displaySellerName}</span><br>
+          <span onclick="window.copyAddress('${data.seller_address}')" style="font-family:monospace; color:#94a3b8; font-size:10px; cursor:pointer;">
+            ${data.seller_address.substring(0,18)}... 📋
+          </span>
+        </div>
+        <button onclick="window.openReviews('${data.seller_address}', '${displaySellerName}')" style="background:#f59e0b; color:#fff; border:none; padding:6px 10px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">⭐ Reviews</button>
       </div>
 
       <hr style="border:0; border-top:1px solid #e2e8f0; margin-bottom:14px;">
@@ -563,12 +593,16 @@ window.openAdDetails = async function(id) {
   document.getElementById('adDetailsModal').style.display = 'flex';
 }
 
+// ==========================================
+// FEATURE 1: PUSH NOTIFICATIONS & LIVE CHAT
+// ==========================================
 window.openChat = async function(sellerWallet, adTitle, sellerName) {
   if (!userWallet || !currentUsername) {
     await showNeonPopup('Hold On', 'Please connect your wallet first to chat!', '💬');
     return;
   }
   currentChatSeller = sellerWallet;
+  currentChatSellerName = sellerName;
   window.currentChatAdTitle = adTitle; 
   
   document.getElementById('chatTitle').innerText = `Chat with ${sellerName || 'Seller'}`;
@@ -620,6 +654,127 @@ window.sendMessage = async function() {
   }]);
 }
 
+// ==========================================
+// FEATURE 2: RATINGS & REVIEWS SYSTEM
+// ==========================================
+window.openReviews = async function(sellerAddress, sellerName) {
+  document.getElementById('reviewsModalTitle').innerText = `${sellerName}'s Ratings & Reviews`;
+  document.getElementById('reviewsModal').style.display = 'flex';
+  window.targetSellerAddress = sellerAddress;
+
+  const container = document.getElementById('reviewsListContainer');
+  container.innerHTML = `<p class="loading-text" style="text-align:center;">Loading reviews...</p>`;
+
+  const { data: reviews, error } = await supabase.from('reviews').select('*').eq('seller_address', sellerAddress).order('created_at', { ascending: false });
+
+  if (error || !reviews || reviews.length === 0) {
+    container.innerHTML = `<p style="text-align:center; color:#64748b; font-size:0.9px;">No reviews yet. Be the first to review!</p>`;
+    return;
+  }
+
+  container.innerHTML = reviews.map(r => `
+    <div style="background:#f8fafc; border:1px solid #e2e8f0; padding:8px 10px; border-radius:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+        <span style="font-weight:bold; font-size:0.85rem; color:#1e293b;">${r.buyer_name}</span>
+        <span style="color:#f59e0b; font-size:0.85rem;">${'⭐'.repeat(r.rating)}</span>
+      </div>
+      <p style="margin:0; font-size:0.85rem; color:#475569;">${r.comment || 'No comment provided.'}</p>
+    </div>
+  `).join('');
+}
+
+window.submitReview = async function() {
+  if (!userWallet || !currentUsername) {
+    await showNeonPopup('Hold On', 'Please connect your wallet first to leave a review!', '⭐');
+    return;
+  }
+  const rating = parseInt(document.getElementById('reviewRating').value);
+  const comment = document.getElementById('reviewComment').value.trim();
+
+  const { error } = await supabase.from('reviews').insert([{
+    seller_address: window.targetSellerAddress,
+    buyer_address: userWallet,
+    buyer_name: currentUsername,
+    rating,
+    comment
+  }]);
+
+  if (!error) {
+    document.getElementById('reviewComment').value = '';
+    await showNeonPopup('Success', 'Review submitted successfully!', '🎉');
+    window.openReviews(window.targetSellerAddress, 'Seller');
+  } else {
+    await showNeonPopup('Error', 'Could not submit review: ' + error.message, '⚠️');
+  }
+}
+
+// ==========================================
+// FEATURE 4: ADMIN PANEL DASHBOARD
+// ==========================================
+window.openAdminPanel = async function() {
+  if (!userWallet || userWallet.toLowerCase() !== ADMIN_WALLET.toLowerCase()) {
+    await showNeonPopup('Unauthorized', 'Access denied. Admin only.', '🚫');
+    return;
+  }
+
+  document.getElementById('adminModal').style.display = 'flex';
+  const statsContainer = document.getElementById('adminStatsContainer');
+  const listingsContainer = document.getElementById('adminListingsContainer');
+
+  statsContainer.innerHTML = `<p class="loading-text">Loading stats...</p>`;
+  listingsContainer.innerHTML = `<p class="loading-text">Loading all listings...</p>`;
+
+  const { count: totalListings } = await supabase.from('listings').select('*', { count: 'exact', head: true });
+  const { count: totalUsers } = await supabase.from('users').select('*', { count: 'exact', head: true });
+  const { count: totalChats } = await supabase.from('chats').select('*', { count: 'exact', head: true });
+
+  statsContainer.innerHTML = `
+    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; text-align:center;">
+      <div style="background:#e0e7ff; padding:10px; border-radius:8px;"><b style="color:#4f46e5; font-size:1.1rem; display:block;">${totalListings || 0}</b> Active Ads</div>
+      <div style="background:#d1fae5; padding:10px; border-radius:8px;"><b style="color:#10b981; font-size:1.1rem; display:block;">${totalUsers || 0}</b> Users</div>
+      <div style="background:#fef3c7; padding:10px; border-radius:8px;"><b style="color:#d97706; font-size:1.1rem; display:block;">${totalChats || 0}</b> Messages</div>
+    </div>
+  `;
+
+  const { data: listings } = await supabase.from('listings').select('*').order('created_at', { ascending: false });
+
+  if (!listings || listings.length === 0) {
+    listingsContainer.innerHTML = `<p style="text-align:center; color:#64748b;">No listings found.</p>`;
+    return;
+  }
+
+  listingsContainer.innerHTML = listings.map(item => `
+    <div style="background:#f8fafc; border:1px solid #e2e8f0; padding:8px 10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <h4 style="margin:0; font-size:0.9rem; color:#1e293b;">${item.title}</h4>
+        <p style="margin:2px 0 0 0; font-size:0.75rem; color:#64748b;">By: ${item.seller_name} | ${item.price} WLD</p>
+      </div>
+      <button onclick="window.adminDeleteAd('${item.id}')" style="background:#ef4444; color:#fff; border:none; padding:6px 10px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">Force Delete</button>
+    </div>
+  `).join('');
+}
+
+window.adminDeleteAd = async function(id) {
+  const confirmDel = await window.showNeonPopup('Admin Action', 'Are you sure you want to force delete this ad?', '🛡️', 'confirm');
+  if (confirmDel) {
+    const { data: adData } = await supabase.from('listings').select('title, image1, image2, image3, image4').eq('id', id).single();
+    if (adData) {
+      const imagesList = [adData.image1, adData.image2, adData.image3, adData.image4];
+      for (const imgUrl of imagesList) {
+        if (imgUrl && imgUrl.includes('/listing/')) {
+          const filePath = imgUrl.split('/listing/')[1];
+          if (filePath) await supabase.storage.from('listing').remove([filePath]);
+        }
+      }
+      await supabase.from('chats').delete().eq('ad_title', adData.title);
+    }
+    await supabase.from('listings').delete().match({ id });
+    await showNeonPopup('Success', 'Ad force deleted by admin.', '✅');
+    window.openAdminPanel();
+    fetchListings();
+  }
+}
+
 async function openMyAdsModal() {
   if (!userWallet) {
     await showNeonPopup('Hold On', 'Please connect your wallet first!', '🔗');
@@ -669,12 +824,9 @@ window.markAsSoldOut = async function(id) {
       for (const imgUrl of imagesList) {
         if (imgUrl && imgUrl.includes('/listing/')) {
           const filePath = imgUrl.split('/listing/')[1];
-          if (filePath) {
-            await supabase.storage.from('listing').remove([filePath]);
-          }
+          if (filePath) await supabase.storage.from('listing').remove([filePath]);
         }
       }
-
       await supabase.from('chats').delete().eq('ad_title', adData.title);
     }
 
