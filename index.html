@@ -17,8 +17,8 @@
       <button id="viewMyAdsBtn" class="btn-primary" style="display:none; width: 100%;">📦 My Ads</button>
     </div>
 
-    <!-- Direct Clickable Button for Posting Ad -->
-    <button type="button" class="btn-success" onclick="toggleModal('adModal', true)" style="width:100%; padding:16px; font-size:1rem; font-weight:700; border-radius:16px; margin-bottom:18px; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow: 0 10px 25px -5px rgba(79,70,229,0.4);">
+    <!-- Direct Clickable Button with ID -->
+    <button type="button" id="openAdModalBtn" class="btn-success" style="width:100%; padding:16px; font-size:1rem; font-weight:700; border-radius:16px; margin-bottom:18px; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow: 0 10px 25px -5px rgba(79,70,229,0.4);">
       ✨ Post an Ad & Sell (1 WLD)
     </button>
 
@@ -70,10 +70,10 @@
       </div>
     </main>
 
-    <!-- Modal for Posting Ad with Title, Category, Location, & Post Now with 1 WLD -->
+    <!-- Modal for Posting Ad -->
     <div id="adModal" class="modal" style="display:none;">
       <div class="modal-content">
-        <span id="closeModalBtn" class="close" onclick="toggleModal('adModal', false)">&times;</span>
+        <span id="closeModalBtn" class="close">&times;</span>
         <h2>Post New Ad</h2>
         <form id="adForm">
           <div style="display:flex; flex-direction:column; gap:4px; text-align:left;">
@@ -105,7 +105,7 @@
               <option value="IN">🇮🇳 India</option>
               <option value="US">🇺🇸 United States</option>
               <option value="AE">🇦🇪 UAE</option>
-              <option value="GB">🇮🇳 United Kingdom</option>
+              <option value="GB">🇬🇧 United Kingdom</option>
               <option value="SG">🇸🇬 Singapore</option>
             </select>
           </div>
@@ -133,7 +133,7 @@
     <!-- Modal for My Ads -->
     <div id="myAdsModal" class="modal" style="display:none;">
       <div class="modal-content">
-        <span id="closeMyAdsModal" class="close" onclick="toggleModal('myAdsModal', false)">&times;</span>
+        <span id="closeMyAdsModal" class="close">&times;</span>
         <h2>My Posted Ads</h2>
         <div id="myAdsContainer" style="max-height: 350px; overflow-y: auto; margin-top: 10px;"></div>
       </div>
