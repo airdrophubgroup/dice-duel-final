@@ -9,13 +9,54 @@ const APP_ID = 'app_06db98c492a19f80177b8d633f056982';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 let userWallet = null;
 let currentChatSeller = null;
-let currentLat = 28.6139; // Default Delhi Fallback
+let currentLat = 28.6139; 
 let currentLng = 77.2090;
 
-function checkWorldAppEnvironment() {
+// ==========================================
+// UNIVERSAL NEON POPUP SYSTEM
+// ==========================================
+let popupResolve = null;
+
+window.showNeonPopup = function(title, text, icon = '🔔', isConfirm = false) {
+  return new Promise((resolve) => {
+    document.getElementById('neonPopupIcon').innerText = icon;
+    document.getElementById('neonPopupTitle').innerText = title;
+    document.getElementById('neonPopupText').innerHTML = text; // Supports HTML for styled text
+
+    if (isConfirm) {
+      document.getElementById('neonPopupAlertBtnContainer').style.display = 'none';
+      document.getElementById('neonPopupConfirmBtnContainer').style.display = 'flex';
+      // Red styling for delete confirmation
+      document.getElementById('neonPopupBox').style.borderColor = '#ef4444';
+      document.getElementById('neonPopupBox').style.boxShadow = '0 0 30px rgba(239, 68, 68, 0.4)';
+      document.getElementById('neonPopupTitle').style.color = '#ef4444';
+    } else {
+      document.getElementById('neonPopupAlertBtnContainer').style.display = 'block';
+      document.getElementById('neonPopupConfirmBtnContainer').style.display = 'none';
+      // Blue neon for standard alerts
+      document.getElementById('neonPopupBox').style.borderColor = '#38bdf8';
+      document.getElementById('neonPopupBox').style.boxShadow = '0 0 30px rgba(56, 189, 248, 0.4)';
+      document.getElementById('neonPopupTitle').style.color = '#38bdf8';
+    }
+
+    document.getElementById('neonPopup').style.display = 'flex';
+    popupResolve = resolve;
+  });
+};
+
+window.closeNeonPopup = function(result) {
+  document.getElementById('neonPopup').style.display = 'none';
+  if (popupResolve) {
+    popupResolve(result);
+    popupResolve = null;
+  }
+};
+// ==========================================
+
+async function checkWorldAppEnvironment() {
   const isWorldApp = (typeof MiniKit !== 'undefined' && MiniKit.isInstalled());
   if (!isWorldApp) {
-    alert('⚠️ Yeh app sirf World App ke andar kaam karta hai.');
+    await showNeonPopup('Warning', 'Yeh app sirf World App ke andar kaam karta hai.', '⚠️');
     return false;
   }
   return true;
@@ -77,7 +118,8 @@ function setupUI() {
 }
 
 async function handleLogin() {
-  if (!checkWorldAppEnvironment()) return;
+  const isEnvOk = await checkWorldAppEnvironment();
+  if (!isEnvOk) return;
 
   try {
     const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
@@ -93,14 +135,13 @@ async function handleLogin() {
       document.getElementById('loginBtn').innerText = `Connected: ${userWallet.substring(0, 6)}...`;
       document.getElementById('viewMyAdsBtn').style.display = 'block';
     } else {
-      alert('❌ Wallet connect nahi ho paaya.');
+      await showNeonPopup('Connection Failed', 'Wallet connect nahi ho paaya.', '🔌');
     }
   } catch (err) {
-    alert('❌ Wallet connect error.');
+    await showNeonPopup('Error', 'Wallet connect error.', '❌');
   }
 }
 
-// Fixed location accuracy issue
 function detectUserCurrentPosition() {
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition((position) => {
@@ -112,7 +153,6 @@ function detectUserCurrentPosition() {
   }
 }
 
-// Fixed High-Accuracy Location Detection
 window.detectLocation = async function() {
   const addressField = document.getElementById('adAddress');
   addressField.value = "Detecting precise location...";
@@ -133,26 +173,25 @@ window.detectLocation = async function() {
         addressField.value = `Lat: ${currentLat.toFixed(4)}, Lng: ${currentLng.toFixed(4)}`;
       }
     }, async (error) => {
-      // Fallback: If GPS fails, use IP API but also update the Lat/Lng
       try {
         const res = await fetch('https://ipapi.co/json/');
         const locData = await res.json();
         if (locData && locData.city) {
-          currentLat = locData.latitude; // Fixed: updating coords from IP
+          currentLat = locData.latitude;
           currentLng = locData.longitude;
           addressField.value = `${locData.city}, ${locData.region}, ${locData.country_name}`;
         } else {
           addressField.value = "";
-          alert("Could not auto-detect. Please type manually.");
+          await showNeonPopup('Notice', 'Could not auto-detect. Please type manually.', '📍');
         }
       } catch (err) {
         addressField.value = "";
-        alert("Location permissions denied and fallback failed. Please type manually.");
+        await showNeonPopup('Error', 'Location permissions denied and fallback failed. Please type manually.', '🌍');
       }
     }, { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 });
   } else {
     addressField.value = "";
-    alert("Geolocation not supported. Please type manually.");
+    await showNeonPopup('Error', 'Geolocation not supported. Please type manually.', '🚫');
   }
 }
 
@@ -176,25 +215,39 @@ function containsPhoneNumber(text) {
 
 async function handlePostAd(e) {
   e.preventDefault();
-  if (!userWallet) return alert("Please connect your wallet first!");
-  if (!checkWorldAppEnvironment()) return;
+  
+  if (!userWallet) {
+    await showNeonPopup('Hold On', 'Please connect your wallet first!', '🔗');
+    return;
+  }
+  
+  const isEnvOk = await checkWorldAppEnvironment();
+  if (!isEnvOk) return;
 
   const title = document.getElementById('title').value;
   const description = document.getElementById('description').value;
   const address = document.getElementById('adAddress').value;
 
   if (!address) {
-    return alert("❌ Please click '📍 Detect GPS' to capture your real location before posting!");
+    await showNeonPopup('Location Required', 'Please click \'📍 Detect GPS\' to capture your real location before posting!', '📍');
+    return;
   }
 
   if (containsPhoneNumber(title) || containsPhoneNumber(description) || containsPhoneNumber(address)) {
-    return alert("❌ Error: Phone numbers or contact details are strictly not allowed!");
+    await showNeonPopup('Rule Violation', 'Phone numbers or contact details are strictly not allowed to prevent scams!', '🚫');
+    return;
   }
 
   const fileInput = document.getElementById('imageInput');
   const files = fileInput.files;
-  if (files.length === 0) return alert("Please select at least one image!");
-  if (files.length > 4) return alert("You can upload a maximum of 4 photos!");
+  if (files.length === 0) {
+    await showNeonPopup('Image Missing', 'Please select at least one product image!', '🖼️');
+    return;
+  }
+  if (files.length > 4) {
+    await showNeonPopup('Limit Reached', 'You can upload a maximum of 4 photos!', '📸');
+    return;
+  }
 
   let paymentSuccessful = false;
   try {
@@ -212,7 +265,8 @@ async function handlePostAd(e) {
   }
 
   if (!paymentSuccessful) {
-    return alert('❌ Payment failed ya cancel ho gaya.');
+    await showNeonPopup('Payment Cancelled', 'Payment failed or was cancelled by you.', '💸');
+    return;
   }
 
   let imageUrls = ['', '', '', ''];
@@ -223,7 +277,7 @@ async function handlePostAd(e) {
     
     const { error: uploadError } = await supabase.storage.from('listing').upload(fileName, file);
     if (uploadError) {
-      alert("Image upload failed: " + uploadError.message);
+      await showNeonPopup('Upload Error', 'Image upload failed: ' + uploadError.message, '❌');
       return;
     }
 
@@ -253,12 +307,14 @@ async function handlePostAd(e) {
     let newBal = (balData && balData.balance) ? balData.balance + 1 : 1;
     await supabase.from('sow_balances').upsert([{ wallet_address: userWallet, balance: newBal }]);
 
-    alert('Ad posted successfully! 🎉 You earned 1 SOW Coin!');
     document.getElementById('adModal').style.display = 'none';
     document.getElementById('adForm').reset();
     fetchListings();
+
+    // The beautiful success popup!
+    await showNeonPopup('Awesome! 🎉', `Your ad was posted successfully!<br><span style="color: #10b981; font-weight: 800; font-size: 1.2rem; display: block; margin-top: 8px; text-shadow: 0 0 10px rgba(16, 185, 129, 0.4);">+1 SOW Coin Earned!</span>`, '🪙');
   } else {
-    alert('Error saving ad: ' + insertError.message);
+    await showNeonPopup('Database Error', 'Error saving ad: ' + insertError.message, '⚠️');
   }
 }
 
@@ -317,7 +373,10 @@ async function fetchListings() {
 
 window.openAdDetails = async function(id) {
   const { data, error } = await supabase.from('listings').select('*').eq('id', id).single();
-  if (error || !data) return alert("Ad details not found.");
+  if (error || !data) {
+    await showNeonPopup('Not Found', 'Ad details not found or removed.', '🔍');
+    return;
+  }
 
   const allImages = [data.image1, data.image2, data.image3, data.image4].filter(img => img && img.trim() !== "");
   const imagesHtml = allImages.map(img => `
@@ -358,8 +417,11 @@ window.openAdDetails = async function(id) {
   document.getElementById('adDetailsModal').style.display = 'flex';
 }
 
-window.openChat = function(sellerWallet, adTitle) {
-  if (!userWallet) return alert("Please connect your wallet first to chat!");
+window.openChat = async function(sellerWallet, adTitle) {
+  if (!userWallet) {
+    await showNeonPopup('Hold On', 'Please connect your wallet first to chat!', '💬');
+    return;
+  }
   currentChatSeller = sellerWallet;
   document.getElementById('chatTitle').innerText = `Chat about: ${adTitle}`;
   document.getElementById('chatMessages').innerHTML = `<div style="background:#e2e8f0; padding:8px 12px; border-radius:8px; font-size:12px; align-self:flex-start; color:#334155;">Hello! I am interested in your ad: ${adTitle}</div>`;
@@ -378,7 +440,10 @@ window.sendMessage = function() {
 }
 
 async function openMyAdsModal() {
-  if (!userWallet) return alert("Please connect first!");
+  if (!userWallet) {
+    await showNeonPopup('Hold On', 'Please connect your wallet first!', '🔗');
+    return;
+  }
   document.getElementById('myAdsModal').style.display = 'flex';
   
   const container = document.getElementById('myAdsContainer');
@@ -407,20 +472,23 @@ async function openMyAdsModal() {
         <h4 style="font-size:0.9rem; color:#1e293b;">${item.title}</h4>
         <p style="font-size:0.8rem; color:#10b981;">${item.price} WLD (${item.country})</p>
       </div>
-      <button onclick="event.stopPropagation(); window.markAsSoldOut('${item.id}')" style="background:#10b981; color:#fff; padding:6px 10px; font-size:11px; border-radius:6px; font-weight:bold; cursor:pointer;">Sold Out</button>
+      <button onclick="event.stopPropagation(); window.markAsSoldOut('${item.id}')" style="background:#ef4444; color:#fff; padding:6px 10px; font-size:11px; border-radius:6px; font-weight:bold; cursor:pointer;">Delete Ad</button>
     </div>
   `).join('');
 }
 
 window.markAsSoldOut = async function(id) {
-  if (confirm("Are you sure this item is Sold Out? This will permanently delete the ad.")) {
+  // Using the new Animated Confirm Popup instead of native window.confirm!
+  const isConfirmed = await showNeonPopup('Delete Ad?', 'Are you sure this item is Sold Out? This will permanently delete the ad.', '🗑️', true);
+  
+  if (isConfirmed) {
     const { error } = await supabase.from('listings').delete().match({ id });
     if (!error) {
-      alert("Ad deleted successfully! Your SOW balance is safe.");
+      await showNeonPopup('Deleted', 'Ad deleted successfully! Your SOW balance is safe.', '✅');
       openMyAdsModal();
       fetchListings();
     } else {
-      alert("Error: " + error.message);
+      await showNeonPopup('Error', 'Could not delete: ' + error.message, '⚠️');
     }
   }
 }
