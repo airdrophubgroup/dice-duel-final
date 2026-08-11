@@ -19,8 +19,6 @@ document.addEventListener('DOMContentLoaded', () => {
 function setupUI() {
   document.getElementById('loginBtn').addEventListener('click', handleLogin);
   document.getElementById('viewMyAdsBtn').addEventListener('click', openMyAdsModal);
-  document.getElementById('closeMyAdsModal').addEventListener('click', () => toggleModal('myAdsModal', false));
-  
   document.getElementById('adForm').addEventListener('submit', handlePostAd);
   document.getElementById('countryFilter').addEventListener('change', () => fetchListings());
   document.getElementById('categoryFilter').addEventListener('change', () => fetchListings());
@@ -34,8 +32,12 @@ function setupUI() {
   });
 }
 
+// Global scope function so HTML buttons can trigger it directly
 window.toggleModal = function(modalId, show) {
-  document.getElementById(modalId).style.display = show ? 'flex' : 'none';
+  const modal = document.getElementById(modalId);
+  if (modal) {
+    modal.style.display = show ? 'flex' : 'none';
+  }
 }
 
 async function handleLogin() {
@@ -83,7 +85,7 @@ async function handlePostAd(e) {
       status: 'active'
     }]);
     alert('Ad posted successfully with 1 WLD payment!');
-    toggleModal('adModal', false);
+    window.toggleModal('adModal', false);
     document.getElementById('adForm').reset();
     fetchListings();
   } else {
@@ -145,7 +147,7 @@ window.contactSeller = function(sellerWallet, adTitle) {
 
 async function openMyAdsModal() {
   if (!userWallet) return alert("Please connect wallet first!");
-  toggleModal('myAdsModal', true);
+  window.toggleModal('myAdsModal', true);
   
   const container = document.getElementById('myAdsContainer');
   container.innerHTML = `<p class="loading-text">Loading your ads...</p>`;
