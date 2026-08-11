@@ -98,7 +98,11 @@
             <option value="SG">🇸🇬 Singapore</option>
           </select>
 
-          <input type="text" id="adAddress" placeholder="Enter your full address (e.g. Street, City)" required>
+          <!-- Address with Detect Button -->
+          <div style="display:flex; gap:6px;">
+            <input type="text" id="adAddress" placeholder="Enter full address or click detect" required style="flex:1;">
+            <button type="button" onclick="window.detectLocation()" style="background:#10b981; color:#fff; border:none; padding:8px 12px; border-radius:8px; font-weight:bold; cursor:pointer;">📍 Detect</button>
+          </div>
 
           <textarea id="description" placeholder="Description (No Phone Numbers)" required style="resize:none; height:60px;"></textarea>
           <input type="number" id="price" placeholder="Price in WLD" required>

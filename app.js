@@ -97,6 +97,35 @@ async function handleLogin() {
   }
 }
 
+// Location detection helper function
+window.detectLocation = function() {
+  if (!navigator.geolocation) {
+    return alert("Geolocation is not supported by your browser");
+  }
+
+  alert("Detecting your location...");
+  navigator.geolocation.getCurrentPosition(async (position) => {
+    const lat = position.coords.latitude;
+    const lng = position.coords.longitude;
+
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+      const data = await response.json();
+      if (data && data.display_name) {
+        document.getElementById('adAddress').value = data.display_name;
+        alert("Location detected successfully!");
+      } else {
+        alert("Could not fetch address from coordinates.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error fetching address.");
+    }
+  }, () => {
+    alert("Unable to retrieve your location. Please check permissions.");
+  });
+}
+
 function containsPhoneNumber(text) {
   const phoneRegex = /(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\b\d{10}\b/;
   return phoneRegex.test(text);
