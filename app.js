@@ -8,6 +8,7 @@ const APP_ID = 'app_06db98c492a19f80177b8d633f056982';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 let userWallet = null;
+let currentUsername = null; // Storing Username globally
 let currentChatSeller = null;
 let currentLat = 28.6139; 
 let currentLng = 77.2090;
@@ -17,28 +18,63 @@ let currentLng = 77.2090;
 // ==========================================
 let popupResolve = null;
 
-window.showNeonPopup = function(title, text, icon = '🔔', isConfirm = false) {
+// 'type' can be: 'alert' (default), 'confirm', or 'prompt'
+window.showNeonPopup = function(title, text, icon = '🔔', type = 'alert') {
   return new Promise((resolve) => {
     document.getElementById('neonPopupIcon').innerText = icon;
     document.getElementById('neonPopupTitle').innerText = title;
     document.getElementById('neonPopupText').innerHTML = text;
 
-    if (isConfirm) {
-      document.getElementById('neonPopupAlertBtnContainer').style.display = 'none';
-      document.getElementById('neonPopupConfirmBtnContainer').style.display = 'flex';
-      document.getElementById('neonPopupBox').style.borderColor = '#ef4444';
-      document.getElementById('neonPopupBox').style.boxShadow = '0 0 30px rgba(239, 68, 68, 0.4)';
+    const inputContainer = document.getElementById('neonPopupInputContainer');
+    const alertBtns = document.getElementById('neonPopupAlertBtnContainer');
+    const confirmBtns = document.getElementById('neonPopupConfirmBtnContainer');
+    const popupBox = document.getElementById('neonPopupBox');
+    
+    inputContainer.style.display = 'none';
+    alertBtns.style.display = 'none';
+    confirmBtns.style.display = 'none';
+
+    if (type === 'confirm') {
+      confirmBtns.style.display = 'flex';
+      popupBox.style.borderColor = '#ef4444';
+      popupBox.style.boxShadow = '0 0 30px rgba(239, 68, 68, 0.4)';
       document.getElementById('neonPopupTitle').style.color = '#ef4444';
+    } else if (type === 'prompt') {
+      inputContainer.style.display = 'block';
+      document.getElementById('neonPopupInput').value = '';
+      alertBtns.style.display = 'block';
+      document.getElementById('neonPopupAlertBtn').innerText = 'Submit';
+      popupBox.style.borderColor = '#10b981';
+      popupBox.style.boxShadow = '0 0 30px rgba(16, 185, 129, 0.4)';
+      document.getElementById('neonPopupTitle').style.color = '#10b981';
     } else {
-      document.getElementById('neonPopupAlertBtnContainer').style.display = 'block';
-      document.getElementById('neonPopupConfirmBtnContainer').style.display = 'none';
-      document.getElementById('neonPopupBox').style.borderColor = '#38bdf8';
-      document.getElementById('neonPopupBox').style.boxShadow = '0 0 30px rgba(56, 189, 248, 0.4)';
+      // standard alert
+      alertBtns.style.display = 'block';
+      document.getElementById('neonPopupAlertBtn').innerText = 'OK';
+      popupBox.style.borderColor = '#38bdf8';
+      popupBox.style.boxShadow = '0 0 30px rgba(56, 189, 248, 0.4)';
       document.getElementById('neonPopupTitle').style.color = '#38bdf8';
     }
 
     document.getElementById('neonPopup').style.display = 'flex';
     popupResolve = resolve;
+
+    // Action Overrides
+    document.getElementById('neonPopupAlertBtn').onclick = function() {
+      if (type === 'prompt') {
+        const val = document.getElementById('neonPopupInput').value.trim();
+        if(!val) {
+          closeNeonPopup("User_" + Math.floor(Math.random()*10000)); // Default if empty
+        } else {
+          closeNeonPopup(val);
+        }
+      } else {
+        closeNeonPopup(true);
+      }
+    };
+    
+    document.getElementById('neonPopupConfirmYesBtn').onclick = () => closeNeonPopup(true);
+    document.getElementById('neonPopupConfirmNoBtn').onclick = () => closeNeonPopup(false);
   });
 };
 
@@ -50,20 +86,18 @@ window.closeNeonPopup = function(result) {
   }
 };
 
-// Clipboard function that uses Neon Popup instead of native prompt!
 window.copyAddress = async function(address) {
   try {
     await navigator.clipboard.writeText(address);
-    await showNeonPopup('Copied!', 'Seller Wallet Address copied to clipboard.', '📋');
+    await showNeonPopup('Copied!', 'Wallet Address copied to clipboard.', '📋');
   } catch (err) {
-    // Fallback for Mini-App limits
     const textArea = document.createElement("textarea");
     textArea.value = address;
     document.body.appendChild(textArea);
     textArea.select();
     try {
       document.execCommand('copy');
-      await showNeonPopup('Copied!', 'Seller Wallet Address copied to clipboard.', '📋');
+      await showNeonPopup('Copied!', 'Wallet Address copied to clipboard.', '📋');
     } catch (ex) {
       await showNeonPopup('Error', 'Could not copy address directly.', '⚠️');
     }
@@ -151,7 +185,21 @@ async function handleLogin() {
 
     if (finalPayload?.status === 'success' && finalPayload?.address) {
       userWallet = finalPayload.address;
-      document.getElementById('loginBtn').innerText = `Connected: ${userWallet.substring(0, 6)}...`;
+      
+      // Username Logic: Check DB First
+      const { data: userData } = await supabase.from('users').select('username').eq('wallet_address', userWallet).single();
+      
+      if (userData && userData.username) {
+        currentUsername = userData.username;
+      } else {
+        // If new user, Prompt them to choose a Username
+        currentUsername = await showNeonPopup('Welcome! 👋', 'Choose a stylish Username for your marketplace profile:', '👤', 'prompt');
+        // Save to DB
+        await supabase.from('users').upsert([{ wallet_address: userWallet, username: currentUsername }]);
+      }
+
+      // Display the Username proudly in Top Right Corner!
+      document.getElementById('loginBtn').innerText = `👤 ${currentUsername}`;
       document.getElementById('viewMyAdsBtn').style.display = 'block';
     } else {
       await showNeonPopup('Connection Failed', 'Wallet connect nahi ho paaya.', '🔌');
@@ -235,7 +283,7 @@ function containsPhoneNumber(text) {
 async function handlePostAd(e) {
   e.preventDefault();
   
-  if (!userWallet) {
+  if (!userWallet || !currentUsername) {
     await showNeonPopup('Hold On', 'Please connect your wallet first!', '🔗');
     return;
   }
@@ -306,6 +354,7 @@ async function handlePostAd(e) {
 
   const { error: insertError } = await supabase.from('listings').insert([{
     seller_address: userWallet,
+    seller_name: currentUsername, // Save Username in Listings Table
     title,
     description,
     price: document.getElementById('price').value,
@@ -375,15 +424,18 @@ async function fetchListings() {
 
   container.innerHTML = filteredData.map((item) => {
     const thumbImg = item.image1 || 'https://via.placeholder.com/90';
+    const displaySellerName = item.seller_name || 'User'; // Get Username
+    
     return `
       <div class="listing-card" onclick="window.openAdDetails('${item.id}')" style="cursor:pointer; display:flex; gap:12px; background:#fff; padding:12px; border-radius:14px; border:1px solid #e2e8f0; margin-bottom:10px; align-items:center;">
         <img src="${thumbImg}" style="width: 90px; height: 90px; object-fit: cover; border-radius: 10px;">
         <div style="flex:1;">
-          <span style="font-size:11px; color:#4f46e5; font-weight:bold;">🌍 ${item.country} (~${item.calculatedDistance} km) | ${item.category}</span>
+          <span style="font-size:11px; color:#4f46e5; font-weight:bold;">🌍 ${item.country} (~${item.calculatedDistance} km)</span>
           <h3 style="font-size:1.05rem; margin:4px 0; color:#1e293b;">${item.title}</h3>
-          <p style="font-size:1rem; font-weight:bold; color:#10b981;">${item.price} WLD</p>
+          <p style="font-size:1rem; font-weight:bold; color:#10b981; margin:0;">${item.price} WLD</p>
+          <p style="font-size:0.8rem; color:#64748b; margin:4px 0 0 0;">👤 ${displaySellerName}</p>
         </div>
-        <button onclick="event.stopPropagation(); window.openChat('${item.seller_address}', '${item.title}')" style="background:#4f46e5; color:#fff; padding:8px 14px; font-size:12px; border-radius:8px; border:none; cursor:pointer; font-weight:bold;">Chat</button>
+        <button onclick="event.stopPropagation(); window.openChat('${item.seller_address}', '${item.title}', '${displaySellerName}')" style="background:#4f46e5; color:#fff; padding:8px 14px; font-size:12px; border-radius:8px; border:none; cursor:pointer; font-weight:bold;">Chat</button>
       </div>
     `;
   }).join('');
@@ -401,6 +453,8 @@ window.openAdDetails = async function(id) {
     <img src="${img}" style="width:100%; height:240px; object-fit:cover; border-radius:10px; margin-bottom:8px; border:1px solid #e2e8f0;">
   `).join('');
 
+  const displaySellerName = data.seller_name || 'User';
+
   document.getElementById('adDetailsBody').innerHTML = `
     <div style="text-align:left;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
@@ -416,9 +470,8 @@ window.openAdDetails = async function(id) {
       </div>
 
       <div style="background:#f1f5f9; padding:8px 12px; border-radius:8px; font-size:12px; color:#475569; margin-bottom:14px;">
-        <!-- Neon Copy feature added directly to the address text -->
-        👤 <b>Seller Address:</b> <br>
-        <span onclick="window.copyAddress('${data.seller_address}')" style="font-family:monospace; color:#38bdf8; font-weight:bold; cursor:pointer; text-decoration:underline;">
+        👤 <b>Seller:</b> <span style="color:#38bdf8; font-weight:bold;">${displaySellerName}</span><br>
+        <span onclick="window.copyAddress('${data.seller_address}')" style="font-family:monospace; color:#94a3b8; font-size:10px; cursor:pointer;">
           ${data.seller_address.substring(0,18)}... 📋
         </span>
       </div>
@@ -435,20 +488,23 @@ window.openAdDetails = async function(id) {
 
       <div style="display: flex; gap: 8px; margin-top: 16px;">
         <button onclick="document.getElementById('adDetailsModal').style.display='none';" style="background: #e2e8f0; color: #475569; flex: 1; padding: 12px; border: none; border-radius: 10px; font-size: 1rem; font-weight: bold; cursor: pointer;">⬅️ Back</button>
-        <button onclick="event.stopPropagation(); window.openChat('${data.seller_address}', '${data.title}'); document.getElementById('adDetailsModal').style.display='none';" style="background: #4f46e5; color: #fff; flex: 1.5; padding: 12px; border: none; border-radius: 10px; font-size: 1rem; font-weight: bold; cursor: pointer;">💬 Chat</button>
+        <button onclick="event.stopPropagation(); window.openChat('${data.seller_address}', '${data.title}', '${displaySellerName}'); document.getElementById('adDetailsModal').style.display='none';" style="background: #4f46e5; color: #fff; flex: 1.5; padding: 12px; border: none; border-radius: 10px; font-size: 1rem; font-weight: bold; cursor: pointer;">💬 Chat</button>
       </div>
     </div>
   `;
   document.getElementById('adDetailsModal').style.display = 'flex';
 }
 
-window.openChat = async function(sellerWallet, adTitle) {
-  if (!userWallet) {
+window.openChat = async function(sellerWallet, adTitle, sellerName) {
+  if (!userWallet || !currentUsername) {
     await showNeonPopup('Hold On', 'Please connect your wallet first to chat!', '💬');
     return;
   }
   currentChatSeller = sellerWallet;
-  document.getElementById('chatTitle').innerText = `Chat about: ${adTitle}`;
+  
+  // Show Seller Username in Chat UI
+  document.getElementById('chatTitle').innerText = `Chat with ${sellerName || 'Seller'}`;
+  
   document.getElementById('chatMessages').innerHTML = `<div style="background:#e2e8f0; padding:8px 12px; border-radius:8px; font-size:12px; align-self:flex-start; color:#334155;">Hello! I am interested in your ad: ${adTitle}</div>`;
   document.getElementById('chatModal').style.display = 'flex';
 }
@@ -503,7 +559,7 @@ async function openMyAdsModal() {
 }
 
 window.markAsSoldOut = async function(id) {
-  const isConfirmed = await showNeonPopup('Delete Ad?', 'Are you sure this item is Sold Out? This will permanently delete the ad.', '🗑️', true);
+  const isConfirmed = await showNeonPopup('Delete Ad?', 'Are you sure this item is Sold Out? This will permanently delete the ad.', '🗑️', 'confirm');
   
   if (isConfirmed) {
     const { error } = await supabase.from('listings').delete().match({ id });
