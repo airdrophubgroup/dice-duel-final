@@ -97,79 +97,24 @@ window.copyAddress = async function(address) {
 }
 
 // ==========================================
-// FULL-SCREEN IMAGE SLIDER SYSTEM
+// STRICT WORLD APP ENVIRONMENT CHECK
 // ==========================================
-let viewerImages = [];
-let currentImageIndex = 0;
-
-window.openImageViewer = function(imagesStr, index) {
-  viewerImages = imagesStr.split('|');
-  currentImageIndex = parseInt(index);
-  updateViewer();
-  document.getElementById('imageViewerModal').style.display = 'flex';
-}
-
-window.prevImage = function() {
-  if (currentImageIndex > 0) {
-    currentImageIndex--;
-    updateViewer();
-  }
-}
-
-window.nextImage = function() {
-  if (currentImageIndex < viewerImages.length - 1) {
-    currentImageIndex++;
-    updateViewer();
-  }
-}
-
-function updateViewer() {
-  document.getElementById('viewerImage').src = viewerImages[currentImageIndex];
-  document.getElementById('imageCounter').innerText = `${currentImageIndex + 1} / ${viewerImages.length}`;
-}
-// ==========================================
-
-// ==========================================
-// AUTOMATIC IMAGE COMPRESSION HELPER
-// ==========================================
-function compressImage(file, maxWidth = 1000, quality = 0.7) {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event) => {
-      const img = new Image();
-      img.src = event.target.result;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width);
-          width = maxWidth;
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-
-        canvas.toBlob((blob) => {
-          resolve(new File([blob], file.name, {
-            type: 'image/jpeg',
-            lastModified: Date.now()
-          }));
-        }, 'image/jpeg', quality);
-      };
-    };
-  });
-}
-// ==========================================
-
-async function checkWorldAppEnvironment() {
+async function enforceWorldAppEnvironment() {
   const isWorldApp = (typeof MiniKit !== 'undefined' && MiniKit.isInstalled());
   if (!isWorldApp) {
-    await showNeonPopup('Warning', 'Yeh app sirf World App ke andar kaam karta hai.', '⚠️');
+    // Agar user bahar browser mein kholta hai, toh poori screen par strict warning chipka do
+    document.body.innerHTML = `
+      <div style="background: linear-gradient(135deg, #0f172a, #1e293b); color: #fff; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; font-family: sans-serif;">
+        <div style="font-size: 80px; margin-bottom: 20px; animation: iconBounce 2s infinite;">⚠️</div>
+        <h1 style="color: #ef4444; font-size: 2rem; margin-bottom: 10px; font-weight: 900; text-shadow: 0 0 20px rgba(239, 68, 68, 0.5);">STRICT WARNING</h1>
+        <p style="color: #cbd5e1; font-size: 1.1rem; max-width: 400px; line-height: 1.6; margin-bottom: 30px;">
+          This application is secure and can <b>ONLY</b> be opened inside the official <b>World App</b>. Please open this mini-app through World App to continue.
+        </p>
+        <div style="background: rgba(239, 68, 68, 0.1); border: 2px solid #ef4444; padding: 12px 24px; border-radius: 14px; color: #ef4444; font-weight: bold; font-size: 0.95rem; box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);">
+          🚫 Access Denied Outside World App
+        </div>
+      </div>
+    `;
     return false;
   }
   return true;
@@ -202,6 +147,11 @@ function randomAlphaNumeric(len) {
 document.addEventListener('DOMContentLoaded', async () => {
   try { MiniKit.install(APP_ID); } catch (e) { console.error(e); }
   await waitForMiniKitReady();
+  
+  // Sabse pehle check karo ki app World App ke andar hai ya nahi!
+  const isAllowed = await enforceWorldAppEnvironment();
+  if (!isAllowed) return; // Agar bahar hai toh aage ka code execute hi nahi hoga!
+
   setupUI();
   detectUserCurrentPosition();
   fetchListings();
@@ -231,9 +181,6 @@ function setupUI() {
 }
 
 async function handleLogin() {
-  const isEnvOk = await checkWorldAppEnvironment();
-  if (!isEnvOk) return;
-
   try {
     const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
       nonce: randomAlphaNumeric(24),
@@ -336,6 +283,74 @@ function containsPhoneNumber(text) {
   return phoneRegex.test(text);
 }
 
+// ==========================================
+// FULL-SCREEN IMAGE SLIDER SYSTEM
+// ==========================================
+let viewerImages = [];
+let currentImageIndex = 0;
+
+window.openImageViewer = function(imagesStr, index) {
+  viewerImages = imagesStr.split('|');
+  currentImageIndex = parseInt(index);
+  updateViewer();
+  document.getElementById('imageViewerModal').style.display = 'flex';
+}
+
+window.prevImage = function() {
+  if (currentImageIndex > 0) {
+    currentImageIndex--;
+    updateViewer();
+  }
+}
+
+window.nextImage = function() {
+  if (currentImageIndex < viewerImages.length - 1) {
+    currentImageIndex++;
+    updateViewer();
+  }
+}
+
+function updateViewer() {
+  document.getElementById('viewerImage').src = viewerImages[currentImageIndex];
+  document.getElementById('imageCounter').innerText = `${currentImageIndex + 1} / ${viewerImages.length}`;
+}
+
+// ==========================================
+// AUTOMATIC IMAGE COMPRESSION HELPER
+// ==========================================
+function compressImage(file, maxWidth = 1000, quality = 0.7) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          resolve(new File([blob], file.name, {
+            type: 'image/jpeg',
+            lastModified: Date.now()
+          }));
+        }, 'image/jpeg', quality);
+      };
+    };
+  });
+}
+
 async function handlePostAd(e) {
   e.preventDefault();
   
@@ -343,9 +358,6 @@ async function handlePostAd(e) {
     await showNeonPopup('Hold On', 'Please connect your wallet first!', '🔗');
     return;
   }
-  
-  const isEnvOk = await checkWorldAppEnvironment();
-  if (!isEnvOk) return;
 
   const title = document.getElementById('title').value;
   const description = document.getElementById('description').value;
@@ -646,9 +658,6 @@ async function openMyAdsModal() {
   `).join('');
 }
 
-// ==========================================
-// DELETE AD, STORAGE IMAGES & ASSOCIATED CHATS
-// ==========================================
 window.markAsSoldOut = async function(id) {
   const isConfirmed = await showNeonPopup('Delete Ad?', 'Are you sure this item is Sold Out? This will permanently delete the ad, its images, and chat history.', '🗑️', 'confirm');
   
