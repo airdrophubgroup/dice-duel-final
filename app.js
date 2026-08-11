@@ -9,7 +9,7 @@ const APP_ID = 'app_06db98c492a19f80177b8d633f056982';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 let userWallet = null;
 let currentChatSeller = null;
-let currentLat = 28.6139; // Default Delhi
+let currentLat = 28.6139; 
 let currentLng = 77.2090;
 
 function checkWorldAppEnvironment() {
@@ -100,7 +100,6 @@ async function handleLogin() {
   }
 }
 
-// Detect user GPS coordinates automatically on startup
 function detectUserCurrentPosition() {
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition((position) => {
@@ -112,41 +111,51 @@ function detectUserCurrentPosition() {
   }
 }
 
-// Detect location when clicking button inside Post Ad modal
-window.detectLocation = function() {
+window.detectLocation = async function() {
   const addressField = document.getElementById('adAddress');
-  addressField.value = "Fetching GPS coordinates...";
+  addressField.value = "Detecting location...";
 
-  if (!navigator.geolocation) {
-    alert("Geolocation is not supported by your browser");
-    return;
+  try {
+    const res = await fetch('https://ipapi.co/json/');
+    const locData = await res.json();
+    
+    if (locData && locData.city) {
+      addressField.value = `${locData.city}, ${locData.region}, ${locData.country_name}`;
+      return;
+    }
+  } catch (err) {
+    console.log("IP fallback error:", err);
   }
 
-  navigator.geolocation.getCurrentPosition(async (position) => {
-    currentLat = position.coords.latitude;
-    currentLng = position.coords.longitude;
-
-    try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${currentLat}&lon=${currentLng}`);
-      const data = await response.json();
-      if (data && data.display_name) {
-        addressField.value = data.display_name;
-      } else {
-        addressField.value = `Lat: ${currentLat}, Lng: ${currentLng}`;
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      try {
+        currentLat = position.coords.latitude;
+        currentLng = position.coords.longitude;
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${currentLat}&lon=${currentLng}`);
+        const data = await response.json();
+        if (data && data.display_name) {
+          addressField.value = data.display_name;
+          return;
+        }
+      } catch (e) {
+        console.error(e);
       }
-    } catch (err) {
-      addressField.value = `Lat: ${currentLat}, Lng: ${currentLng}`;
-    }
-  }, (error) => {
+      addressField.value = "";
+      alert("Could not auto-detect. Please type your location manually.");
+    }, (error) => {
+      addressField.value = "";
+      alert("Location permission denied or timeout. Please type manually.");
+    }, { timeout: 5000 });
+  } else {
     addressField.value = "";
-    alert("Unable to retrieve GPS location. Please allow location access.");
-  }, { timeout: 10000 });
+    alert("Geolocation not supported. Please type manually.");
+  }
 }
 
-// Haversine formula to calculate exact distance in KM between two lat/lng points
 function calculateDistance(lat1, lon1, lat2, lon2) {
   if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
-  const R = 6371; // Radius of the earth in km
+  const R = 6371; 
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a = 
@@ -154,7 +163,7 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
     Math.sin(dLon/2) * Math.sin(dLon/2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return Math.round(R * c); // Distance in KM
+  return Math.round(R * c); 
 }
 
 function containsPhoneNumber(text) {
@@ -227,8 +236,8 @@ async function handlePostAd(e) {
     category: document.getElementById('category').value,
     country: document.getElementById('adCountry').value,
     address: address,
-    lat: currentLat, // Real GPS latitude saved
-    lng: currentLng, // Real GPS longitude saved
+    lat: currentLat,
+    lng: currentLng,
     image1: imageUrls[0],
     image2: imageUrls[1],
     image3: imageUrls[2],
@@ -237,7 +246,12 @@ async function handlePostAd(e) {
   }]);
 
   if (!insertError) {
-    alert('Ad posted successfully!');
+    // SOW Balance logic (Independent of ad deletion)
+    const { data: balData } = await supabase.from('sow_balances').select('balance').eq('wallet_address', userWallet).single();
+    let newBal = (balData && balData.balance) ? balData.balance + 1 : 1;
+    await supabase.from('sow_balances').upsert([{ wallet_address: userWallet, balance: newBal }]);
+
+    alert('Ad posted successfully! 🎉 You earned 1 SOW Coin!');
     document.getElementById('adModal').style.display = 'none';
     document.getElementById('adForm').reset();
     fetchListings();
@@ -266,13 +280,12 @@ async function fetchListings() {
     return;
   }
 
-  // Filter listings based on real Haversine geographical distance from user's current GPS location
   const filteredData = data.filter((item) => {
     const itemLat = item.lat || 28.6139;
     const itemLng = item.lng || 77.2090;
     const realDist = calculateDistance(currentLat, currentLng, itemLat, itemLng);
 
-    item.calculatedDistance = realDist; // attach for display
+    item.calculatedDistance = realDist; 
 
     if (realDist > maxDistance) return false;
     if (searchText && !item.title.toLowerCase().includes(searchText)) return false;
@@ -367,16 +380,28 @@ async function openMyAdsModal() {
   document.getElementById('myAdsModal').style.display = 'flex';
   
   const container = document.getElementById('myAdsContainer');
-  container.innerHTML = `<p class="loading-text">Loading your ads...</p>`;
+  container.innerHTML = `<p class="loading-text">Loading your ads & balance...</p>`;
 
-  const { data } = await supabase.from('listings').select('*').eq('seller_address', userWallet).eq('status', 'active');
+  // SOW balance ab alag table se aa raha hai
+  const { data: balData } = await supabase.from('sow_balances').select('balance').eq('wallet_address', userWallet).single();
+  const earnedSow = balData ? balData.balance : 0;
 
-  if (!data || data.length === 0) {
-    container.innerHTML = `<p style="text-align:center; color:#64748b; padding:20px;">You haven't posted any active ads yet.</p>`;
+  const balanceHtml = `
+    <div style="background: linear-gradient(135deg, #0f172a, #1e293b); border: 1px solid #38bdf8; padding: 14px; border-radius: 12px; margin-bottom: 15px; color: #fff; text-align: center; box-shadow: 0 4px 10px rgba(56, 189, 248, 0.2);">
+      <h3 style="margin: 0; font-size: 1.3rem; color: #38bdf8;">🪙 Your Balance: ${earnedSow} SOW</h3>
+      <p style="margin: 4px 0 0 0; font-size: 0.8rem; color: #cbd5e1;">Tokens will be airdropped to your wallet on launch!</p>
+    </div>
+  `;
+
+  // Fetch only active ads
+  const { data: activeAds } = await supabase.from('listings').select('*').eq('seller_address', userWallet).eq('status', 'active');
+
+  if (!activeAds || activeAds.length === 0) {
+    container.innerHTML = balanceHtml + `<p style="text-align:center; color:#64748b; padding:20px;">You have no active ads.</p>`;
     return;
   }
 
-  container.innerHTML = data.map(item => `
+  container.innerHTML = balanceHtml + activeAds.map(item => `
     <div onclick="document.getElementById('myAdsModal').style.display='none'; window.openAdDetails('${item.id}')" style="background:rgba(0,0,0,0.03); padding:10px; border-radius:10px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
       <div>
         <h4 style="font-size:0.9rem; color:#1e293b;">${item.title}</h4>
@@ -388,12 +413,15 @@ async function openMyAdsModal() {
 }
 
 window.markAsSoldOut = async function(id) {
-  if (confirm("Are you sure this item is Sold Out?")) {
+  if (confirm("Are you sure this item is Sold Out? This will permanently delete the ad.")) {
+    // Ad wapas database se delete ho raha hai, SOW balance par koi asar nahi hoga!
     const { error } = await supabase.from('listings').delete().match({ id });
     if (!error) {
-      alert("Ad removed.");
+      alert("Ad deleted successfully! Your SOW balance is safe.");
       openMyAdsModal();
       fetchListings();
+    } else {
+      alert("Error: " + error.message);
     }
   }
 }
