@@ -7,7 +7,7 @@ const ADMIN_WALLET = '0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1';
 
 // 👇 YEH ZAROORI HAI: World ID Developer Portal (developer.worldcoin.org) se apna
 // App ID yahan daalo. Isske bina walletAuth aur pay dono fail/hang ho sakte hain.
-const APP_ID = 'app_YOUR_APP_ID_HERE';
+const APP_ID = 'app_06db98c492a19f80177b8d633f056982';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 let userWallet = null;
