@@ -18,8 +18,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function setupUI() {
   document.getElementById('loginBtn').addEventListener('click', handleLogin);
-  document.getElementById('closeModalBtn').addEventListener('click', () => toggleModal('adModal', false));
-  
   document.getElementById('viewMyAdsBtn').addEventListener('click', openMyAdsModal);
   document.getElementById('closeMyAdsModal').addEventListener('click', () => toggleModal('myAdsModal', false));
   
@@ -57,7 +55,7 @@ async function handleLogin() {
 
 async function handlePostAd(e) {
   e.preventDefault();
-  if (!userWallet) return alert("Connect wallet first!");
+  if (!userWallet) return alert("Please connect your wallet first!");
 
   const title = document.getElementById('title').value;
   const description = document.getElementById('description').value;
@@ -84,10 +82,12 @@ async function handlePostAd(e) {
       image_url: imageUrl,
       status: 'active'
     }]);
-    alert('Ad posted successfully! Note: Ads cannot be edited, only deleted.');
+    alert('Ad posted successfully with 1 WLD payment!');
     toggleModal('adModal', false);
     document.getElementById('adForm').reset();
     fetchListings();
+  } else {
+    alert('Payment failed or cancelled.');
   }
 }
 

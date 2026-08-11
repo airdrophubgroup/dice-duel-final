@@ -12,12 +12,12 @@
       <button id="loginBtn">Connect Wallet</button>
     </header>
 
-    <!-- Action Bar: Post Ad & View My Ads -->
+    <!-- Action Bar: View My Ads -->
     <div class="action-bar" style="display:flex; gap:10px;">
       <button id="viewMyAdsBtn" class="btn-primary" style="display:none; width: 100%;">📦 My Ads</button>
     </div>
 
-    <!-- Interactive Animated Logo Banner -->
+    <!-- Interactive Animated Logo Banner (Triggers Ad Post Modal) -->
     <div class="animated-sell-banner" onclick="toggleModal('adModal', true)">
       <div class="logo-icon-pulse">✨</div>
       <div class="logo-text-group">
@@ -74,40 +74,62 @@
       </div>
     </main>
 
-    <!-- Modal for Posting Ad -->
+    <!-- Modal for Posting Ad with Title, Category, Location, & Post Now with 1 WLD -->
     <div id="adModal" class="modal" style="display:none;">
       <div class="modal-content">
-        <span id="closeModalBtn" class="close">&times;</span>
-        <h2>Post New Ad (1 WLD)</h2>
+        <span id="closeModalBtn" class="close" onclick="toggleModal('adModal', false)">&times;</span>
+        <h2>Post New Ad</h2>
         <form id="adForm">
-          <input type="text" id="title" placeholder="Product Title (e.g. iPhone 13)" required>
-          <textarea id="description" placeholder="Description details..." required></textarea>
-          <input type="number" id="price" placeholder="Price in WLD" required>
-          
-          <select id="category" required>
-            <option value="" disabled selected>Select Category</option>
-            <option value="Electronics">🔌 Electronics</option>
-            <option value="Phones">📱 Phones & Tablets</option>
-            <option value="Laptops">💻 Laptops & Computers</option>
-            <option value="Games">🎮 Games & Consoles</option>
-            <option value="Clothes">👕 Clothes & Fashion</option>
-            <option value="Shoes">👟 Shoes & Footwear</option>
-            <option value="Bags">🎒 Bags & Luggage</option>
-            <option value="Home Appliances">🏠 Home Appliances</option>
-            <option value="Books & Sports">⚽ Books & Sports Equipment</option>
-            <option value="Automotive">🚗 Cars & Bikes</option>
-            <option value="Other">📦 Other</option>
-          </select>
+          <div style="display:flex; flex-direction:column; gap:4px; text-align:left;">
+            <label style="font-size:12px; font-weight:600; color:#334155;">Product Title</label>
+            <input type="text" id="title" placeholder="e.g. iPhone 13 Pro" required>
+          </div>
 
-          <select id="adCountry" required>
-            <option value="IN">🇮🇳 India</option>
-            <option value="US">🇺🇸 United States</option>
-            <option value="AE">🇦🇪 UAE</option>
-            <option value="GB">🇬🇧 United Kingdom</option>
-            <option value="SG">🇸🇬 Singapore</option>
-          </select>
-          <input type="text" id="imageUrl" placeholder="Image URL" required>
-          <button type="submit" class="btn-pay">Pay 1 WLD & Post Ad</button>
+          <div style="display:flex; flex-direction:column; gap:4px; text-align:left;">
+            <label style="font-size:12px; font-weight:600; color:#334155;">Category</label>
+            <select id="category" required>
+              <option value="" disabled selected>Select Category</option>
+              <option value="Electronics">🔌 Electronics</option>
+              <option value="Phones">📱 Phones & Tablets</option>
+              <option value="Laptops">💻 Laptops & Computers</option>
+              <option value="Games">🎮 Games & Consoles</option>
+              <option value="Clothes">👕 Clothes & Fashion</option>
+              <option value="Shoes">👟 Shoes & Footwear</option>
+              <option value="Bags">🎒 Bags & Luggage</option>
+              <option value="Home Appliances">🏠 Home Appliances</option>
+              <option value="Books & Sports">⚽ Books & Sports Equipment</option>
+              <option value="Automotive">🚗 Cars & Bikes</option>
+              <option value="Other">📦 Other</option>
+            </select>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:4px; text-align:left;">
+            <label style="font-size:12px; font-weight:600; color:#334155;">Location / Country</label>
+            <select id="adCountry" required>
+              <option value="IN">🇮🇳 India</option>
+              <option value="US">🇺🇸 United States</option>
+              <option value="AE">🇦🇪 UAE</option>
+              <option value="GB">🇬🇧 United Kingdom</option>
+              <option value="SG">🇸🇬 Singapore</option>
+            </select>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:4px; text-align:left;">
+            <label style="font-size:12px; font-weight:600; color:#334155;">Description</label>
+            <textarea id="description" placeholder="Write item details..." required style="resize:none; height:70px;"></textarea>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:4px; text-align:left;">
+            <label style="font-size:12px; font-weight:600; color:#334155;">Price (WLD)</label>
+            <input type="number" id="price" placeholder="Price in WLD" required>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:4px; text-align:left;">
+            <label style="font-size:12px; font-weight:600; color:#334155;">Image URL</label>
+            <input type="text" id="imageUrl" placeholder="Paste image direct link" required>
+          </div>
+
+          <button type="submit" class="btn-pay">Post Now with 1 WLD</button>
         </form>
       </div>
     </div>
@@ -115,7 +137,7 @@
     <!-- Modal for My Ads -->
     <div id="myAdsModal" class="modal" style="display:none;">
       <div class="modal-content">
-        <span id="closeMyAdsModal" class="close">&times;</span>
+        <span id="closeMyAdsModal" class="close" onclick="toggleModal('myAdsModal', false)">&times;</span>
         <h2>My Posted Ads</h2>
         <div id="myAdsContainer" style="max-height: 350px; overflow-y: auto; margin-top: 10px;"></div>
       </div>
