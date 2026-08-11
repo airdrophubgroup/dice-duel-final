@@ -4,16 +4,11 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 const SUPABASE_URL = 'https://adicdkrfinbudpaqqjai.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFkaWNka3JmaW5idWRwYXFxamFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxNzM4MzMsImV4cCI6MjEwMTc0OTgzM30.ksv1zdQVimQTNWnrHaRqEXcLw7-3G6_zjAyEOZZkr0s';
 const ADMIN_WALLET = '0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1';
-
-// 👇 YEH ZAROORI HAI: World ID Developer Portal (developer.worldcoin.org) se apna
-// App ID yahan daalo. Isske bina walletAuth aur pay dono fail/hang ho sakte hain.
 const APP_ID = 'app_06db98c492a19f80177b8d633f056982';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 let userWallet = null;
 
-// Agar app World App ke bahar khula hai to yeh screen dikhado — silently kuch na
-// hone se behtar hai user ko clearly bata dena.
 function checkWorldAppEnvironment() {
   const isWorldApp = (typeof MiniKit !== 'undefined' && MiniKit.isInstalled());
   if (!isWorldApp) {
@@ -23,8 +18,6 @@ function checkWorldAppEnvironment() {
   return true;
 }
 
-// MiniKit ko ready hone mein thoda time lag sakta hai (World App webview load
-// hote waqt) — isliye turant isInstalled() check karne ke bajaye thoda wait karo.
 function waitForMiniKitReady(timeoutMs = 2000) {
   return new Promise((resolve) => {
     const start = Date.now();
@@ -50,31 +43,8 @@ function randomAlphaNumeric(len) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // BUG THA YAHAN: pehle `isInstalled()` check ho raha tha aur uske TRUE hone par
-  // hi `install()` call hota tha. Lekin isInstalled() sirf install() ke baad hi
-  // kaam karta hai — isliye install() kabhi chalta hi nahi tha aur wallet connect
-  // fail ho raha تھا. Fix: install() ko seedha, unconditionally, sabse pehle call karo.
-  let installError = null;
-  try { MiniKit.install(APP_ID); } catch (e) { installError = e.message; console.error('MiniKit install error:', e); }
-
-  // MiniKit ko native bridge se connect hone mein thoda time lagta hai — turant
-  // check karne se galat false milta hai. Yahan thoda wait karke confirm karte hain.
-  const ready = await waitForMiniKitReady();
-
-  // ON-SCREEN DEBUG PANEL — taaki phone pe hi exact status dikh jaye, console
-  // kholne ki zaroorat na pade. Yeh temporary hai, baad mein hata sakte ho.
-  const debugEl = document.getElementById('debugPanel');
-  if (debugEl) {
-    debugEl.innerText =
-      'DEBUG INFO:\n' +
-      'typeof MiniKit: ' + typeof MiniKit + '\n' +
-      'MiniKit.isInstalled(): ' + (typeof MiniKit !== 'undefined' ? MiniKit.isInstalled() : 'N/A') + '\n' +
-      'waitForMiniKitReady result: ' + ready + '\n' +
-      'APP_ID used: ' + APP_ID + '\n' +
-      'install() error: ' + (installError || 'none') + '\n' +
-      'User Agent: ' + navigator.userAgent;
-  }
-
+  try { MiniKit.install(APP_ID); } catch (e) { console.error('MiniKit install error:', e); }
+  await waitForMiniKitReady();
   setupUI();
   fetchListings();
 });
@@ -82,42 +52,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 function setupUI() {
   document.getElementById('loginBtn').addEventListener('click', handleLogin);
   document.getElementById('viewMyAdsBtn').addEventListener('click', openMyAdsModal);
-  
   document.getElementById('adForm').addEventListener('submit', handlePostAd);
   document.getElementById('countryFilter').addEventListener('change', fetchListings);
   document.getElementById('categoryFilter').addEventListener('change', fetchListings);
 
-  const rangeInput = document.getElementById('distanceRange');
-  rangeInput.addEventListener('input', (e) => {
-    document.getElementById('rangeValue').innerText = e.target.value + ' km';
-  });
-  rangeInput.addEventListener('change', fetchListings);
-
-  // "All" checkbox — checked hone par distance/radius filter ignore ho jata hai,
-  // sirf country aur category ke hisaab se saari ads dikhengi.
-  const allDistanceCheck = document.getElementById('allDistanceCheck');
-  allDistanceCheck.addEventListener('change', () => {
-    rangeInput.disabled = allDistanceCheck.checked;
-    fetchListings();
-  });
-
-  // Search box — title ke andar type karte hi (debounced) listings filter ho jaati hain.
   let searchDebounceTimer;
-  document.getElementById('searchInput').addEventListener('input', () => {
-    clearTimeout(searchDebounceTimer);
-    searchDebounceTimer = setTimeout(fetchListings, 300);
-  });
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(fetchListings, 300);
+    });
+  }
 }
 
 async function handleLogin() {
-  const debugEl = document.getElementById('debugPanel');
-
   if (!checkWorldAppEnvironment()) return;
 
   try {
     const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
-      // Random alphanumeric nonce — static nonce ('12345678') SIWE ke liye
-      // reject ho sakta hai naye minikit-js versions mein.
       nonce: randomAlphaNumeric(24),
       requestId: 'req_login_' + Date.now(),
       expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -125,26 +78,19 @@ async function handleLogin() {
       statement: 'Sign in to Want Sell On World',
     });
 
-    if (debugEl) debugEl.innerText = 'walletAuth response:\n' + JSON.stringify(finalPayload, null, 2);
-
     if (finalPayload?.status === 'success' && finalPayload?.address) {
       userWallet = finalPayload.address;
       document.getElementById('loginBtn').innerText = `Connected: ${userWallet.substring(0, 6)}...`;
       document.getElementById('viewMyAdsBtn').style.display = 'block';
     } else {
-      console.error('walletAuth failed:', finalPayload);
-      alert('❌ Wallet connect nahi ho paaya: ' + (finalPayload?.error_code || 'unknown error'));
+      alert('❌ Wallet connect nahi ho paaya.');
     }
   } catch (err) {
-    console.error('walletAuth exception:', err);
-    if (debugEl) debugEl.innerText = 'walletAuth EXCEPTION:\n' + (err?.message || String(err));
-    alert('❌ Wallet connect mein error aaya: ' + (err?.message || 'unknown'));
+    alert('❌ Wallet connect mein error aaya.');
   }
 }
 
-// Function to check phone numbers (detects 10 digit numbers, country codes, spaces/hyphens)
 function containsPhoneNumber(text) {
-  // Regex to detect sequence of 10 or more numbers or common phone formats
   const phoneRegex = /(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\b\d{10}\b/;
   return phoneRegex.test(text);
 }
@@ -157,9 +103,8 @@ async function handlePostAd(e) {
   const title = document.getElementById('title').value;
   const description = document.getElementById('description').value;
 
-  // Restriction check for phone number
   if (containsPhoneNumber(title) || containsPhoneNumber(description)) {
-    return alert("❌ Error: Phone numbers or contact details are strictly not allowed in Title or Description!");
+    return alert("❌ Error: Phone numbers or contact details are strictly not allowed!");
   }
 
   const fileInput = document.getElementById('imageInput');
@@ -178,28 +123,21 @@ async function handlePostAd(e) {
 
     const { finalPayload } = await MiniKit.commandsAsync.pay(payPayload);
     paymentSuccessful = (finalPayload?.status === 'success');
-
-    if (!paymentSuccessful) {
-      console.error('Payment failed:', finalPayload);
-    }
   } catch (err) {
     console.error('pay exception:', err);
   }
 
   if (!paymentSuccessful) {
-    return alert('❌ Payment failed ya cancel ho gaya. Dobara try karein.');
+    return alert('❌ Payment failed ya cancel ho gaya.');
   }
 
   let imageUrls = ['', '', '', ''];
-  
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     const fileExt = file.name.split('.').pop();
     const fileName = `${Date.now()}_${Math.random()}.${fileExt}`;
     
-    // BUCKET NAME FIXED: changed from 'listings' to 'listing' matching your Supabase storage
     const { error: uploadError } = await supabase.storage.from('listing').upload(fileName, file);
-    
     if (uploadError) {
       alert("Image upload failed: " + uploadError.message);
       return;
@@ -237,9 +175,8 @@ async function fetchListings() {
   const container = document.getElementById('listingsContainer');
   const selectedCountry = document.getElementById('countryFilter').value;
   const selectedCategory = document.getElementById('categoryFilter').value;
-  const showAllDistance = document.getElementById('allDistanceCheck').checked;
-  const maxDistance = parseInt(document.getElementById('distanceRange').value);
-  const searchText = document.getElementById('searchInput').value.trim().toLowerCase();
+  const searchInput = document.getElementById('searchInput');
+  const searchText = searchInput ? searchInput.value.trim().toLowerCase() : '';
   
   let query = supabase.from('listings').select('*').eq('status', 'active');
   
@@ -250,43 +187,30 @@ async function fetchListings() {
     query = query.eq('category', selectedCategory);
   }
 
-  const { data } = await query;
+  const { data, error } = await query;
   
-  if (!data || data.length === 0) {
+  if (error || !data || data.length === 0) {
     container.innerHTML = `<p class="loading-text">No active listings found.</p>`;
     return;
   }
 
-  const filteredData = data.filter((item, index) => {
-    // "All" checked ho to distance filter skip karo — sirf country/category/search chalega.
-    if (!showAllDistance) {
-   const filteredData = data.filter((item, index) => {
-    // "All" checked ho to distance filter skip karo — sirf country/category/search chalega.
-    if (!showAllDistance) {
-      const itemDistance = (index * 15 + 10) % 500;
-      if (itemDistance > maxDistance) return false;
-    }
-    if (searchText && !item.title.toLowerCase().includes(searchText)) return false;
-    return true;
-  });
-    }
+  const filteredData = data.filter((item) => {
     if (searchText && !item.title.toLowerCase().includes(searchText)) return false;
     return true;
   });
 
   if (filteredData.length === 0) {
-    container.innerHTML = `<p class="loading-text">No listings found${searchText ? ` for "${searchText}"` : ''}${!showAllDistance ? ` within ${maxDistance} km` : ''}.</p>`;
+    container.innerHTML = `<p class="loading-text">No listings found.</p>`;
     return;
   }
 
-  container.innerHTML = filteredData.map((item, index) => {
-    const simulatedDist = (index * 15 + 10) % 500;
+  container.innerHTML = filteredData.map((item) => {
     const thumbImg = item.image1 || 'https://via.placeholder.com/90';
     return `
       <div class="listing-card">
         <img src="${thumbImg}" style="width: 90px; height: 90px; object-fit: cover; border-radius: 12px;">
         <div style="flex:1;">
-          <span style="font-size:10px; color:#4f46e5; font-weight:bold;">🌍 ${item.country} (~${simulatedDist} km) | ${item.category}</span>
+          <span style="font-size:10px; color:#4f46e5; font-weight:bold;">🌍 ${item.country} | ${item.category}</span>
           <h3 style="font-size:1rem; margin:2px 0;">${item.title}</h3>
           <p style="font-weight:bold; color:#10b981;">${item.price} WLD</p>
         </div>
@@ -296,8 +220,8 @@ async function fetchListings() {
   }).join('');
 }
 
-window.contactSeller = function(sellerWallet, adTitle) {
-  prompt("Seller Wallet Address (Copy to connect/chat):", sellerWallet);
+window.contactSeller = function(sellerWallet) {
+  prompt("Seller Wallet Address:", sellerWallet);
 }
 
 async function openMyAdsModal() {
@@ -326,14 +250,12 @@ async function openMyAdsModal() {
 }
 
 window.markAsSoldOut = async function(id) {
-  if (confirm("Are you sure this item is Sold Out? Marking it as sold out will permanently remove the ad from the marketplace.")) {
+  if (confirm("Are you sure this item is Sold Out?")) {
     const { error } = await supabase.from('listings').delete().match({ id });
     if (!error) {
-      alert("Ad marked as Sold Out and removed successfully.");
+      alert("Ad removed.");
       openMyAdsModal();
       fetchListings();
-    } else {
-      alert("Error updating ad status.");
     }
   }
 }
