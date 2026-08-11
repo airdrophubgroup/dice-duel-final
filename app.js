@@ -647,17 +647,15 @@ async function openMyAdsModal() {
 }
 
 // ==========================================
-// DELETE AD & AUTOMATICALLY DELETE IMAGES FROM STORAGE
+// DELETE AD, STORAGE IMAGES & ASSOCIATED CHATS
 // ==========================================
 window.markAsSoldOut = async function(id) {
-  const isConfirmed = await showNeonPopup('Delete Ad?', 'Are you sure this item is Sold Out? This will permanently delete the ad and its storage images.', '🗑️', 'confirm');
+  const isConfirmed = await showNeonPopup('Delete Ad?', 'Are you sure this item is Sold Out? This will permanently delete the ad, its images, and chat history.', '🗑️', 'confirm');
   
   if (isConfirmed) {
-    // 1. Pehle ad ki details fetch karo taaki image URLs mil sakein
-    const { data: adData } = await supabase.from('listings').select('image1, image2, image3, image4').eq('id', id).single();
+    const { data: adData } = await supabase.from('listings').select('title, image1, image2, image3, image4').eq('id', id).single();
 
     if (adData) {
-      // 2. URLs se file paths extract karke Supabase Storage bucket se delete karo
       const imagesList = [adData.image1, adData.image2, adData.image3, adData.image4];
       for (const imgUrl of imagesList) {
         if (imgUrl && imgUrl.includes('/listing/')) {
@@ -667,12 +665,13 @@ window.markAsSoldOut = async function(id) {
           }
         }
       }
+
+      await supabase.from('chats').delete().eq('ad_title', adData.title);
     }
 
-    // 3. Database se listing row delete karo
     const { error } = await supabase.from('listings').delete().match({ id });
     if (!error) {
-      await showNeonPopup('Deleted', 'Ad and associated storage images deleted successfully! Your SOW balance is safe.', '✅');
+      await showNeonPopup('Deleted', 'Ad, storage images, and related chat history deleted successfully!', '✅');
       openMyAdsModal();
       fetchListings();
     } else {
