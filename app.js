@@ -129,6 +129,43 @@ function updateViewer() {
 }
 // ==========================================
 
+// ==========================================
+// AUTOMATIC IMAGE COMPRESSION HELPER
+// ==========================================
+function compressImage(file, maxWidth = 1000, quality = 0.7) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          resolve(new File([blob], file.name, {
+            type: 'image/jpeg',
+            lastModified: Date.now()
+          }));
+        }, 'image/jpeg', quality);
+      };
+    };
+  });
+}
+// ==========================================
+
 async function checkWorldAppEnvironment() {
   const isWorldApp = (typeof MiniKit !== 'undefined' && MiniKit.isInstalled());
   if (!isWorldApp) {
@@ -335,16 +372,6 @@ async function handlePostAd(e) {
     return;
   }
 
-  // ==========================================
-  // IMAGE SIZE VALIDATION (Max 50 KB per image)
-  // ==========================================
-  for (let i = 0; i < files.length; i++) {
-    if (files[i].size > 50 * 1024) { // 50 KB in bytes
-      await showNeonPopup('Size Exceeded', 'Please upload image under 50 KB per image. If exceed please use online image size reduce tool on Google.', '⚠️');
-      return;
-    }
-  }
-
   let paymentSuccessful = false;
   try {
     const payPayload = {
@@ -363,13 +390,14 @@ async function handlePostAd(e) {
     return;
   }
 
+  // Automatic Image Compression & Uploading (Any size file allowed now!)
   let imageUrls = ['', '', '', ''];
   for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    const fileExt = file.name.split('.').pop();
+    const compressedFile = await compressImage(files[i]);
+    const fileExt = 'jpg';
     const fileName = `${Date.now()}_${Math.random()}.${fileExt}`;
     
-    const { error: uploadError } = await supabase.storage.from('listing').upload(fileName, file);
+    const { error: uploadError } = await supabase.storage.from('listing').upload(fileName, compressedFile);
     if (uploadError) {
       await showNeonPopup('Upload Error', 'Image upload failed: ' + uploadError.message, '❌');
       return;
