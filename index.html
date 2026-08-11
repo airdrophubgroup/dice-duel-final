@@ -17,8 +17,8 @@
       <button id="viewMyAdsBtn" class="btn-primary" style="display:none; width: 100%;">📦 My Ads</button>
     </div>
 
-    <!-- Direct Clickable Button with ID -->
-    <button type="button" id="openAdModalBtn" class="btn-success" style="width:100%; padding:16px; font-size:1rem; font-weight:700; border-radius:16px; margin-bottom:18px; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow: 0 10px 25px -5px rgba(79,70,229,0.4);">
+    <!-- Direct Inline Click Trigger -->
+    <button type="button" onclick="document.getElementById('adModal').style.display='flex'" class="btn-success" style="width:100%; padding:16px; font-size:1rem; font-weight:700; border-radius:16px; margin-bottom:18px; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow: 0 10px 25px -5px rgba(79,70,229,0.4); cursor:pointer;">
       ✨ Post an Ad & Sell (1 WLD)
     </button>
 
@@ -73,7 +73,7 @@
     <!-- Modal for Posting Ad -->
     <div id="adModal" class="modal" style="display:none;">
       <div class="modal-content">
-        <span id="closeModalBtn" class="close">&times;</span>
+        <span class="close" onclick="document.getElementById('adModal').style.display='none'">&times;</span>
         <h2>Post New Ad</h2>
         <form id="adForm">
           <div style="display:flex; flex-direction:column; gap:4px; text-align:left;">
@@ -133,7 +133,7 @@
     <!-- Modal for My Ads -->
     <div id="myAdsModal" class="modal" style="display:none;">
       <div class="modal-content">
-        <span id="closeMyAdsModal" class="close">&times;</span>
+        <span class="close" onclick="document.getElementById('myAdsModal').style.display='none'">&times;</span>
         <h2>My Posted Ads</h2>
         <div id="myAdsContainer" style="max-height: 350px; overflow-y: auto; margin-top: 10px;"></div>
       </div>
