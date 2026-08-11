@@ -15,7 +15,6 @@
       40% { transform: translateY(-15px); }
       60% { transform: translateY(-7px); }
     }
-    /* Image Slider Buttons */
     .slider-btn {
       background: rgba(255,255,255,0.2); border: none; color: white; 
       font-size: 2rem; cursor: pointer; padding: 15px 20px; 
@@ -24,19 +23,24 @@
     .slider-btn:active { background: rgba(255,255,255,0.4); transform: scale(0.9); }
   </style>
 </head>
-<body style="margin: 0; padding: 0; position: relative;">
-  
-  <!-- Fixed Floating Support Button at Top-Left Corner -->
-  <a href="mailto:airdrophubgroup@gmail.com" style="position: absolute; top: 12px; left: 16px; background: linear-gradient(135deg, #4f46e5, #06b6d4); color: #fff; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; text-decoration: none; box-shadow: 0 0 10px rgba(79, 70, 229, 0.6), 0 0 20px rgba(6, 182, 212, 0.4); border: 1px solid rgba(255, 255, 255, 0.3); z-index: 50; display: flex; align-items: center; gap: 4px;">
-    🎧 Support
-  </a>
+<body style="margin: 0; padding: 0; background: #f8fafc;">
 
-  <!-- Fixed Official Marketplace Text at Top-Right Corner -->
-  <div style="position: absolute; top: 14px; right: 16px; font-size: 11px; color: #94a3b8; font-weight: 600; z-index: 50; pointer-events: none; background: rgba(15, 23, 42, 0.75); padding: 4px 8px; border-radius: 8px; backdrop-filter: blur(4px);">
-    🌍 Worldcoin Marketplace
-  </div>
+  <!-- App Container with a clean top bar wrapper so Support & Marketplace stay perfectly aligned inside the normal flow -->
+  <div class="app-container" style="padding-top: 10px;">
+    
+    <!-- Top Corner Alignment Row -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; width: 100%; box-sizing: border-box;">
+      <!-- Support Button in Top-Left Corner -->
+      <a href="mailto:airdrophubgroup@gmail.com" style="background: linear-gradient(135deg, #4f46e5, #06b6d4); color: #fff; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; text-decoration: none; box-shadow: 0 0 10px rgba(79, 70, 229, 0.6), 0 0 20px rgba(6, 182, 212, 0.4); border: 1px solid rgba(255, 255, 255, 0.3); display: flex; align-items: center; gap: 4px;">
+        🎧 Support
+      </a>
 
-  <div class="app-container" style="margin-top: 45px;">
+      <!-- Worldcoin Marketplace text in Top-Right Corner -->
+      <div style="font-size: 11px; color: #64748b; font-weight: 600; background: rgba(0, 0, 0, 0.04); padding: 4px 10px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.05);">
+        🌍 Worldcoin Marketplace
+      </div>
+    </div>
+
     <header class="header">
       <h1>🌍 Want Sell On World</h1>
       <button id="loginBtn">Connect Wallet</button>
@@ -136,7 +140,7 @@
             <option value="IN">🇮🇳 India</option>
             <option value="US">🇺🇸 United States</option>
             <option value="AE">🇦🇪 UAE</option>
-            <option value="GB">🇬🇧 United Kingdom</option>
+            <option value="GB">🇺🇸 United Kingdom</option>
             <option value="SG">🇸🇬 Singapore</option>
           </select>
           <div style="display:flex; gap:6px;">
@@ -192,9 +196,8 @@
       </div>
     </div>
 
-    <!-- NEW: Full Screen Image Zoom / Slider Modal -->
+    <!-- Full Screen Image Zoom / Slider Modal -->
     <div id="imageViewerModal" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 20000; background: rgba(0,0,0,0.95); flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
-      <!-- Wapas Ad par jaane ka button -->
       <button onclick="document.getElementById('imageViewerModal').style.display='none'" style="position: absolute; top: 20px; left: 20px; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.3); padding: 10px 18px; border-radius: 10px; font-weight: bold; cursor: pointer; z-index: 20001; font-size: 1rem;">⬅️ Back to Ad</button>
       
       <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; height: 70vh; padding: 0 10px; box-sizing: border-box;">
