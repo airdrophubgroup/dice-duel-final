@@ -390,7 +390,6 @@ async function handlePostAd(e) {
     return;
   }
 
-  // Automatic Image Compression & Uploading (Any size file allowed now!)
   let imageUrls = ['', '', '', ''];
   for (let i = 0; i < files.length; i++) {
     const compressedFile = await compressImage(files[i]);
@@ -582,7 +581,7 @@ window.openChat = async function(sellerWallet, adTitle, sellerName) {
       if (msg.sender === userWallet) {
         chatHtml += `<div style="background:#4f46e5; color:#fff; padding:8px 12px; border-radius:8px; font-size:12px; align-self:flex-end; max-width:80%; margin-bottom:4px;">${msg.message}</div>`;
       } else {
-        chatHtml += `<div style="background:#e2e8f0; padding:8px 12px; border-radius:8px; font-size:12px; align-self:flex-start; color:#334155; max-width:80%; margin-bottom:4px;">${msg.message}</div>`;
+        chatHtml += `<div style="background:#e2e8f0; color:#fff; padding:8px 12px; border-radius:8px; font-size:12px; align-self:flex-start; color:#334155; max-width:80%; margin-bottom:4px;">${msg.message}</div>`;
       }
     });
   }
@@ -647,13 +646,33 @@ async function openMyAdsModal() {
   `).join('');
 }
 
+// ==========================================
+// DELETE AD & AUTOMATICALLY DELETE IMAGES FROM STORAGE
+// ==========================================
 window.markAsSoldOut = async function(id) {
-  const isConfirmed = await showNeonPopup('Delete Ad?', 'Are you sure this item is Sold Out? This will permanently delete the ad.', '🗑️', 'confirm');
+  const isConfirmed = await showNeonPopup('Delete Ad?', 'Are you sure this item is Sold Out? This will permanently delete the ad and its storage images.', '🗑️', 'confirm');
   
   if (isConfirmed) {
+    // 1. Pehle ad ki details fetch karo taaki image URLs mil sakein
+    const { data: adData } = await supabase.from('listings').select('image1, image2, image3, image4').eq('id', id).single();
+
+    if (adData) {
+      // 2. URLs se file paths extract karke Supabase Storage bucket se delete karo
+      const imagesList = [adData.image1, adData.image2, adData.image3, adData.image4];
+      for (const imgUrl of imagesList) {
+        if (imgUrl && imgUrl.includes('/listing/')) {
+          const filePath = imgUrl.split('/listing/')[1];
+          if (filePath) {
+            await supabase.storage.from('listing').remove([filePath]);
+          }
+        }
+      }
+    }
+
+    // 3. Database se listing row delete karo
     const { error } = await supabase.from('listings').delete().match({ id });
     if (!error) {
-      await showNeonPopup('Deleted', 'Ad deleted successfully! Your SOW balance is safe.', '✅');
+      await showNeonPopup('Deleted', 'Ad and associated storage images deleted successfully! Your SOW balance is safe.', '✅');
       openMyAdsModal();
       fetchListings();
     } else {
