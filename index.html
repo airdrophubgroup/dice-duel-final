@@ -15,28 +15,35 @@
       40% { transform: translateY(-15px); }
       60% { transform: translateY(-7px); }
     }
+    /* Image Slider Buttons */
+    .slider-btn {
+      background: rgba(255,255,255,0.2); border: none; color: white; 
+      font-size: 2rem; cursor: pointer; padding: 15px 20px; 
+      border-radius: 12px; backdrop-filter: blur(5px); transition: 0.3s;
+    }
+    .slider-btn:active { background: rgba(255,255,255,0.4); transform: scale(0.9); }
   </style>
 </head>
-<body style="margin: 0; padding: 0;">
+<body style="margin: 0; padding: 0; position: relative;">
   
-  <!-- Top Support Bar -->
-  <div style="background: #0f172a; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); width: 100%; box-sizing: border-box; position: sticky; top: 0; z-index: 50;">
-    <a href="mailto:airdrophubgroup@gmail.com" style="background: linear-gradient(135deg, #4f46e5, #06b6d4); color: #fff; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; text-decoration: none; box-shadow: 0 0 10px rgba(79, 70, 229, 0.6), 0 0 20px rgba(6, 182, 212, 0.4); border: 1px solid rgba(255, 255, 255, 0.3); display: flex; align-items: center; gap: 4px;">
-      🎧 Support
-    </a>
-    <span style="font-size: 11px; color: #94a3b8; font-weight: 500;">🌍 Official Worldcoin Marketplace</span>
+  <!-- Fixed Floating Support Button at Top-Left Corner -->
+  <a href="mailto:airdrophubgroup@gmail.com" style="position: absolute; top: 12px; left: 16px; background: linear-gradient(135deg, #4f46e5, #06b6d4); color: #fff; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; text-decoration: none; box-shadow: 0 0 10px rgba(79, 70, 229, 0.6), 0 0 20px rgba(6, 182, 212, 0.4); border: 1px solid rgba(255, 255, 255, 0.3); z-index: 50; display: flex; align-items: center; gap: 4px;">
+    🎧 Support
+  </a>
+
+  <!-- Fixed Official Marketplace Text at Top-Right Corner -->
+  <div style="position: absolute; top: 14px; right: 16px; font-size: 11px; color: #94a3b8; font-weight: 600; z-index: 50; pointer-events: none; background: rgba(15, 23, 42, 0.75); padding: 4px 8px; border-radius: 8px; backdrop-filter: blur(4px);">
+    🌍 Worldcoin Marketplace
   </div>
 
-  <div class="app-container">
+  <div class="app-container" style="margin-top: 45px;">
     <header class="header">
       <h1>🌍 Want Sell On World</h1>
       <button id="loginBtn">Connect Wallet</button>
     </header>
 
     <div class="action-bar" style="display:flex; gap:10px; margin-bottom: 12px;">
-      <!-- Chhota sa Leaderboard Button (Space save karne ke liye) -->
       <button onclick="window.openLeaderboard()" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: none; padding: 10px 16px; border-radius: 12px; font-size: 1.2rem; cursor: pointer; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3);">🏆</button>
-      
       <button id="viewMyAdsBtn" class="btn-primary" style="display:none; width: 100%;">📦 My Ads & Balance</button>
     </div>
 
@@ -123,7 +130,6 @@
             <option value="Automotive">Automotive</option>
             <option value="Other">Other</option>
           </select>
-          
           <select id="adCountry" required>
             <option value="" disabled selected>Select Country / Region</option>
             <option value="ALL">🌐 All Countries / Other</option>
@@ -133,16 +139,13 @@
             <option value="GB">🇬🇧 United Kingdom</option>
             <option value="SG">🇸🇬 Singapore</option>
           </select>
-
           <div style="display:flex; gap:6px;">
             <input type="text" id="adAddress" placeholder="Click detect to auto-fill address & GPS" required style="flex:1;" readonly>
             <button type="button" onclick="window.detectLocation()" style="background:#10b981; color:#fff; border:none; padding:8px 12px; border-radius:8px; font-weight:bold; cursor:pointer;">📍 Detect GPS</button>
           </div>
-
           <textarea id="description" placeholder="Description (No Phone Numbers)" required style="resize:none; height:60px;"></textarea>
           <input type="number" id="price" placeholder="Price in WLD" required>
           <input type="file" id="imageInput" multiple accept="image/*" required style="padding: 6px; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 10px;">
-          
           <div style="display: flex; gap: 8px;">
             <button type="button" onclick="document.getElementById('adModal').style.display='none'" style="background: #e2e8f0; color: #475569; flex: 1; padding: 12px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 1rem;">Cancel</button>
             <button type="submit" class="btn-pay" style="flex: 2; margin: 0;">Post Now (0.1 WLD)</button>
@@ -151,18 +154,13 @@
       </div>
     </div>
 
-    <!-- Leaderboard Modal (New) -->
+    <!-- Leaderboard Modal -->
     <div id="leaderboardModal" class="modal" style="display:none; z-index: 1000;">
       <div class="modal-content">
         <span class="close" onclick="document.getElementById('leaderboardModal').style.display='none'">&times;</span>
         <h2 style="color: #f59e0b; margin-top: 0; display: flex; align-items: center; gap: 8px;">🏆 SOW Leaderboard</h2>
         <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 10px;">Top sellers earning SOW Coins</p>
-        
-        <div id="leaderboardContainer" style="max-height: 400px; overflow-y: auto; margin-top: 10px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;">
-          <!-- Realtime users render here -->
-        </div>
-        
-        <!-- Back Button for Homepage -->
+        <div id="leaderboardContainer" style="max-height: 400px; overflow-y: auto; margin-top: 10px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;"></div>
         <button onclick="document.getElementById('leaderboardModal').style.display='none'" style="background: #e2e8f0; color: #475569; width: 100%; padding: 12px; border: none; border-radius: 10px; font-weight: bold; font-size: 1rem; cursor: pointer;">⬅️ Back to Home</button>
       </div>
     </div>
@@ -173,15 +171,12 @@
         <div id="neonPopupIcon" style="font-size: 65px; margin-bottom: 10px; animation: iconBounce 2s infinite;">🔔</div>
         <h2 id="neonPopupTitle" style="color: #38bdf8; margin: 0 0 10px 0; font-size: 1.6rem; font-weight: 800;">Notice</h2>
         <p id="neonPopupText" style="color: #cbd5e1; font-size: 0.95rem; line-height: 1.5; margin: 0 0 20px 0;">Message goes here</p>
-        
         <div id="neonPopupInputContainer" style="display:none; width: 100%;">
           <input type="text" id="neonPopupInput" placeholder="Type your username..." style="width: 100%; box-sizing: border-box; padding: 12px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #38bdf8; background: rgba(0,0,0,0.3); color: #fff; font-size: 1rem; outline: none; text-align: center;">
         </div>
-
         <div id="neonPopupAlertBtnContainer">
-          <button id="neonPopupAlertBtn" style="background: linear-gradient(135deg, #38bdf8, #4f46e5); color: #fff; border: none; padding: 12px 30px; border-radius: 12px; font-weight: bold; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 15px rgba(56,189,248,0.4); transition: transform 0.2s;" onmousedown="this.style.transform='scale(0.95)'" onmouseup="this.style.transform='scale(1)'">OK</button>
+          <button id="neonPopupAlertBtn" style="background: linear-gradient(135deg, #38bdf8, #4f46e5); color: #fff; border: none; padding: 12px 30px; border-radius: 12px; font-weight: bold; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 15px rgba(56,189,248,0.4); transition: transform 0.2s;">OK</button>
         </div>
-        
         <div id="neonPopupConfirmBtnContainer" style="display:none; gap: 10px; justify-content: center;">
           <button id="neonPopupConfirmNoBtn" style="background: rgba(255,255,255,0.05); color: #cbd5e1; border: 1px solid #475569; padding: 12px 20px; border-radius: 12px; font-weight: bold; font-size: 1rem; cursor: pointer;">Cancel</button>
           <button id="neonPopupConfirmYesBtn" style="background: linear-gradient(135deg, #ef4444, #b91c1c); color: #fff; border: none; padding: 12px 20px; border-radius: 12px; font-weight: bold; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);">Yes, Delete</button>
@@ -197,12 +192,25 @@
       </div>
     </div>
 
+    <!-- NEW: Full Screen Image Zoom / Slider Modal -->
+    <div id="imageViewerModal" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 20000; background: rgba(0,0,0,0.95); flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
+      <!-- Wapas Ad par jaane ka button -->
+      <button onclick="document.getElementById('imageViewerModal').style.display='none'" style="position: absolute; top: 20px; left: 20px; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.3); padding: 10px 18px; border-radius: 10px; font-weight: bold; cursor: pointer; z-index: 20001; font-size: 1rem;">⬅️ Back to Ad</button>
+      
+      <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; height: 70vh; padding: 0 10px; box-sizing: border-box;">
+        <button onclick="window.prevImage()" class="slider-btn">&#10094;</button>
+        <img id="viewerImage" src="" style="max-width: 70%; max-height: 70vh; object-fit: contain; border-radius: 8px; box-shadow: 0 0 30px rgba(0,0,0,0.8);">
+        <button onclick="window.nextImage()" class="slider-btn">&#10095;</button>
+      </div>
+      <div id="imageCounter" style="color: #fff; margin-top: 20px; font-size: 1.2rem; font-weight: bold; background: rgba(255,255,255,0.2); padding: 5px 15px; border-radius: 20px;">1 / 3</div>
+    </div>
+
     <!-- Chat Modal -->
     <div id="chatModal" class="modal" style="display:none; z-index: 1000;">
       <div class="modal-content" style="max-width:400px;">
         <span class="close" onclick="document.getElementById('chatModal').style.display='none'">&times;</span>
         <h3 id="chatTitle">Chat</h3>
-        <div id="chatMessages" style="height:200px; border:1px solid #cbd5e1; border-radius:8px; padding:10px; overflow-y:auto; margin:10px 0; background:#f8fafc; display:flex; flex-direction:column; gap:6px;"></div>
+        <div id="chatMessages" style="height:300px; border:1px solid #cbd5e1; border-radius:8px; padding:10px; overflow-y:auto; margin:10px 0; background:#f8fafc; display:flex; flex-direction:column; gap:6px;"></div>
         <div style="display:flex; gap:6px;">
           <button onclick="document.getElementById('chatModal').style.display='none'" style="background: #e2e8f0; color: #475569; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold;">⬅️</button>
           <input type="text" id="chatInput" placeholder="Type a message..." style="flex:1; padding:8px; border-radius:6px; border:1px solid #cbd5e1;">
