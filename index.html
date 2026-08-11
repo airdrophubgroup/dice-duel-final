@@ -13,7 +13,7 @@
     </header>
 
     <div class="action-bar" style="display:flex; gap:10px;">
-      <button id="viewMyAdsBtn" class="btn-primary" style="display:none; width: 100%;">📦 My Ads</button>
+      <button id="viewMyAdsBtn" class="btn-primary" style="display:none; width: 100%;">📦 My Ads (Manage & Sold Out)</button>
     </div>
 
     <button type="button" onclick="document.getElementById('adModal').style.display='flex'" class="btn-success" style="width:100%; padding:16px; font-size:1rem; font-weight:700; border-radius:16px; margin-bottom:18px; cursor:pointer;">
@@ -67,6 +67,7 @@
       <div class="modal-content">
         <span class="close" onclick="document.getElementById('adModal').style.display='none'">&times;</span>
         <h2>Post New Ad</h2>
+        <p style="font-size: 11px; color: #ef4444; margin-bottom: 8px; font-weight: 600;">⚠️ Note: Ads cannot be edited later. Phone numbers/contacts are strictly not allowed in title or description.</p>
         <form id="adForm">
           <div style="display:flex; flex-direction:column; gap:4px; text-align:left;">
             <label style="font-size:12px; font-weight:600; color:#334155;">Product Title</label>
@@ -103,7 +104,7 @@
           </div>
 
           <div style="display:flex; flex-direction:column; gap:4px; text-align:left;">
-            <label style="font-size:12px; font-weight:600; color:#334155;">Description</label>
+            <label style="font-size:12px; font-weight:600; color:#334155;">Description (No Phone Numbers)</label>
             <textarea id="description" placeholder="Write item details..." required style="resize:none; height:70px;"></textarea>
           </div>
 
@@ -122,10 +123,12 @@
       </div>
     </div>
 
+    <!-- My Ads Modal for managing & Sold Out -->
     <div id="myAdsModal" class="modal" style="display:none;">
       <div class="modal-content">
         <span class="close" onclick="document.getElementById('myAdsModal').style.display='none'">&times;</span>
-        <h2>My Posted Ads</h2>
+        <h2>My Posted Ads (Manage / Sold Out)</h2>
+        <p style="font-size:11px; color:#64748b; margin-bottom:10px;">Ads cannot be edited. You can mark them as "Sold Out" which will delete them from the marketplace.</p>
         <div id="myAdsContainer" style="max-height: 350px; overflow-y: auto; margin-top: 10px;"></div>
       </div>
     </div>

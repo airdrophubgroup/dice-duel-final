@@ -46,9 +46,24 @@ async function handleLogin() {
   }
 }
 
+// Function to check phone numbers (detects 10 digit numbers, country codes, spaces/hyphens)
+function containsPhoneNumber(text) {
+  // Regex to detect sequence of 10 or more numbers or common phone formats
+  const phoneRegex = /(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\b\d{10}\b/;
+  return phoneRegex.test(text);
+}
+
 async function handlePostAd(e) {
   e.preventDefault();
   if (!userWallet) return alert("Please connect your wallet first!");
+
+  const title = document.getElementById('title').value;
+  const description = document.getElementById('description').value;
+
+  // Restriction check for phone number
+  if (containsPhoneNumber(title) || containsPhoneNumber(description)) {
+    return alert("❌ Error: Phone numbers or contact details are strictly not allowed in Title or Description!");
+  }
 
   const fileInput = document.getElementById('imageInput');
   const files = fileInput.files;
@@ -86,8 +101,8 @@ async function handlePostAd(e) {
 
   const { error: insertError } = await supabase.from('listings').insert([{
     seller_address: userWallet,
-    title: document.getElementById('title').value,
-    description: document.getElementById('description').value,
+    title,
+    description,
     price: document.getElementById('price').value,
     category: document.getElementById('category').value,
     country: document.getElementById('adCountry').value,
@@ -99,7 +114,7 @@ async function handlePostAd(e) {
   }]);
 
   if (!insertError) {
-    alert('Ad posted successfully with 0.1 WLD payment and images uploaded!');
+    alert('Ad posted successfully!');
     document.getElementById('adModal').style.display = 'none';
     document.getElementById('adForm').reset();
     fetchListings();
@@ -166,12 +181,12 @@ async function openMyAdsModal() {
   document.getElementById('myAdsModal').style.display = 'flex';
   
   const container = document.getElementById('myAdsContainer');
-  container.innerHTML = `<p class="loading-text">Loading...</p>`;
+  container.innerHTML = `<p class="loading-text">Loading your ads...</p>`;
 
   const { data } = await supabase.from('listings').select('*').eq('seller_address', userWallet).eq('status', 'active');
 
   if (!data || data.length === 0) {
-    container.innerHTML = `<p style="text-align:center; color:#64748b; padding:20px;">No ads posted yet.</p>`;
+    container.innerHTML = `<p style="text-align:center; color:#64748b; padding:20px;">You haven't posted any active ads yet.</p>`;
     return;
   }
 
@@ -181,18 +196,20 @@ async function openMyAdsModal() {
         <h4 style="font-size:0.9rem; color:#1e293b;">${item.title}</h4>
         <p style="font-size:0.8rem; color:#10b981;">${item.price} WLD (${item.country})</p>
       </div>
-      <button onclick="window.deleteMyAd('${item.id}')" style="background:#ef4444; color:#fff; padding:6px 10px; font-size:11px; border-radius:6px;">Delete</button>
+      <button onclick="window.markAsSoldOut('${item.id}')" style="background:#10b981; color:#fff; padding:6px 10px; font-size:11px; border-radius:6px; font-weight:bold; cursor:pointer;">Sold Out</button>
     </div>
   `).join('');
 }
 
-window.deleteMyAd = async function(id) {
-  if (confirm("Are you sure? Delete this ad?")) {
+window.markAsSoldOut = async function(id) {
+  if (confirm("Are you sure this item is Sold Out? Marking it as sold out will permanently remove the ad from the marketplace.")) {
     const { error } = await supabase.from('listings').delete().match({ id });
     if (!error) {
-      alert("Deleted.");
+      alert("Ad marked as Sold Out and removed successfully.");
       openMyAdsModal();
       fetchListings();
+    } else {
+      alert("Error updating ad status.");
     }
   }
 }
