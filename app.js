@@ -1,17 +1,23 @@
-import { MiniKit } from '@worldcoin/minikit-js';
+import { MiniKit, Tokens, tokenToDecimals } from '@worldcoin/minikit-js';
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = 'https://adicdkrfinbudpaqqjai.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFkaWNka3JmaW5idWRwYXFxamFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxNzM4MzMsImV4cCI6MjEwMTc0OTgzM30.ksv1zdQVimQTNWnrHaRqEXcLw7-3G6_zjAyEOZZkr0s';
 const ADMIN_WALLET = '0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1';
 
+// 👇 YEH ZAROORI HAI: World ID Developer Portal (developer.worldcoin.org) se apna
+// App ID yahan daalo. Isske bina walletAuth aur pay dono fail/hang ho sakte hain.
+const APP_ID = 'app_YOUR_APP_ID_HERE';
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 let userWallet = null;
 
 document.addEventListener('DOMContentLoaded', () => {
-  if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
-    MiniKit.install();
-  }
+  // BUG THA YAHAN: pehle `isInstalled()` check ho raha tha aur uske TRUE hone par
+  // hi `install()` call hota tha. Lekin isInstalled() sirf install() ke baad hi
+  // kaam karta hai — isliye install() kabhi chalta hi nahi tha aur wallet connect
+  // fail ho raha tha. Fix: install() ko seedha, unconditionally, sabse pehle call karo.
+  MiniKit.install(APP_ID);
   setupUI();
   fetchListings();
 });
@@ -32,17 +38,36 @@ function setupUI() {
 }
 
 async function handleLogin() {
-  const res = await MiniKit.commandsAsync.walletAuth({
-    nonce: '12345678',
-    requestId: '0',
-    expirationTime: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000),
-    statement: 'Sign in to Want Sell On World',
-  });
+  // Yeh app sirf World App ke webview ke andar hi wallet commands chala sakta hai.
+  // Normal mobile/desktop browser mein isInstalled() hamesha false rahega.
+  if (!MiniKit.isInstalled()) {
+    alert('⚠️ Wallet connect sirf World App ke andar kaam karta hai. Is app ko World App mein open karein.');
+    return;
+  }
 
-  if (res.finalPayload?.status === 'success') {
-    userWallet = res.finalPayload.address;
-    document.getElementById('loginBtn').innerText = `Connected: ${userWallet.substring(0, 6)}...`;
-    document.getElementById('viewMyAdsBtn').style.display = 'block';
+  try {
+    // Random alphanumeric nonce — static nonce ('12345678') SIWE ke liye reject
+    // ho sakta hai naye minikit-js versions mein.
+    const nonce = crypto.randomUUID().replace(/-/g, '');
+
+    const res = await MiniKit.commandsAsync.walletAuth({
+      nonce,
+      requestId: '0',
+      expirationTime: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000),
+      statement: 'Sign in to Want Sell On World',
+    });
+
+    if (res.finalPayload?.status === 'success') {
+      userWallet = res.finalPayload.address;
+      document.getElementById('loginBtn').innerText = `Connected: ${userWallet.substring(0, 6)}...`;
+      document.getElementById('viewMyAdsBtn').style.display = 'block';
+    } else {
+      console.error('walletAuth failed:', res.finalPayload);
+      alert('❌ Wallet connect nahi ho paaya: ' + (res.finalPayload?.error_code || 'unknown error'));
+    }
+  } catch (err) {
+    console.error('walletAuth exception:', err);
+    alert('❌ Wallet connect mein error aaya. Console (F12/inspect) check karein.');
   }
 }
 
@@ -56,6 +81,7 @@ function containsPhoneNumber(text) {
 async function handlePostAd(e) {
   e.preventDefault();
   if (!userWallet) return alert("Please connect your wallet first!");
+  if (!MiniKit.isInstalled()) return alert("⚠️ Payment sirf World App ke andar kaam karta hai.");
 
   const title = document.getElementById('title').value;
   const description = document.getElementById('description').value;
@@ -70,15 +96,22 @@ async function handlePostAd(e) {
   if (files.length === 0) return alert("Please select at least one image!");
   if (files.length > 4) return alert("You can upload a maximum of 4 photos!");
 
-  const paymentResponse = await MiniKit.commandsAsync.pay({
-    reference: 'listing_fee_' + Date.now(),
-    to: ADMIN_WALLET,
-    tokens: [{ symbol: 'WLD', token_amount: '100000000000000000' }],
-    description: 'Listing Fee: 0.1 WLD',
-  });
+  let paymentResponse;
+  try {
+    paymentResponse = await MiniKit.commandsAsync.pay({
+      reference: 'listing_fee_' + Date.now(),
+      to: ADMIN_WALLET,
+      tokens: [{ symbol: Tokens.WLD, token_amount: tokenToDecimals(0.1, Tokens.WLD).toString() }],
+      description: 'Listing Fee: 0.1 WLD',
+    });
+  } catch (err) {
+    console.error('pay exception:', err);
+    return alert('❌ Payment command chalane mein error aaya. Console check karein.');
+  }
 
   if (paymentResponse.finalPayload?.status !== 'success') {
-    return alert('Payment failed or cancelled.');
+    console.error('Payment failed:', paymentResponse.finalPayload);
+    return alert('❌ Payment failed ya cancel ho gaya: ' + (paymentResponse.finalPayload?.error_code || ''));
   }
 
   let imageUrls = ['', '', '', ''];
