@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function setupUI() {
   document.getElementById('loginBtn').addEventListener('click', handleLogin);
   document.getElementById('viewMyAdsBtn').addEventListener('click', openMyAdsModal);
+  
   document.getElementById('adForm').addEventListener('submit', handlePostAd);
   document.getElementById('countryFilter').addEventListener('change', () => fetchListings());
   document.getElementById('categoryFilter').addEventListener('change', () => fetchListings());
@@ -30,14 +31,6 @@ function setupUI() {
   rangeInput.addEventListener('change', () => {
     fetchListings();
   });
-}
-
-// Global scope function so HTML buttons can trigger it directly
-window.toggleModal = function(modalId, show) {
-  const modal = document.getElementById(modalId);
-  if (modal) {
-    modal.style.display = show ? 'flex' : 'none';
-  }
 }
 
 async function handleLogin() {
@@ -66,11 +59,12 @@ async function handlePostAd(e) {
   const country = document.getElementById('adCountry').value;
   const imageUrl = document.getElementById('imageUrl').value;
 
+  // Test Fee: 0.1 WLD
   const paymentResponse = await MiniKit.commandsAsync.pay({
     reference: 'listing_fee_' + Date.now(),
     to: ADMIN_WALLET,
-    tokens: [{ symbol: 'WLD', token_amount: '1000000000000000000' }],
-    description: 'Listing Fee: 1 WLD',
+    tokens: [{ symbol: 'WLD', token_amount: '100000000000000000' }],
+    description: 'Listing Fee: 0.1 WLD',
   });
 
   if (paymentResponse.finalPayload?.status === 'success') {
@@ -84,8 +78,8 @@ async function handlePostAd(e) {
       image_url: imageUrl,
       status: 'active'
     }]);
-    alert('Ad posted successfully with 1 WLD payment!');
-    window.toggleModal('adModal', false);
+    alert('Ad posted successfully with 0.1 WLD payment!');
+    document.getElementById('adModal').style.display = 'none';
     document.getElementById('adForm').reset();
     fetchListings();
   } else {
@@ -111,7 +105,7 @@ async function fetchListings() {
   const { data } = await query;
   
   if (!data || data.length === 0) {
-    container.innerHTML = `<p class="loading-text">No active listings found for this filter.</p>`;
+    container.innerHTML = `<p class="loading-text">No active listings found.</p>`;
     return;
   }
 
@@ -121,7 +115,7 @@ async function fetchListings() {
   });
 
   if (filteredData.length === 0) {
-    container.innerHTML = `<p class="loading-text">No listings found within ${maxDistance} km range.</p>`;
+    container.innerHTML = `<p class="loading-text">No listings found within ${maxDistance} km.</p>`;
     return;
   }
 
@@ -135,7 +129,7 @@ async function fetchListings() {
           <h3 style="font-size:1rem; margin:2px 0;">${item.title}</h3>
           <p style="font-weight:bold; color:#10b981;">${item.price} WLD</p>
         </div>
-        <button onclick="contactSeller('${item.seller_address}', '${item.title}')" style="background:#4f46e5; color:#fff; padding:6px 12px; font-size:12px; border-radius:8px; align-self:center;">Chat</button>
+        <button onclick="window.contactSeller('${item.seller_address}', '${item.title}')" style="background:#4f46e5; color:#fff; padding:6px 12px; font-size:12px; border-radius:8px; align-self:center;">Chat</button>
       </div>
     `;
   }).join('');
@@ -146,16 +140,16 @@ window.contactSeller = function(sellerWallet, adTitle) {
 }
 
 async function openMyAdsModal() {
-  if (!userWallet) return alert("Please connect wallet first!");
-  window.toggleModal('myAdsModal', true);
+  if (!userWallet) return alert("Please connect first!");
+  document.getElementById('myAdsModal').style.display = 'flex';
   
   const container = document.getElementById('myAdsContainer');
-  container.innerHTML = `<p class="loading-text">Loading your ads...</p>`;
+  container.innerHTML = `<p class="loading-text">Loading...</p>`;
 
   const { data } = await supabase.from('listings').select('*').eq('seller_address', userWallet).eq('status', 'active');
 
   if (!data || data.length === 0) {
-    container.innerHTML = `<p style="text-align:center; color:#64748b; padding:20px;">You haven't posted any ads yet.</p>`;
+    container.innerHTML = `<p style="text-align:center; color:#64748b; padding:20px;">No ads posted yet.</p>`;
     return;
   }
 
@@ -163,22 +157,20 @@ async function openMyAdsModal() {
     <div style="background:rgba(0,0,0,0.03); padding:10px; border-radius:10px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
       <div>
         <h4 style="font-size:0.9rem; color:#1e293b;">${item.title}</h4>
-        <p style="font-size:0.8rem; color:#10b981;">${item.price} WLD (${item.country}) - [${item.category}]</p>
+        <p style="font-size:0.8rem; color:#10b981;">${item.price} WLD (${item.country})</p>
       </div>
-      <button onclick="deleteMyAd('${item.id}')" style="background:#ef4444; color:#fff; padding:6px 10px; font-size:11px; border-radius:6px;">Delete</button>
+      <button onclick="window.deleteMyAd('${item.id}')" style="background:#ef4444; color:#fff; padding:6px 10px; font-size:11px; border-radius:6px;">Delete</button>
     </div>
   `).join('');
 }
 
 window.deleteMyAd = async function(id) {
-  if (confirm("Are you sure? Once deleted, it cannot be recovered and you must pay 1 WLD to repost.")) {
+  if (confirm("Are you sure? Delete this ad?")) {
     const { error } = await supabase.from('listings').delete().match({ id });
     if (!error) {
-      alert("Ad deleted successfully.");
+      alert("Deleted.");
       openMyAdsModal();
       fetchListings();
-    } else {
-      alert("Error deleting ad.");
     }
   }
 }
