@@ -273,7 +273,6 @@ async function handleLogin() {
       document.getElementById('loginBtn').innerText = `👤 ${currentUsername}`;
       document.getElementById('viewMyAdsBtn').style.display = 'block';
 
-      // Check if logged in user is Admin
       if (userWallet.toLowerCase() === ADMIN_WALLET.toLowerCase()) {
         document.getElementById('adminPanelBtn').style.display = 'block';
       }
@@ -356,9 +355,6 @@ function containsPhoneNumber(text) {
   return phoneRegex.test(text);
 }
 
-// ==========================================
-// PROHIBITED / ILLEGAL WORDS CHECKER
-// ==========================================
 const forbiddenWords = ['weapon', 'drug', 'gun', 'hack', 'counterfeit', 'illegal', 'adult', 'bomb', 'firearm'];
 
 function validateListingContent(title, description) {
@@ -371,9 +367,6 @@ function validateListingContent(title, description) {
   return null;
 }
 
-// ==========================================
-// FULL-SCREEN IMAGE SLIDER SYSTEM
-// ==========================================
 let viewerImages = [];
 let currentImageIndex = 0;
 
@@ -403,9 +396,6 @@ function updateViewer() {
   document.getElementById('imageCounter').innerText = `${currentImageIndex + 1} / ${viewerImages.length}`;
 }
 
-// ==========================================
-// AUTOMATIC IMAGE COMPRESSION HELPER
-// ==========================================
 function compressImage(file, maxWidth = 1000, quality = 0.7) {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -461,7 +451,6 @@ async function handlePostAd(e) {
     return;
   }
 
-  // Illegal Content Validation Check
   const restrictedWord = validateListingContent(title, description);
   if (restrictedWord) {
     await showNeonPopup('Prohibited Item', `Your listing contains a restricted or illegal keyword ("${restrictedWord}"). Please follow marketplace safety guidelines.`, '🛡️');
@@ -482,43 +471,11 @@ async function handlePostAd(e) {
   let paymentSuccessful = false;
   try {
     const feeWei = tokenToDecimals(1, Tokens.WLD).toString(); // 1 WLD Listing Fee
-    const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({
-      transaction: [
-        {
-          address: PERMIT2_ADDRESS,
-          abi: [
-            {
-              "inputs": [
-                { "internalType": "address", "name": "token", "type": "address" },
-                { "internalType": "address", "name": "spender", "type": "address" },
-                { "internalType": "uint160", "name": "amount", "type": "uint160" },
-                { "internalType": "uint48", "name": "expiration", "type": "uint48" }
-              ],
-              "name": "approve",
-              "outputs": [],
-              "stateMutability": "nonpayable",
-              "type": "function"
-            }
-          ],
-          functionName: "approve",
-          args: [
-            WLD_TOKEN_ADDRESS,
-            CONTRACT_ADDRESS,
-            feeWei,
-            Math.floor(Date.now() / 1000) + 3600
-          ]
-        },
-        {
-          address: CONTRACT_ADDRESS,
-          abi: CONTRACT_ABI,
-          functionName: "joinMatch", // Or contract payment transaction mapping
-          args: [
-            "0x0000000000000000000000000000000000000000000000000000000000000000",
-            feeWei,
-            "0x0000000000000000000000000000000000000000"
-          ]
-        }
-      ]
+    const { finalPayload } = await MiniKit.commandsAsync.pay({
+      reference: randomAlphaNumeric(16),
+      to: ADMIN_WALLET,
+      tokens: [{ symbol: Tokens.WLD, token_amount: feeWei }],
+      description: 'Listing Fee: 1 WLD',
     });
     paymentSuccessful = (finalPayload?.status === 'success');
   } catch (err) {}
@@ -692,9 +649,6 @@ window.openAdDetails = async function(id) {
   document.getElementById('adDetailsModal').style.display = 'flex';
 }
 
-// ==========================================
-// FEATURE 1: PUSH NOTIFICATIONS & LIVE CHAT
-// ==========================================
 window.openChat = async function(sellerWallet, adTitle, sellerName) {
   if (!userWallet || !currentUsername) {
     await showNeonPopup('Hold On', 'Please connect your wallet first to chat!', '💬');
@@ -753,9 +707,6 @@ window.sendMessage = async function() {
   }]);
 }
 
-// ==========================================
-// FEATURE 2: RATINGS & REVIEWS SYSTEM
-// ==========================================
 window.openReviews = async function(sellerAddress, sellerName) {
   document.getElementById('reviewsModalTitle').innerText = `${sellerName}'s Ratings & Reviews`;
   document.getElementById('reviewsModal').style.display = 'flex';
@@ -807,9 +758,6 @@ window.submitReview = async function() {
   }
 }
 
-// ==========================================
-// FEATURE 4: ADMIN PANEL DASHBOARD
-// ==========================================
 window.openAdminPanel = async function() {
   if (!userWallet || userWallet.toLowerCase() !== ADMIN_WALLET.toLowerCase()) {
     await showNeonPopup('Unauthorized', 'Access denied. Admin only.', '🚫');
