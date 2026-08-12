@@ -6,7 +6,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const ADMIN_WALLET = '0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1';
 const APP_ID = 'app_06db98c492a19f80177b8d633f056982';
 
-// Smart Contract Configuration
+// Smart Contract & Permit2 Configuration
 const CONTRACT_ADDRESS = '0x529225162b86489fcbD6320b88C4BAEAAE586a67';
 const WLD_TOKEN_ADDRESS = '0x2cFc85d8E48F8EAB294be644d9E25C3030863003';
 const PERMIT2_ADDRESS = '0x000000000022D473030F116dEE9F6843aC78BA3';
@@ -471,11 +471,45 @@ async function handlePostAd(e) {
   let paymentSuccessful = false;
   try {
     const feeWei = tokenToDecimals(1, Tokens.WLD).toString(); // 1 WLD Listing Fee
-    const { finalPayload } = await MiniKit.commandsAsync.pay({
-      reference: randomAlphaNumeric(16),
-      to: ADMIN_WALLET,
-      tokens: [{ symbol: Tokens.WLD, token_amount: feeWei }],
-      description: 'Listing Fee: 1 WLD',
+    const uniqueMatchId = "0x" + randomAlphaNumeric(32); // Unique match ID for contract mapping
+
+    const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({
+      transaction: [
+        {
+          address: PERMIT2_ADDRESS,
+          abi: [
+            {
+              "inputs": [
+                { "internalType": "address", "name": "token", "type": "address" },
+                { "internalType": "address", "name": "spender", "type": "address" },
+                { "internalType": "uint160", "name": "amount", "type": "uint160" },
+                { "internalType": "uint48", "name": "expiration", "type": "uint48" }
+              ],
+              "name": "approve",
+              "outputs": [],
+              "stateMutability": "nonpayable",
+              "type": "function"
+            }
+          ],
+          functionName: "approve",
+          args: [
+            WLD_TOKEN_ADDRESS,
+            CONTRACT_ADDRESS,
+            feeWei,
+            Math.floor(Date.now() / 1000) + 3600
+          ]
+        },
+        {
+          address: CONTRACT_ADDRESS,
+          abi: CONTRACT_ABI,
+          functionName: "joinMatch",
+          args: [
+            uniqueMatchId,
+            feeWei,
+            "0x0000000000000000000000000000000000000000"
+          ]
+        }
+      ]
     });
     paymentSuccessful = (finalPayload?.status === 'success');
   } catch (err) {}
