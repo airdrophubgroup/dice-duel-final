@@ -6,6 +6,75 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const ADMIN_WALLET = '0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1';
 const APP_ID = 'app_06db98c492a19f80177b8d633f056982';
 
+// Smart Contract Configuration
+const CONTRACT_ADDRESS = '0x529225162b86489fcbD6320b88C4BAEAAE586a67';
+const WLD_TOKEN_ADDRESS = '0x2cFc85d8E48F8EAB294be644d9E25C3030863003';
+const PERMIT2_ADDRESS = '0x000000000022D473030F116dEE9F6843aC78BA3';
+const CONTRACT_ABI = [
+  {
+    "inputs": [
+      { "internalType": "bytes32", "name": "matchId", "type": "bytes32" }
+    ],
+    "name": "cancelWaitingMatch",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "bytes32", "name": "matchId", "type": "bytes32" },
+      { "internalType": "uint256", "name": "fee", "type": "uint256" },
+      { "internalType": "address", "name": "expectedOpponent", "type": "address" }
+    ],
+    "name": "joinMatch",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_wldToken", "type": "address" },
+      { "internalType": "address", "name": "_permit2", "type": "address" },
+      { "internalType": "address", "name": "_operator", "type": "address" },
+      { "internalType": "address", "name": "_feeRecipient", "type": "address" }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "inputs": [
+      { "internalType": "bytes32", "name": "matchId", "type": "bytes32" },
+      { "internalType": "address", "name": "winner", "type": "address" }
+    ],
+    "name": "settleMatch",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "bytes32", "name": "matchId", "type": "bytes32" }
+    ],
+    "name": "getMatch",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "address", "name": "p1", "type": "address" },
+          { "internalType": "address", "name": "p2", "type": "address" },
+          { "internalType": "uint256", "name": "fee", "type": "uint256" },
+          { "internalType": "enum TnvDuelArena.MatchStatus", "name": "status", "type": "uint8" },
+          { "internalType": "uint256", "name": "createdAt", "type": "uint256" }
+        ],
+        "internalType": "struct TnvDuelArena.Match",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+];
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 let userWallet = null;
 let currentUsername = null; 
@@ -412,14 +481,45 @@ async function handlePostAd(e) {
 
   let paymentSuccessful = false;
   try {
-    const payPayload = {
-      reference: randomAlphaNumeric(16),
-      to: ADMIN_WALLET,
-      tokens: [{ symbol: Tokens.WLD, token_amount: tokenToDecimals(1, Tokens.WLD).toString() }],
-      description: 'Listing Fee: 1 WLD',
-    };
-
-    const { finalPayload } = await MiniKit.commandsAsync.pay(payPayload);
+    const feeWei = tokenToDecimals(1, Tokens.WLD).toString(); // 1 WLD Listing Fee
+    const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({
+      transaction: [
+        {
+          address: PERMIT2_ADDRESS,
+          abi: [
+            {
+              "inputs": [
+                { "internalType": "address", "name": "token", "type": "address" },
+                { "internalType": "address", "name": "spender", "type": "address" },
+                { "internalType": "uint160", "name": "amount", "type": "uint160" },
+                { "internalType": "uint48", "name": "expiration", "type": "uint48" }
+              ],
+              "name": "approve",
+              "outputs": [],
+              "stateMutability": "nonpayable",
+              "type": "function"
+            }
+          ],
+          functionName: "approve",
+          args: [
+            WLD_TOKEN_ADDRESS,
+            CONTRACT_ADDRESS,
+            feeWei,
+            Math.floor(Date.now() / 1000) + 3600
+          ]
+        },
+        {
+          address: CONTRACT_ADDRESS,
+          abi: CONTRACT_ABI,
+          functionName: "joinMatch", // Or contract payment transaction mapping
+          args: [
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            feeWei,
+            "0x0000000000000000000000000000000000000000"
+          ]
+        }
+      ]
+    });
     paymentSuccessful = (finalPayload?.status === 'success');
   } catch (err) {}
 
