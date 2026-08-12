@@ -4,6 +4,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 const SUPABASE_URL = 'https://adicdkrfinbudpaqqjai.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFkaWNka3JmaW5idWRwYXFxamFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxNzM4MzMsImV4cCI6MjEwMTc0OTgzM30.ksv1zdQVimQTNWnrHaRqEXcLw7-3G6_zjAyEOZZkr0s';
 const ADMIN_WALLET = '0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1';
+const OPERATOR_WALLET = '0x8FB70CDFb545C7D9b842cBE37B9aba84059Bf14b';
 const APP_ID = 'app_06db98c492a19f80177b8d633f056982';
 
 // Smart Contract & Permit2 Configuration
@@ -590,11 +591,11 @@ window.cancelEscrowMatch = async function(matchId) {
 }
 
 // ==========================================
-// AUTOMATED WINNER PAYOUT FUNCTION (Admin / Operator Triggered)
+// AUTOMATED WINNER PAYOUT FUNCTION (Operator Triggered)
 // ==========================================
 window.adminSettleMatch = async function(matchId, winnerAddress) {
-  if (!userWallet || userWallet.toLowerCase() !== ADMIN_WALLET.toLowerCase()) {
-    await showNeonPopup('Unauthorized', 'Admin access required.', '🚫');
+  if (!userWallet || userWallet.toLowerCase() !== OPERATOR_WALLET.toLowerCase()) {
+    await showNeonPopup('Unauthorized', 'Only the Operational Wallet can settle matches.', '🚫');
     return;
   }
   try {
