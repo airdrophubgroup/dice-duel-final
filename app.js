@@ -39,9 +39,6 @@ window.addEventListener('DOMContentLoaded', async () => {
         new Promise((_, reject) => setTimeout(() => reject(new Error('Auth timeout')), 4000))
       ]);
     } catch(err) {
-      // Sign-in didn't complete in time — fall back to a random LOCAL test identity.
-      // NEVER fall back to ADMIN_WALLET here: that would let any user with a
-      // failed/slow sign-in silently become "admin" and see admin panels / revenue.
       let fakeAddress = localStorage.getItem("myAddress");
       let fakeUsername = localStorage.getItem("myUsername");
       if (!fakeAddress || fakeAddress.toLowerCase() === ADMIN_WALLET.toLowerCase()) {
@@ -67,8 +64,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     setUserData(fakeUsername || '@TestPC', fakeAddress);
   }
 
-  // Stuck matches cleanup — ONLY this user's own unmatched "waiting" matches,
-  // and refund the fee if one is found. Must NEVER touch other players' matches.
   if (myAddress) {
     try {
       const { data: stuckMatches } = await supabaseClient
@@ -93,7 +88,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     } catch (e) {}
   }
 
-  // UI elements creation safely inside DOMContentLoaded
   let waitingOverlay = $('waiting-overlay');
   if (waitingOverlay && !document.getElementById('cancel-search-btn')) {
     const cancelBtn = document.createElement('button');
@@ -356,7 +350,7 @@ async function fetchAdminWithdrawRequests() {
         <div class="admin-req-item">
           <div class="admin-req-row">
             <span style="color:var(--photon); font-family:'JetBrains Mono', monospace;" title="${req.wallet_address}">${shortAddr}</span>
-            <button onclick="navigator.clipboard.writeText('${req.wallet_address}'); alert('User address copied!');" style="background:rgba(255,255,255,0.1); border:none; color:#fff; font-size:9px; padding:2px 6px; border-radius:4px; cursor:pointer;">Copy Addr</button>
+            <button onclick="navigator.clipboard.writeText('${req.wallet_address}'); showNeonAlert('User address copied!');" style="background:rgba(255,255,255,0.1); border:none; color:#fff; font-size:9px; padding:2px 6px; border-radius:4px; cursor:pointer;">Copy Addr</button>
             <span style="color:var(--gold); font-family:'JetBrains Mono', monospace; font-weight:700;">${req.amount} TNV</span>
           </div>
           <div class="admin-req-row"><span style="font-size:10px; color:var(--slate);">${new Date(req.created_at).toLocaleString()}</span><button class="approve-btn" onclick="openAdminModal('${req.id}', '${req.wallet_address}', ${req.amount})">APPROVE / PAY</button></div>
@@ -393,7 +387,7 @@ async function fetchAdminCheaters() {
 window.promptBlockUser = async function(walletToBlock) {
   if (confirm(`⚠️ Block user: ${walletToBlock}?`)) {
     await supabaseClient.from('user_rewards').update({ is_blocked: true }).eq('wallet_address', walletToBlock);
-    alert('User blocked.');
+    showNeonAlert('User blocked.');
     fetchAdminCheaters();
   }
 };
@@ -409,15 +403,15 @@ window.closeAdminModal = function() { $('admin-approve-modal').style.display = '
 
 window.confirmAdminApproval = async function() {
   let txProof = $('admin-tx-input').value.trim();
-  if (!txProof) { alert('Enter Tx Hash'); return; }
+  if (!txProof) { showNeonAlert('Enter Tx Hash'); return; }
   await supabaseClient.from('withdraw_requests').update({ status: 'approved', tx_hash: txProof }).eq('id', activeAdminReqId);
-  alert('Approved successfully!');
+  showNeonAlert('Approved successfully!');
   closeAdminModal();
   fetchAdminWithdrawRequests();
 };
 
 window.openUserHistoryModal = async function() {
-  if (!myAddress) { alert('Please sign in first!'); return; }
+  if (!myAddress) { showNeonAlert('Please sign in first!'); return; }
   $('user-history-modal').style.display = 'flex';
   const container = $('user-history-list');
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading history...</div>`;
@@ -436,7 +430,7 @@ window.openUserHistoryModal = async function() {
 
 window.closeUserHistoryModal = function() { $('user-history-modal').style.display = 'none'; };
 window.openUserWithdrawalsModal = async function() {
-  if (!myAddress) { alert('Please sign in first!'); return; }
+  if (!myAddress) { showNeonAlert('Please sign in first!'); return; }
   $('user-withdrawals-modal').style.display = 'flex';
   const container = $('user-withdrawals-list');
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading requests...</div>`;
@@ -484,7 +478,7 @@ async function fetchLeaderboard() {
 }
 
 window.openWithdrawModal = function() {
-  if (currentTnvBalance < 5000) { alert('Min 5,000 TNV required!'); return; }
+  if (currentTnvBalance < 5000) { showNeonAlert('Min 5,000 TNV required!'); return; }
   $('modal-bal').innerText = currentTnvBalance;
   $('withdraw-input-container').style.display = 'block';
   $('withdraw-amount-input').value = currentTnvBalance;
@@ -495,10 +489,10 @@ window.closeWithdrawModal = function() { $('withdraw-modal').style.display = 'no
 
 window.submitWithdrawRequest = async function() {
   let withdrawAmt = Number($('withdraw-amount-input').value);
-  if (isNaN(withdrawAmt) || withdrawAmt < 5000 || withdrawAmt > currentTnvBalance) { alert('Invalid amount'); return; }
+  if (isNaN(withdrawAmt) || withdrawAmt < 5000 || withdrawAmt > currentTnvBalance) { showNeonAlert('Invalid amount'); return; }
   await supabaseClient.from('withdraw_requests').insert({ wallet_address: myAddress, amount: withdrawAmt, status: 'pending' });
   await supabaseClient.from('user_rewards').update({ tnv_balance: currentTnvBalance - withdrawAmt }).eq('wallet_address', myAddress);
-  alert('Withdrawal requested!');
+  showNeonAlert('Withdrawal requested!');
   closeWithdrawModal();
   fetchUserBalanceAndLeaderboard(myAddress);
 };
@@ -543,7 +537,7 @@ async function resumeGameIfActive() {
 
 function setUserData(username, address){
   myUsername = username;
-  myAddress = address ? address.toLowerCase() : address; // normalize so every .eq('wallet_address', myAddress) lookup across the app matches consistently
+  myAddress = address ? address.toLowerCase() : address;
   $('display-username').innerText = myUsername;
   $('my-name-tag').innerText = myUsername;
   fetchUserBalanceAndLeaderboard(myAddress);
@@ -567,10 +561,6 @@ async function resolveUsername(address){
   return '@WLD_' + address.substring(2, 8);
 }
 
-// ----------------------------------------------------
-// STEP 1: WALLET SIGN-IN (auto on load inside World App, or manual before PLAY NOW)
-// Returns true only if the user is actually signed in with a real wallet address.
-// ----------------------------------------------------
 function showAuthBanner(msg){
   const el = $('auth-banner');
   if (!el) return;
@@ -580,7 +570,7 @@ function showAuthBanner(msg){
 
 async function performWalletAuth(silent = false){
   if (!MiniKit.isInstalled()) return false;
-  if (myAddress && realWorldIdUser) return true; // already signed in
+  if (myAddress && realWorldIdUser) return true;
 
   try {
     const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
@@ -601,34 +591,27 @@ async function performWalletAuth(silent = false){
     }
 
     showAuthBanner(`Sign-in did not complete (status: ${finalPayload?.status || 'unknown'})`);
-    if (!silent) alert("Sign-in cancelled or failed.");
+    if (!silent) showNeonAlert("Sign-in cancelled or failed.");
     return false;
   } catch (err) {
     showAuthBanner(`Wallet auth error: ${err?.message || String(err)}`);
-    if (!silent) alert("Wallet authentication error.");
+    if (!silent) showNeonAlert("Wallet authentication error.");
     return false;
   }
 }
 
-// ----------------------------------------------------
-// PLAY BUTTON: 1) SIGN IN (if needed) -> 2) MINIKIT.PAY -> 3) MATCHMAKING (only on success)
-// ----------------------------------------------------
 async function handlePlayButtonClick(){
   if (matchmakingActive) return;
 
-  // STEP 1: Ensure wallet is signed in before anything else
   if (MiniKit.isInstalled()) {
     if (!myAddress || !realWorldIdUser) {
       const signedIn = await performWalletAuth(false);
-      if (!signedIn) return; // user cancelled sign-in / failed — stop here, nothing else happens
+      if (!signedIn) return;
     }
   } else if (!myAddress) {
-    // Desktop simulation has no wallet to sign in with; nothing to do here,
-    // DOMContentLoaded already assigned a fake dev address.
     return;
   }
 
-  // STEP 2: Trigger the official MiniKit payment request (Allow / Cancel prompt)
   if (MiniKit.isInstalled()) {
     $('start-btn').disabled = true;
 
@@ -654,9 +637,8 @@ async function handlePlayButtonClick(){
       paymentSuccessful = false;
     }
 
-    // STEP 3: Only proceed if payment was genuinely successful
     if (!paymentSuccessful) {
-      alert("Payment was cancelled or failed.");
+      showNeonAlert("Payment was cancelled or failed.");
       $('start-btn').disabled = false;
       return;
     }
@@ -664,20 +646,18 @@ async function handlePlayButtonClick(){
     await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', selectedFee, `Entry fee payment from ${myUsername || myAddress}`);
 
   } else {
-    // Desktop simulation fallback (no MiniKit / no real payment prompt available)
     const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
     let currentWld = Number(usrData?.wld_balance || 100);
     if (currentWld < selectedFee) {
-      alert(`Insufficient WLD Balance: ${currentWld.toFixed(2)}, Required: ${selectedFee}`);
+      showNeonAlert(`Insufficient WLD Balance: ${currentWld.toFixed(2)}, Required: ${selectedFee}`);
       return;
     }
     if (!confirm(`Confirm payment of ${selectedFee} WLD to start match?`)) {
-      return; // simulated cancel
+      return;
     }
     await supabaseClient.from('user_rewards').update({ wld_balance: Number((currentWld - selectedFee).toFixed(2)) }).eq('wallet_address', myAddress);
   }
 
-  // STEP 3 (continued): Start matchmaking only after a successful payment
   initMatchmakingAfterPayment();
 }
 
@@ -757,7 +737,6 @@ async function cancelMatchmaking(showAlert = true) {
       const { data: matchCheck } = await supabaseClient.from('matches').select('status, game_started, fee').eq('id', matchId).single();
 
       if (matchCheck && !matchCheck.game_started && matchCheck.status === 'waiting') {
-        // Verified: opponent never joined & game never started -> safe to refund
         let matchFee = Number(matchCheck.fee || selectedFee);
         const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
         const currentBal = Number(usrData?.wld_balance || 0);
@@ -767,10 +746,9 @@ async function cancelMatchmaking(showAlert = true) {
         await logMatchHistory(myAddress, 'REFUND', matchFee, `Search cancelled & fee refunded (${matchFee} WLD)`);
         await supabaseClient.from('matches').delete().eq('id', matchId).eq('status', 'waiting');
 
-        if (showAlert) alert(`Search cancelled. ${matchFee} WLD entry fee has been refunded.`);
+        if (showAlert) showNeonAlert(`Search cancelled. ${matchFee} WLD entry fee has been refunded.`);
       } else {
-        // Already matched/playing by the time cancel fired -> do NOT refund
-        if (showAlert) alert(`Search cancelled.`);
+        if (showAlert) showNeonAlert(`Search cancelled.`);
       }
     } catch(e) {}
   }
