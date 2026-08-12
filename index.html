@@ -9,36 +9,6 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
-<style>
-/* Neon Warning Style for Alerts */
-.neon-alert {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(20, 20, 35, 0.95);
-    border: 2px solid #ff00ff; /* Neon Pink/Magenta */
-    box-shadow: 0 0 15px #ff00ff, 0 0 5px #ff00ff;
-    color: #fff;
-    padding: 20px;
-    border-radius: 15px;
-    z-index: 9999;
-    text-align: center;
-    font-family: 'Space Grotesk', sans-serif;
-    font-weight: 700;
-    max-width: 80%;
-}
-.neon-alert button {
-    margin-top: 15px;
-    padding: 8px 16px;
-    background: #ff00ff;
-    border: none;
-    color: white;
-    border-radius: 5px;
-    cursor: pointer;
-    font-weight: bold;
-}
-</style>
 </head>
 <body>
 
@@ -49,7 +19,7 @@
     <div id="support-dropdown" class="support-dropdown">
       <a href="https://t.me/TNVTEAMWLD" target="_blank" class="support-link">Telegram</a>
       <div class="support-link">Discord <span class="coming-soon">Soon</span></div>
-      <div class="support-link">Twitter <span class="coming-soon">Soon</span></div>
+      <div class="support-link">X <span class="coming-soon">Soon</span></div>
       <div class="support-link">Instagram <span class="coming-soon">Soon</span></div>
     </div>
   </div>
@@ -67,24 +37,10 @@
     </div>
     <div class="progress-bar"><div id="p-fill" class="progress-fill"></div></div>
     
-    <!-- WITHDRAW BUTTON TNV KE PAAS & WLD ALAG CLEAN DISPLAY -->
-    <div id="balance-area" style="display:flex; flex-direction:column; gap:6px; align-items:center; margin-top:8px;">
-      <div>
-        <span>Balance: <span id="balance-num">0</span> TNV</span>
-        <button id="withdraw-btn" class="withdraw-btn" disabled onclick="openWithdrawModal()">WITHDRAW</button>
-      </div>
-      <div style="font-size: 12px; color: var(--gold); font-weight: 600;">
-        Test WLD Balance: <span id="wld-balance-num">100.00</span> WLD
-      </div>
+    <div id="balance-area">
+      <span>Balance: <span id="balance-num">0</span> TNV</span>
+      <button id="withdraw-btn" class="withdraw-btn" disabled onclick="openWithdrawModal()">WITHDRAW</button>
     </div>
-
-    <!-- STYLISH HISTORY, WITHDRAWALS & ADMIN REVENUE BUTTONS -->
-    <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:10px;">
-      <button class="btn btn-ghost" style="font-size:10.5px; padding:6px 12px; border:1px solid rgba(41,217,194,0.4); color:var(--photon);" onclick="openUserHistoryModal()">📜 Match History</button>
-      <button class="btn btn-ghost" style="font-size:10.5px; padding:6px 12px; border:1px solid rgba(41,217,194,0.4); color:var(--photon);" onclick="openUserWithdrawalsModal()">💸 My Withdrawals</button>
-      <button id="admin-history-nav-btn" class="btn btn-ghost" style="font-size:10.5px; padding:6px 12px; border:1px solid rgba(243,156,18,0.4); color:var(--gold); display:none;" onclick="openAdminEarningsModal()">🛡️ Admin Revenue</button>
-    </div>
-
     <div id="auth-banner"></div>
   </header>
 
@@ -103,7 +59,7 @@
         <div class="fee-chip" data-fee="1">1 WLD<span class="chip-earn">+1.60</span></div>
         <div class="fee-chip" data-fee="2">2 WLD<span class="chip-earn">+3.20</span></div>
         <div class="fee-chip" data-fee="5">5 WLD<span class="chip-earn">+8.80</span></div>
-        <div class="fee-chip" data-fee="10">10 WLD<span class="chip-earn">+17.8</span></div>
+        <div class="fee-chip" data-fee="10">10 WLD<span class="chip-earn">+17.0</span></div>
         <div class="fee-chip" data-fee="20">20 WLD<span class="chip-earn">+36.0</span></div>
         <div class="fee-chip" data-fee="30">30 WLD<span class="chip-earn">+54.0</span></div>
         <div class="fee-chip" data-fee="40">40 WLD<span class="chip-earn">+72.0</span></div>
@@ -159,7 +115,7 @@
         </div>
       </div>
 
-      <!-- TNV COIN LEADERSHIP DISTRIBUTION -->
+      <!-- TNV COIN LEADERSHIP DISTRIBUTION (ALL COMING SOON) -->
       <div class="rules-card" style="margin-top: 18px; text-align: left;">
         <h3>💎 TNV COIN LEADERSHIP DISTRIBUTION</h3>
         <div class="rules-grid" style="margin-bottom: 14px;">
@@ -169,8 +125,9 @@
           <div class="rule-item">• <span>Active Holders:</span> Coming Soon</div>
         </div>
         
-        <div class="neon-coming-soon-box" style="text-align:center; padding:10px; background:rgba(41,217,194,0.08); border:1px dashed var(--photon); border-radius:10px; color:var(--photon); font-size:11px; font-weight:700;">
-          <span>🚀 COMING SOON: TNV STAKING & MAINNET LAUNCH</span>
+        <!-- COMING SOON NEON GLOWING BOX -->
+        <div class="neon-coming-soon-box">
+          <span class="neon-text">🚀 COMING SOON: TNV STAKING & MAINNET LAUNCH</span>
         </div>
       </div>
 
@@ -215,49 +172,6 @@
     </div>
   </div>
 
-  <!-- USER MATCH HISTORY MODAL -->
-  <div id="user-history-modal" class="custom-modal">
-    <div class="modal-card" style="max-width:420px; width:92%;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h3 style="margin:0; color:var(--photon);">📜 Match & Refund History</h3>
-        <button class="chat-close-btn" onclick="closeUserHistoryModal()">✕</button>
-      </div>
-      <div id="user-history-list" style="max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; text-align:left; font-size:11.5px; padding-right:4px;">
-        <div style="text-align:center; color:var(--slate);">Loading history...</div>
-      </div>
-      <button class="btn btn-ghost" style="margin-top:16px; width:100%;" onclick="closeUserHistoryModal()">CLOSE</button>
-    </div>
-  </div>
-
-  <!-- USER WITHDRAWAL REQUESTS MODAL -->
-  <div id="user-withdrawals-modal" class="custom-modal">
-    <div class="modal-card" style="max-width:420px; width:92%;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h3 style="margin:0; color:var(--photon);">💸 Withdrawal Requests</h3>
-        <button class="chat-close-btn" onclick="closeUserWithdrawalsModal()">✕</button>
-      </div>
-      <div id="user-withdrawals-list" style="max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; text-align:left; font-size:11.5px; padding-right:4px;">
-        <div style="text-align:center; color:var(--slate);">Loading requests...</div>
-      </div>
-      <button class="btn btn-ghost" style="margin-top:16px; width:100%;" onclick="closeUserWithdrawalsModal()">CLOSE</button>
-    </div>
-  </div>
-
-  <!-- ADMIN EARNINGS REVENUE MODAL -->
-  <div id="admin-earnings-modal" class="custom-modal">
-    <div class="modal-card" style="max-width:450px; width:92%;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h3 style="margin:0; color:var(--gold);">🛡️ Admin Revenue Ledger</h3>
-        <button class="chat-close-btn" onclick="closeAdminEarningsModal()">✕</button>
-      </div>
-      <div style="font-size:11px; color:var(--slate); margin-bottom:10px;">Total collected fees from all user matches:</div>
-      <div id="admin-earnings-list" style="max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; text-align:left; font-size:11.5px; padding-right:4px;">
-        <div style="text-align:center; color:var(--slate);">Loading admin revenue...</div>
-      </div>
-      <button class="btn btn-ghost" style="margin-top:16px; width:100%;" onclick="closeAdminEarningsModal()">CLOSE</button>
-    </div>
-  </div>
-
   <!-- BLOCKED / SUSPENDED USER SCREEN -->
   <div id="blocked-screen">
     <div class="blocked-card">
@@ -287,7 +201,7 @@
     </div>
   </div>
 
-  <!-- ADMIN APPROVAL MODAL -->
+  <!-- ADMIN APPROVAL MODAL WITH PROOF INPUT -->
   <div id="admin-approve-modal" class="custom-modal">
     <div class="modal-card">
       <h3>🛡️ APPROVE WITHDRAWAL</h3>
