@@ -29,6 +29,7 @@ body{
   display:flex; flex-direction:column; position:relative;
 }
 
+/* SUPPORT (LEFT) & GREEN GLOBAL CHAT (RIGHT) CORNER BUTTONS */
 .support-container {
   position: absolute; top: calc(12px + var(--safe-t)); left: 18px; z-index: 10;
 }
@@ -53,6 +54,7 @@ body{
   content: ''; width: 7px; height: 7px; background: #2ecc71; border-radius: 50%; box-shadow: 0 0 6px #2ecc71; display: inline-block;
 }
 
+/* SUPPORT DROPDOWN MENU */
 .support-dropdown {
   display: none; position: absolute; left: 0; top: 36px;
   background: var(--void-2); border: 1px solid var(--border); border-radius: 12px;
@@ -68,6 +70,7 @@ body{
 }
 .support-link:hover { background: rgba(41,217,194,0.12); border-color: var(--photon); color: var(--photon); }
 
+/* GLOBAL CHAT MODAL UI */
 .chat-card { max-width: 360px !important; height: 420px; display: flex; flex-direction: column; padding: 16px !important; }
 .chat-header { display: flex; justify-content: space-between; align-items: center; font-family:'Space Grotesk', sans-serif; font-weight: 700; color: var(--photon); font-size: 13px; margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
 .chat-close-btn { background: none; border: none; color: var(--slate); font-size: 16px; cursor: pointer; }
@@ -140,6 +143,7 @@ h1.brand{
 
 main{ flex:1; display:flex; flex-direction:column; }
 
+/* ---------- GAME RULES SECTION ---------- */
 .rules-card {
   background: var(--void-2); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 14px; margin-top: 16px; font-size: 11.5px; line-height: 1.5; color: var(--slate);
@@ -152,6 +156,7 @@ main{ flex:1; display:flex; flex-direction:column; }
 .rule-item { display: flex; align-items: flex-start; gap: 6px; }
 .rule-item span { color: var(--gold); font-weight: 700; }
 
+/* ---------- ADMIN PANELS ---------- */
 #admin-panel, #admin-cheaters-panel {
   display: none;
   margin-top: 18px;
@@ -187,6 +192,7 @@ main{ flex:1; display:flex; flex-direction:column; }
   font-weight: 700; font-size: 11px; padding: 4px 10px; border-radius: 6px; cursor: pointer;
 }
 
+/* ---------- LEADERBOARD STYLING ---------- */
 .leaderboard-section {
   margin-top: 18px;
   background: var(--void-2);
@@ -224,6 +230,7 @@ main{ flex:1; display:flex; flex-direction:column; }
 .lb-user { flex: 1; font-weight: 600; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lb-score { font-family: 'JetBrains Mono', monospace; color: var(--gold); font-weight: 600; }
 
+/* ---------- WITHDRAW & ADMIN MODALS ---------- */
 .custom-modal {
   position: fixed; inset:0; background: rgba(11,11,20,0.92); backdrop-filter: blur(8px);
   z-index: 3000; display:none; flex-direction:column; align-items:center; justify-content:center; padding: 0 24px;
@@ -241,6 +248,7 @@ main{ flex:1; display:flex; flex-direction:column; }
 .modal-input:focus { border-color: var(--gold); }
 .modal-actions { display: flex; gap: 10px; margin-top: 10px; }
 
+/* ---------- BLOCKED SCREEN OVERLAY ---------- */
 #blocked-screen {
   position: fixed; inset: 0; background: var(--void); z-index: 5000;
   display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px;
@@ -288,12 +296,13 @@ main{ flex:1; display:flex; flex-direction:column; }
 @keyframes pulse{ 0%,100%{ transform: scale(1); } 50%{ transform: scale(1.12); } }
 @keyframes ping { 0%, 100% { opacity: 0; transform:scale(0.5); } 50% { opacity: 0.8; transform:scale(1.2); } }
 @keyframes lockOn { 0% { transform: scale(2.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce){ .scanner .sweep, .scanner .core{ animation:none !important; } }
 
 #waiting-overlay{
   position: fixed; inset:0; background: rgba(11,11,20,0.94); backdrop-filter: blur(6px);
   z-index: 1000; display:none; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding: 0 24px;
 }
-#wait-status{ font-family:'Space Grotesk', sans-serif; font-weight:600; font-size: 19px; margin: 0; }
+#wait-status{ font-family:'Space Grotesk', sans-serif; font-weight:600; font-size: 19px; margin: 0; transition: color 0.3s ease; }
 
 .stats-box{
   display:flex; justify-content:space-around; align-items:center; padding: 14px;
@@ -329,15 +338,26 @@ main{ flex:1; display:flex; flex-direction:column; }
 #result-overlay{
   position: fixed; inset:0; background: rgba(11,11,20,0.94); backdrop-filter: blur(8px);
   z-index: 2000; display:none; flex-direction:column; align-items:center; justify-content:center; padding: 0 24px;
+  animation: fadeIn 0.3s ease;
 }
 .result-card{
   background: var(--void-2); border: 2px solid var(--border); border-radius: 24px;
   padding: 40px 24px; text-align:center; width:100%; max-width: 320px;
   box-shadow: 0 20px 50px -10px rgba(0,0,0,0.5);
+  transform: scale(0.9); animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
-#result-icon{ font-size: 64px; margin-bottom: 16px; }
-#result-title{ font-family:'Space Grotesk', sans-serif; font-size: 34px; font-weight:700; margin: 0 0 8px; text-transform:uppercase; }
+#result-icon{ font-size: 64px; margin-bottom: 16px; filter: drop-shadow(0 0 12px rgba(255,255,255,0.1)); }
+#result-title{ font-family:'Space Grotesk', sans-serif; font-size: 34px; font-weight:700; margin: 0 0 8px; text-transform:uppercase; letter-spacing: 1px; }
 #result-msg{ font-family:'JetBrains Mono', monospace; font-size: 16px; color: var(--slate); margin: 0 0 32px; font-weight:600; }
+
 .result-victory { border-color: var(--photon); box-shadow: 0 0 40px -10px rgba(41,217,194,0.4); }
+.result-victory #result-title { color: var(--photon); text-shadow: 0 0 16px rgba(41,217,194,0.5); }
+
 .result-defeat { border-color: var(--signal); box-shadow: 0 0 40px -10px rgba(255,95,109,0.4); }
+.result-defeat #result-title { color: var(--signal); text-shadow: 0 0 16px rgba(255,95,109,0.5); }
+
 .result-tie { border-color: var(--gold); box-shadow: 0 0 40px -10px rgba(255,179,0,0.4); }
+.result-tie #result-title { color: var(--gold); text-shadow: 0 0 16px rgba(255,179,0,0.5); }
+
+@keyframes fadeIn { from{ opacity:0; } to{ opacity:1; } }
+@keyframes popIn { to{ transform: scale(1); } }
