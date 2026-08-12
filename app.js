@@ -471,7 +471,7 @@ async function handlePostAd(e) {
   let paymentSuccessful = false;
   try {
     const feeWei = tokenToDecimals(1, Tokens.WLD).toString(); // 1 WLD Listing Fee
-    const uniqueMatchId = "0x" + randomAlphaNumeric(32); // Unique match ID for contract mapping
+    const uniqueMatchId = "0x" + randomAlphaNumeric(32);
 
     const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({
       transaction: [
