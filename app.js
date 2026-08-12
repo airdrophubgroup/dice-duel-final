@@ -33,16 +33,6 @@ const CONTRACT_ABI = [
   },
   {
     "inputs": [
-      { "internalType": "address", "name": "_wldToken", "type": "address" },
-      { "internalType": "address", "name": "_permit2", "type": "address" },
-      { "internalType": "address", "name": "_operator", "type": "address" },
-      { "internalType": "address", "name": "_feeRecipient", "type": "address" }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "constructor"
-  },
-  {
-    "inputs": [
       { "internalType": "bytes32", "name": "matchId", "type": "bytes32" },
       { "internalType": "address", "name": "winner", "type": "address" }
     ],
@@ -469,9 +459,10 @@ async function handlePostAd(e) {
   }
 
   let paymentSuccessful = false;
+  let uniqueMatchId = "0x" + randomAlphaNumeric(32);
+  
   try {
     const feeWei = tokenToDecimals(1, Tokens.WLD).toString(); // 1 WLD Listing Fee
-    const uniqueMatchId = "0x" + randomAlphaNumeric(32);
 
     const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({
       transaction: [
@@ -550,7 +541,8 @@ async function handlePostAd(e) {
     image2: imageUrls[1],
     image3: imageUrls[2],
     image4: imageUrls[3],
-    status: 'active'
+    status: 'active',
+    match_id: uniqueMatchId // Saved for tracking escrow/refunds
   }]);
 
   if (!insertError) {
@@ -565,6 +557,64 @@ async function handlePostAd(e) {
     await showNeonPopup('Awesome! 🎉', `Your ad was posted successfully!<br><span style="color: #10b981; font-weight: 800; font-size: 1.2rem; display: block; margin-top: 8px; text-shadow: 0 0 10px rgba(16, 185, 129, 0.4);">+1 SOW Coin Earned!</span>`, '🪙');
   } else {
     await showNeonPopup('Database Error', 'Error saving ad: ' + insertError.message, '⚠️');
+  }
+}
+
+// ==========================================
+// AUTOMATED REFUND FUNCTION (User Triggered)
+// ==========================================
+window.cancelEscrowMatch = async function(matchId) {
+  if (!userWallet) {
+    await showNeonPopup('Hold On', 'Please connect your wallet first!', '🔗');
+    return;
+  }
+  try {
+    const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({
+      transaction: [
+        {
+          address: CONTRACT_ADDRESS,
+          abi: CONTRACT_ABI,
+          functionName: "cancelWaitingMatch",
+          args: [matchId]
+        }
+      ]
+    });
+    if (finalPayload?.status === 'success') {
+      await showNeonPopup('Refund Successful', 'Your escrow funds have been automatically refunded to your wallet.', '✅');
+    } else {
+      await showNeonPopup('Failed', 'Could not process refund.', '❌');
+    }
+  } catch (err) {
+    await showNeonPopup('Error', 'Transaction error during refund.', '⚠️');
+  }
+}
+
+// ==========================================
+// AUTOMATED WINNER PAYOUT FUNCTION (Admin / Operator Triggered)
+// ==========================================
+window.adminSettleMatch = async function(matchId, winnerAddress) {
+  if (!userWallet || userWallet.toLowerCase() !== ADMIN_WALLET.toLowerCase()) {
+    await showNeonPopup('Unauthorized', 'Admin access required.', '🚫');
+    return;
+  }
+  try {
+    const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({
+      transaction: [
+        {
+          address: CONTRACT_ADDRESS,
+          abi: CONTRACT_ABI,
+          functionName: "settleMatch",
+          args: [matchId, winnerAddress]
+        }
+      ]
+    });
+    if (finalPayload?.status === 'success') {
+      await showNeonPopup('Match Settled', `Winner payout distributed automatically to ${winnerAddress.substring(0, 6)}...`, '🏆');
+    } else {
+      await showNeonPopup('Failed', 'Could not settle match.', '❌');
+    }
+  } catch (err) {
+    await showNeonPopup('Error', 'Transaction error during settlement.', '⚠️');
   }
 }
 
@@ -889,7 +939,10 @@ async function openMyAdsModal() {
         <h4 style="font-size:0.9rem; color:#1e293b;">${item.title}</h4>
         <p style="font-size:0.8rem; color:#10b981;">${item.price} WLD (${item.country})</p>
       </div>
-      <button onclick="event.stopPropagation(); window.markAsSoldOut('${item.id}')" style="background:#ef4444; color:#fff; padding:6px 10px; font-size:11px; border-radius:6px; font-weight:bold; cursor:pointer;">Delete Ad</button>
+      <div style="display:flex; gap:6px;">
+        ${item.match_id ? `<button onclick="event.stopPropagation(); window.cancelEscrowMatch('${item.match_id}')" style="background:#f59e0b; color:#fff; padding:6px 10px; font-size:11px; border-radius:6px; font-weight:bold; cursor:pointer;">Refund</button>` : ''}
+        <button onclick="event.stopPropagation(); window.markAsSoldOut('${item.id}')" style="background:#ef4444; color:#fff; padding:6px 10px; font-size:11px; border-radius:6px; font-weight:bold; cursor:pointer;">Delete</button>
+      </div>
     </div>
   `).join('');
 }
