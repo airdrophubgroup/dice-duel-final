@@ -1,114 +1,65 @@
-import { MiniKit, Tokens, tokenToDecimals } from "https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@latest/+esm";
+import { MiniKit, Tokens, tokenToDecimals } from "https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@1.9.6/+esm";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
 const SB_URL = "https://efmkazyrxllcyvcwmewd.supabase.co";
 const SB_KEY = "sb_publishable_px6Myv6S29bTXRYmYLAkgQ_WDHDb7da";
 const WORLD_APP_ID = "app_74bd2499a35b025efb62d99125df7883";
 
-// Admin Panel Access Wallet
 const ADMIN_WALLET = "0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1"; 
-
-// Fee Receive Wallet
-const PAYMENT_RECV_WALLET = "0x8FB70CDFb545C7D9b842cBE37B9aba84059Bf14b";
-
 const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";
 const WORLDCHAIN_RPC = "https://worldchain-mainnet.g.alchemy.com/public";
 
-// ---- On-chain Escrow Payment Contract ----
-const CONTRACT_ADDRESS = "0x529225162b86489fcbD6320b88C4BAEAAE586a67";
-const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+// PROXY ENDPOINT (Frontend ab direct RPC/API call ke bajaye is proxy URL ko use karega)
+const PROXY_API_URL = "/api/proxy-request";
 
-const JOIN_MATCH_ABI = [
-  {
-    "inputs": [
-      { "internalType": "bytes32", "name": "matchId", "type": "bytes32" },
-      { "internalType": "uint256", "name": "fee", "type": "uint256" },
-      { "internalType": "address", "name": "expectedOpponent", "type": "address" }
-    ],
-    "name": "joinMatch",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
-];
+// Fixed contract (front-running gap + player2-overwrite fixed + Permit2 support).
+const DICE_DUEL_CONTRACT = "0x060EDB17E26D5385f20f85D577dc9b87Dfa6cE28";
 
-const PERMIT2_APPROVE_ABI = [
-  {
-    name: "approve",
-    type: "function",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "token", type: "address" },
-      { name: "spender", type: "address" },
-      { name: "amount", type: "uint160" },
-      { name: "expiration", type: "uint48" },
-    ],
-    outputs: [],
-  },
-];
+// BACKGROUND MUSIC SETUP
+let bgMusic = new Audio('assets/bg-music.mp3'); 
+bgMusic.loop = true; 
+bgMusic.volume = 0.4; 
 
-// ---- ULTRA-LIGHTWEIGHT ZERO-DEPENDENCY CRYPTO HELPERS (Replacing Viem) ----
-function toHex(str) {
-  let result = "";
-  for (let i = 0; i < str.length; i++) {
-    result += str.charCodeAt(i).toString(16).padStart(2, "0");
-  }
-  return "0x" + result;
+function startBackgroundMusic() {
+  try {
+    bgMusic.play().catch(err => console.log("Audio play blocked:", err));
+  } catch (e) {}
 }
 
-async function matchIdToBytes32(supabaseMatchId) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(supabaseMatchId);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return "0x" + hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+function stopBackgroundMusic() {
+  try {
+    bgMusic.pause();
+    bgMusic.currentTime = 0;
+  } catch (e) {}
 }
 
-function encodeApproveData(token, spender, amount, expiration) {
-  const cleanToken = token.toLowerCase().replace("0x", "").padStart(64, "0");
-  const cleanSpender = spender.toLowerCase().replace("0x", "").padStart(64, "0");
-  const cleanAmount = BigInt(amount).toString(16).padStart(64, "0");
-  const cleanExp = Number(expiration).toString(16).padStart(64, "0");
-  return "0x095ea7b3" + cleanToken + cleanSpender + cleanAmount + cleanExp;
-}
+// NOTE: deposits now go through MiniKit.pay() (a plain WLD transfer to
+// the contract address) instead of a direct contract call — World App's
+// transaction filter currently blocks any approve()-shaped call,
+// including Permit2's own approve(), which made the on-chain pull-based
+// joinMatch() flow unusable. The resolver backend verifies each payment
+// and calls DiceDuelEscrow.recordDeposit() on the player's behalf.
 
-function encodeJoinMatchData(bytes32MatchId, feeWei, opponentAddress) {
-  const cleanMatchId = bytes32MatchId.replace("0x", "").padStart(64, "0");
-  const cleanFee = BigInt(feeWei).toString(16).padStart(64, "0");
-  const cleanOpponent = opponentAddress.toLowerCase().replace("0x", "").padStart(64, "0");
-  return "0x64426543" + cleanMatchId + cleanFee + cleanOpponent;
-}
+// Exact wei amounts (18 decimals) for each fee chip — avoids float
+// rounding issues that matter a lot more once real money is involved.
+const FEE_WEI = {
+  0.1: "100000000000000000", 0.2: "200000000000000000", 0.5: "500000000000000000",
+  1: "1000000000000000000", 2: "2000000000000000000", 5: "5000000000000000000",
+  10: "10000000000000000000", 20: "20000000000000000000", 30: "30000000000000000000",
+  40: "40000000000000000000", 50: "50000000000000000000"
+};
 
-function wldToWei(amount) {
-  const [whole, frac = ""] = String(amount).split(".");
-  const fracPadded = (frac + "0".repeat(18)).slice(0, 18);
-  return BigInt(whole || "0") * 10n ** 18n + BigInt(fracPadded || "0");
-}
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"; // unused for now, kept in case joinMatch() fallback is reactivated
 
-async function joinMatchOnChain(supabaseMatchId, feeWld, opponentAddress) {
-  const bytes32MatchId = await matchIdToBytes32(supabaseMatchId);
-  const feeWei = wldToWei(feeWld);
-
-  const approveData = encodeApproveData(WLD_TOKEN_CONTRACT, CONTRACT_ADDRESS, feeWei, 0);
-  const joinData = encodeJoinMatchData(bytes32MatchId, feeWei, opponentAddress);
-
-  const result = await MiniKit.sendTransaction({
-    chainId: 480,
-    transaction: [
-      { address: PERMIT2_ADDRESS, data: approveData },
-      { address: CONTRACT_ADDRESS, data: joinData },
-    ],
-  });
-
-  if (result?.executedWith === "fallback") {
-    throw new Error("Not running inside World App");
-  }
-  const userOpHash = result?.data?.userOpHash;
-  if (!userOpHash) {
-    throw new Error("On-chain payment failed: " + JSON.stringify(result));
-  }
-  return userOpHash;
+// Turns a Supabase match id (uuid string) into a deterministic bytes32
+// value both players compute identically — used as the on-chain matchId.
+// SHA-256 is fine here (doesn't need to be keccak256): we just need a
+// unique, collision-resistant 32-byte value both sides agree on.
+async function matchIdToBytes32(uuidStr) {
+  const enc = new TextEncoder().encode(uuidStr);
+  const hashBuf = await crypto.subtle.digest('SHA-256', enc);
+  const hashArr = Array.from(new Uint8Array(hashBuf));
+  return '0x' + hashArr.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 const supabaseClient = createClient(SB_URL, SB_KEY);
@@ -129,15 +80,17 @@ const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 const $ = (id) => document.getElementById(id);
 
+// STRICT BROWSER RESTRICTION & RED WARNING SCREEN
 function checkWorldAppEnvironment() {
   const isWorldApp = (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) || window.ethereum;
+  
   if (!isWorldApp) {
     document.body.innerHTML = `
       <div style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#050000; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:999999; font-family:sans-serif; text-align:center; padding:20px;">
         <div style="background:rgba(255, 0, 0, 0.08); border:2px solid #ff3333; padding:30px; border-radius:20px; box-shadow: 0 0 30px rgba(255, 0, 0, 0.4); max-width:400px;">
-          <h1 style="color:#ff3333; font-size:24px; margin-bottom:15px;">⚠️ ACCESS DENIED</h1>
+          <h1 style="color:#ff3333; font-size:24px; margin-bottom:15px; text-shadow: 0 0 10px rgba(255,51,51,0.5);">⚠️ ACCESS DENIED</h1>
           <p style="color:#ffffff; font-size:16px; line-height:1.5; margin-bottom:20px;">This mini app can only be accessed and used inside the official <b>World App</b>.</p>
-          <div style="background:#ff3333; color:#000; font-weight:bold; padding:12px 20px; border-radius:10px; font-size:15px;">
+          <div style="background:#ff3333; color:#000; font-weight:bold; padding:12px 20px; border-radius:10px; font-size:15px; box-shadow: 0 0 15px #ff3333;">
             Please open inside World App
           </div>
         </div>
@@ -164,6 +117,8 @@ function waitForMiniKitReady(timeoutMs = 2000) {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
+  startBackgroundMusic();
+
   try { 
     MiniKit.install(WORLD_APP_ID); 
   } catch(e) {}
@@ -173,7 +128,10 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
     if ($('landingHint')) $('landingHint').textContent = 'World App detected — signing in...';
-    try { await performWalletAuth(true); } catch(err) {}
+    
+    try {
+      await performWalletAuth(true);
+    } catch(err) {}
   }
 
   if (myAddress) {
@@ -187,7 +145,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (stuckMatches && stuckMatches.length > 0) {
         for (let match of stuckMatches) {
           if (!match.game_started) {
-            await supabaseClient.rpc('secure_leave_waiting_match', { p_match_id: match.id, p_wallet: myAddress });
+            await supabaseClient.rpc('secure_leave_waiting_match', {
+              p_match_id: match.id, p_wallet: myAddress
+            });
           }
         }
       }
@@ -205,35 +165,47 @@ window.addEventListener('DOMContentLoaded', async () => {
     waitingOverlay.appendChild(cancelBtn);
   }
 
-  if (typeof initGlobalChat === 'function') initGlobalChat();
+  if (typeof initGlobalChat === 'function') {
+    initGlobalChat();
+  }
   fetchLeaderboard();
   await resumeGameIfActive();
 });
 
 window.addEventListener('beforeunload', () => {
-  if (matchmakingActive && matchId && !gameActive) cancelMatchmaking(false);
+  if (matchmakingActive && matchId && !gameActive) {
+    cancelMatchmaking(false);
+  }
 });
 
 function initGlobalChat() {
   loadAndCleanChatHistory();
+
   globalChatChannel = supabaseClient.channel('global_community_chat', {
     config: { presence: { key: myUsername || 'Guest' }, broadcast: { self: true } }
   });
 
   globalChatChannel
     .on('broadcast', { event: 'new_chat_msg' }, ({ payload }) => {
-      if (payload && payload.message) saveAndAppendChatMessage(payload.sender, payload.message, payload.address, payload.timestamp);
+      if (payload && payload.message) {
+        saveAndAppendChatMessage(payload.sender, payload.message, payload.address, payload.timestamp);
+      }
     })
     .on('broadcast', { event: 'live_bet_alert' }, ({ payload }) => {
-      if (!matchmakingActive && !gameActive && payload && payload.address !== myAddress) showLiveBetNotification(payload.username, payload.fee);
+      if (!matchmakingActive && !gameActive && payload && payload.address !== myAddress) {
+        showLiveBetNotification(payload.username, payload.fee);
+      }
     })
     .on('presence', { event: 'sync' }, () => {
       const state = globalChatChannel.presenceState();
       const onlineCount = Object.keys(state).length || 1;
-      if ($('online-count')) $('online-count').innerText = onlineCount;
+      const onlineElem = $('online-count');
+      if (onlineElem) onlineElem.innerText = onlineCount;
     })
     .subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') await globalChatChannel.track({ online_at: new Date().toISOString() });
+      if (status === 'SUBSCRIBED') {
+        await globalChatChannel.track({ online_at: new Date().toISOString() });
+      }
     });
 }
 
@@ -253,11 +225,12 @@ function showLiveBetNotification(username, fee) {
   }
 
   const ticker = document.createElement('div');
-  ticker.style.cssText = 'background:rgba(17,17,32,0.92); border:1px solid rgba(41,217,194,0.4); backdrop-filter:blur(8px); color:#f1eee6; padding:8px 12px; border-radius:12px; font-size:11.5px; opacity:0; transition:all 0.3s ease; text-align:center;';
+  ticker.style.cssText = 'background:rgba(17,17,32,0.92); border:1px solid rgba(41,217,194,0.4); backdrop-filter:blur(8px); color:#f1eee6; padding:8px 12px; border-radius:12px; font-size:11.5px; font-family:"Space Grotesk", sans-serif; box-shadow:0 8px 24px rgba(0,0,0,0.5); opacity:0; transition:all 0.3s ease; text-align:center;';
   ticker.innerHTML = `🔥 <span style="color:var(--photon); font-weight:700;">${escapeHtml(username || 'A player')}</span> started a <span style="color:var(--gold); font-weight:700;">${escapeHtml(fee)}</span> WLD duel!`;
   
   existingContainer.appendChild(ticker);
   setTimeout(() => { ticker.style.opacity = '1'; }, 50);
+
   setTimeout(() => {
     ticker.style.opacity = '0';
     setTimeout(() => { ticker.remove(); }, 300);
@@ -275,7 +248,9 @@ function loadAndCleanChatHistory() {
 
     const container = $('chat-messages-container');
     container.innerHTML = `<div style="text-align:center; color:var(--slate); font-size:11px;">Messages are saved for 24 hours. Chat freely!</div>`;
-    history.forEach(item => renderChatMessageUI(item.sender, item.message, item.address, item.timestamp));
+    history.forEach(item => {
+      renderChatMessageUI(item.sender, item.message, item.address, item.timestamp);
+    });
   } catch (e) {}
 }
 
@@ -320,17 +295,39 @@ window.sendChatMessage = function() {
   const msg = input.value.trim();
   if (!msg) return;
 
+  let senderName = myUsername || '@Guest';
   globalChatChannel.send({
     type: 'broadcast',
     event: 'new_chat_msg',
-    payload: { sender: myUsername || '@Guest', message: msg, address: myAddress, timestamp: Date.now() }
+    payload: { sender: senderName, message: msg, address: myAddress, timestamp: Date.now() }
   });
+
   input.value = '';
 };
 
+function playVictorySound() {
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const notes = [523.25, 659.25, 783.99, 1046.50]; 
+    notes.forEach((freq, idx) => {
+      let osc = audioCtx.createOscillator();
+      let gain = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.25, audioCtx.currentTime + idx * 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + idx * 0.12 + 0.35);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(audioCtx.currentTime + idx * 0.12);
+      osc.stop(audioCtx.currentTime + idx * 0.12 + 0.35);
+    });
+  } catch (e) {}
+}
+
 window.toggleSupportDropdown = function(event) {
   event.stopPropagation();
-  $('support-dropdown').classList.toggle('show');
+  const dropdown = $('support-dropdown');
+  dropdown.classList.toggle('show');
 };
 
 window.addEventListener('click', () => {
@@ -361,7 +358,10 @@ async function fetchRealWldBalance(walletAddress) {
       body: JSON.stringify({
         jsonrpc: '2.0',
         method: 'eth_call',
-        params: [{ to: WLD_TOKEN_CONTRACT, data: '0x70a08231' + paddedAddress }, 'latest'],
+        params: [{
+          to: WLD_TOKEN_CONTRACT,
+          data: '0x70a08231' + paddedAddress
+        }, 'latest'],
         id: 1
       })
     });
@@ -371,7 +371,9 @@ async function fetchRealWldBalance(walletAddress) {
       const balanceWei = BigInt(result.result);
       return Number(balanceWei) / 1e18;
     }
-  } catch (e) {}
+  } catch (e) {
+    console.error("On-chain WLD balance fetch failed:", e);
+  }
   return null;
 }
 
@@ -391,7 +393,7 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
 
     const { data, error } = await supabaseClient
       .from('user_rewards')
-      .select('tnv_balance, is_blocked')
+      .select('tnv_balance, wld_balance, is_blocked')
       .eq('wallet_address', cleanWallet)
       .maybeSingle();
 
@@ -401,12 +403,14 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
 
     if (realBalance !== null) {
       currentWldBalance = realBalance;
+      if (!data) {
+        await supabaseClient.rpc('secure_ensure_user_row', { p_wallet: cleanWallet });
+      }
     } else {
-      currentWldBalance = 0;
-    }
-
-    if (!data) {
-      await supabaseClient.rpc('secure_ensure_user_row', { p_wallet: cleanWallet });
+      currentWldBalance = Number(data?.wld_balance || 0);
+      if (!data) {
+        await supabaseClient.rpc('secure_ensure_user_row', { p_wallet: cleanWallet });
+      }
     }
 
     $('balance-num').innerText = currentTnvBalance;
@@ -415,7 +419,9 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
     $('p-fill').style.width = Math.min(100, (currentTnvBalance / 5000) * 100) + '%';
     if (currentTnvBalance >= 5000) $('withdraw-btn').removeAttribute('disabled');
     else $('withdraw-btn').setAttribute('disabled', 'true');
-  } catch (e) {}
+  } catch (e) {
+    console.error("Balance fetch error:", e);
+  }
   fetchLeaderboard();
 }
 
@@ -447,9 +453,10 @@ async function fetchAdminWithdrawRequests() {
         <div class="admin-req-item">
           <div class="admin-req-row">
             <span style="color:var(--photon); font-family:'JetBrains Mono', monospace;" title="${req.wallet_address}">${shortAddr}</span>
-            <span style="color:var(--gold); font-weight:700;">${req.amount} TNV</span>
+            <button onclick="navigator.clipboard.writeText('${req.wallet_address}'); alert('User address copied!');" style="background:rgba(255,255,255,0.1); border:none; color:#fff; font-size:9px; padding:2px 6px; border-radius:4px; cursor:pointer;">Copy Addr</button>
+            <span style="color:var(--gold); font-family:'JetBrains Mono', monospace; font-weight:700;">${req.amount} TNV</span>
           </div>
-          <div class="admin-req-row"><span style="font-size:10px; color:var(--slate);">${new Date(req.created_at).toLocaleString()}</span><button class="approve-btn" onclick="openAdminModal('${req.id}', '${req.wallet_address}', ${req.amount})">APPROVE</button></div>
+          <div class="admin-req-row"><span style="font-size:10px; color:var(--slate);">${new Date(req.created_at).toLocaleString()}</span><button class="approve-btn" onclick="openAdminModal('${req.id}', '${req.wallet_address}', ${req.amount})">APPROVE / PAY</button></div>
         </div>
       `;
     });
@@ -489,6 +496,8 @@ window.promptBlockUser = async function(walletToBlock) {
     if (result && result.success) {
       alert('User blocked.');
       fetchAdminCheaters();
+    } else {
+      alert('Block failed: ' + (result?.error || 'unknown error'));
     }
   }
 };
@@ -496,7 +505,7 @@ window.promptBlockUser = async function(walletToBlock) {
 window.openAdminModal = function(reqId, userWallet, amount) {
   if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
   activeAdminReqId = reqId;
-  $('admin-modal-info').innerText = `Paying ${amount} TNV to ${userWallet.slice(0,6)}...`;
+  $('admin-modal-info').innerText = `Paying ${amount} TNV to ${userWallet.slice(0,6)}...${userWallet.slice(-4)}`;
   $('admin-tx-input').value = "";
   $('admin-approve-modal').style.display = 'flex';
 };
@@ -514,7 +523,11 @@ window.confirmAdminApproval = async function() {
     p_tx_hash: txProof
   });
 
-  if (error) { alert('Approval failed: ' + error.message); return; }
+  if (error) {
+    alert('Approval failed: ' + error.message);
+    return;
+  }
+
   alert('Approved successfully!');
   closeAdminModal();
   fetchAdminWithdrawRequests();
@@ -537,8 +550,8 @@ window.openUserHistoryModal = async function() {
     container.innerHTML = html;
   } catch(e) {}
 };
-window.closeUserHistoryModal = function() { $('user-history-modal').style.display = 'none'; };
 
+window.closeUserHistoryModal = function() { $('user-history-modal').style.display = 'none'; };
 window.openUserWithdrawalsModal = async function() {
   if (!myAddress) { alert('Please sign in first!'); return; }
   $('user-withdrawals-modal').style.display = 'flex';
@@ -555,14 +568,14 @@ window.openUserWithdrawalsModal = async function() {
     container.innerHTML = html;
   } catch(e) {}
 };
-window.closeUserWithdrawalsModal = function() { $('user-withdrawals-modal').style.display = 'none'; };
 
+window.closeUserWithdrawalsModal = function() { $('user-withdrawals-modal').style.display = 'none'; };
 window.openAdminEarningsModal = async function() {
   $('admin-earnings-modal').style.display = 'flex';
   const container = $('admin-earnings-list');
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading revenue...</div>`;
   try {
-    const { data } = await supabaseClient.from('match_history').select('*').eq('wallet_address', PAYMENT_RECV_WALLET).eq('action_type', 'ADMIN_FEE').order('created_at', { ascending: false }).limit(50);
+    const { data } = await supabaseClient.from('match_history').select('*').eq('wallet_address', ADMIN_WALLET).eq('action_type', 'ADMIN_FEE').order('created_at', { ascending: false }).limit(50);
     if (!data || data.length === 0) { container.innerHTML = `<div style="text-align:center; color:var(--slate);">No fees collected.</div>`; return; }
     let total = 0, html = '';
     data.forEach(i => { 
@@ -581,6 +594,7 @@ window.openAdminEarningsModal = async function() {
     container.innerHTML = `<div style="color:var(--gold); font-weight:700; margin-bottom:8px;">Total: ${total.toFixed(2)} WLD</div>` + html;
   } catch(e) {}
 };
+
 window.closeAdminEarningsModal = function() { $('admin-earnings-modal').style.display = 'none'; };
 
 async function fetchLeaderboard() {
@@ -605,6 +619,7 @@ window.openWithdrawModal = function() {
   $('withdraw-amount-input').value = currentTnvBalance;
   $('withdraw-modal').style.display = 'flex';
 };
+
 window.closeWithdrawModal = function() { $('withdraw-modal').style.display = 'none'; };
 
 window.submitWithdrawRequest = async function() {
@@ -615,7 +630,11 @@ window.submitWithdrawRequest = async function() {
     p_wallet: myAddress, p_amount: withdrawAmt
   });
 
-  if (error || !result || !result.success) { alert('Withdrawal request failed: ' + (result?.error || error?.message || 'unknown error')); return; }
+  if (error || !result || !result.success) {
+    alert('Withdrawal request failed: ' + (result?.error || error?.message || 'unknown error'));
+    return;
+  }
+
   alert('Withdrawal requested!');
   closeWithdrawModal();
   fetchUserBalanceAndLeaderboard(myAddress);
@@ -685,47 +704,42 @@ async function resolveUsername(address){
   return '@W_' + address.substring(2, 8);
 }
 
-async function performWalletAuth(silent = false) {
+function showAuthBanner(msg){
+  const el = $('auth-banner');
+  if (!el) return;
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+
+async function performWalletAuth(silent = false){
   if (!checkWorldAppEnvironment()) return false;
+  if (!MiniKit.isInstalled()) return false;
   if (myAddress && realWorldIdUser) return true;
 
   try {
-    if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
-      const result = await MiniKit.walletAuth({
-        nonce: randomAlphaNumeric(24),
-        statement: 'Sign in to TNV Duel Arena.'
-      });
+    const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
+      nonce: randomAlphaNumeric(24),
+      requestId: 'req_login_' + Date.now(),
+      expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      notBefore: new Date(Date.now() - 60 * 1000),
+      statement: 'Sign in to TNV Duel Arena.',
+    });
 
-      if (result?.status === 'success' && result?.data?.address) {
-        realWorldIdUser = true;
-        const addr = result.data.address;
-        const username = await resolveUsername(addr);
-        setUserData(username, addr);
-        localStorage.setItem("myAddress", myAddress);
-        localStorage.setItem("myUsername", username);
-        return true;
-      }
+    if (finalPayload?.status === 'success' && finalPayload?.address){
+      realWorldIdUser = true;
+      const username = await resolveUsername(finalPayload.address);
+      setUserData(username, finalPayload.address);
+      localStorage.setItem("myAddress", myAddress);
+      localStorage.setItem("myUsername", username);
+      return true;
     }
 
-    if (window.ethereum) {
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      if (accounts && accounts.length > 0) {
-        realWorldIdUser = true;
-        const addr = accounts[0];
-        const username = '@W_' + addr.substring(2, 8);
-        setUserData(username, addr);
-        localStorage.setItem("myAddress", myAddress);
-        localStorage.setItem("myUsername", username);
-        return true;
-      }
-    }
-
-    if (!silent) {
-      alert("Wallet connection failed. Please ensure you are opening this inside World App and try restarting the app.");
-    }
+    showAuthBanner(`Sign-in did not complete (status: ${finalPayload?.status || 'unknown'})`);
+    if (!silent) alert("Sign-in cancelled or failed.");
     return false;
   } catch (err) {
-    if (!silent) alert("Auth Error: " + (err.message || err));
+    showAuthBanner(`Wallet auth error: ${err?.message || String(err)}`);
+    if (!silent) alert("Wallet authentication error.");
     return false;
   }
 }
@@ -741,11 +755,21 @@ async function handlePlayButtonClick(){
 
   $('start-btn').disabled = true;
 
+  // Fresh, live balance check right before we attempt payment — not the
+  // possibly-stale `currentWldBalance` cached from page load. This rules
+  // out a stale-balance false pass being the reason the real deposit
+  // then fails.
   const freshBalance = await fetchRealWldBalance(myAddress);
   if (freshBalance !== null) currentWldBalance = freshBalance;
 
   if (currentWldBalance < selectedFee) {
     alert(`Insufficient WLD balance. You have ${currentWldBalance.toFixed(2)} WLD, need ${selectedFee} WLD.`);
+    $('start-btn').disabled = false;
+    return;
+  }
+
+  if (DICE_DUEL_CONTRACT.includes('PUT_YOUR_DEPLOYED')) {
+    alert('DICE_DUEL_CONTRACT address is not set in app.js yet — deploy the contract first and fill it in.');
     $('start-btn').disabled = false;
     return;
   }
@@ -769,16 +793,35 @@ async function handlePlayButtonClick(){
 
   matchId = matchRow.id;
   isP1 = (matchRow.p1_address === myAddress);
+  // (opponent-locking via expectedOpponent is only relevant for the
+  // joinMatch() contract-call fallback — the current pay()-based flow
+  // doesn't need it client-side; the resolver still checks on-chain
+  // vs off-chain participants match before ever calling settleMatch.)
 
   $('wait-status').innerText = `Confirm payment in World App...`;
 
-  let paymentSuccessful = false;
+  let matchIdBytes32;
   try {
-    const opponentAddr = isP1 ? ZERO_ADDRESS : matchRow.p1_address;
-    await joinMatchOnChain(matchId, selectedFee, opponentAddr);
-    paymentSuccessful = true;
+    matchIdBytes32 = await matchIdToBytes32(matchId);
+  } catch (e) {
+    resetToHome();
+    return;
+  }
+
+  const paymentReference = 'ref_' + randomAlphaNumeric(16);
+  let paymentSuccessful = false;
+  let onChainTxId = null;
+  try {
+    const { finalPayload } = await MiniKit.commandsAsync.pay({
+      reference: paymentReference,
+      to: DICE_DUEL_CONTRACT,
+      tokens: [{ symbol: Tokens.WLD, token_amount: tokenToDecimals(selectedFee, Tokens.WLD).toString() }],
+      description: `Dice Duel entry fee: ${selectedFee} WLD`,
+    });
+    paymentSuccessful = (finalPayload?.status === 'success');
+    onChainTxId = finalPayload?.transaction_id || null;
   } catch (err) {
-    console.error('On-chain payment failed:', err);
+    console.warn("Payment error:", err);
     paymentSuccessful = false;
   }
 
@@ -802,6 +845,20 @@ async function handlePlayButtonClick(){
     return;
   }
 
+  // Payment sent successfully — now tell the resolver backend to verify
+  // it and register the deposit on-chain (recordDeposit). We can't do
+  // this ourselves: recordDeposit is resolver-only by design, so a
+  // player's own client can never fake a deposit that wasn't real.
+  try {
+    await supabaseClient.rpc('queue_pending_deposit', {
+      p_match_id: matchId,
+      p_wallet: myAddress,
+      p_fee: selectedFee,
+      p_reference: paymentReference,
+      p_tx_id: onChainTxId,
+    });
+  } catch (e) {}
+
   let existingSuccess = document.getElementById('neon-payment-success');
   if (!existingSuccess) {
     existingSuccess = document.createElement('div');
@@ -809,7 +866,7 @@ async function handlePlayButtonClick(){
     existingSuccess.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:rgba(5,15,10,0.95); border:2px solid #29d9c2; color:#29d9c2; padding:14px 20px; border-radius:12px; font-family:"Space Grotesk", sans-serif; font-size:13px; font-weight:700; text-align:center; box-shadow:0 0 20px rgba(41,217,194,0.6); backdrop-filter:blur(8px); transition:opacity 0.3s ease;';
     document.body.appendChild(existingSuccess);
   }
-  existingSuccess.innerHTML = '✨ Payment sent to Escrow! Confirming...';
+  existingSuccess.innerHTML = '✨ Payment sent! Confirming...';
   existingSuccess.style.opacity = '1';
   setTimeout(() => {
     existingSuccess.style.opacity = '0';
@@ -905,6 +962,8 @@ async function startSyncCountdown(){
   gameActive = true;
   clearInterval(mTimer);
   if (pollTimer) clearInterval(pollTimer);
+
+  stopBackgroundMusic();
 
   if (isP1) {
     await supabaseClient.rpc('secure_start_match', { p_match_id: matchId, p_wallet: myAddress });
@@ -1010,24 +1069,17 @@ async function finalizeGame(){
   const totalPool = Number((matchFee * 2).toFixed(2)); 
   const adminFeeAmount = Number(Math.max(0, totalPool - exactChipEarn).toFixed(2)); 
 
-  // Backend Settlement Trigger
   if (myAddress && !sessionStorage.getItem(`settled_${matchId}_${myAddress}`)) {
       sessionStorage.setItem(`settled_${matchId}_${myAddress}`, "true");
       try {
-          if (isWin) {
-              await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match (${matchFee} WLD duel)`);
-              
-              fetch('/api/settle-match', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                      matchId: matchId,
-                      winnerAddress: myAddress,
-                      loserAddress: isP1 ? finalRow.p2_address : finalRow.p1_address,
-                      fee: matchFee
-                  })
-              }).catch(err => console.error("Background payout error:", err));
+          await supabaseClient.rpc('queue_match_settlement', {
+              p_match_id: matchId,
+              p_reporter_address: myAddress,
+              p_is_win: isWin,
+          });
 
+          if (isWin) {
+              await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match (${matchFee} WLD duel) — pending on-chain settlement`);
           } else {
               await logMatchHistory(myAddress, 'DEFEAT', -matchFee, `Lost match (${matchFee} WLD duel)`);
           }
@@ -1052,6 +1104,7 @@ async function finalizeGame(){
     $('result-title').innerText = 'VICTORY!';
     $('result-msg').innerText = `+${exactChipEarn} WLD & +${earnedTnv} TNV`;
     $('result-card').className = 'result-card result-victory';
+    playVictorySound();
   } else {
     $('result-icon').innerText = '💀';
     $('result-title').innerText = 'DEFEAT!';
