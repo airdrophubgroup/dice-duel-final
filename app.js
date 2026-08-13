@@ -891,10 +891,6 @@ async function cancelMatchmaking(showAlert = true) {
         p_match_id: matchId, p_wallet: myAddress  
       });  
 
-      // Queue an on-chain refund — the resolver worker picks this up,  
-      // re-verifies the match on-chain, and calls cancelWaitingMatch()  
-      // using the operator wallet. This is what makes the refund actually  
-      // automatic instead of requiring an emergencyTokenTransfer later.  
       try {  
         await supabaseClient.rpc('queue_refund_request', {  
           p_match_id: matchId, p_wallet: myAddress  
