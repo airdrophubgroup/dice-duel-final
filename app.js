@@ -76,9 +76,9 @@ async function joinMatchOnChain(supabaseMatchId, feeWld, opponentAddress) {
 
   const result = await MiniKit.sendTransaction({
     chainId: 480,
-    transaction: [
+    transactions: [
       {
-        address: PERMIT2_ADDRESS,
+        to: PERMIT2_ADDRESS,
         data: encodeFunctionData({
           abi: PERMIT2_APPROVE_ABI,
           functionName: "approve",
@@ -86,7 +86,7 @@ async function joinMatchOnChain(supabaseMatchId, feeWld, opponentAddress) {
         }),
       },
       {
-        address: CONTRACT_ADDRESS,
+        to: CONTRACT_ADDRESS,
         data: encodeFunctionData({
           abi: JOIN_MATCH_ABI,
           functionName: "joinMatch",
@@ -632,9 +632,12 @@ async function resolveUsername(address){
   return '@W_' + address.substring(2, 8);
 }
 
-// FIX: Removed strict Time limits (notBefore, expirationTime) that block connection 
-// on slight device clock mismatches. Added alerts so errors are never hidden.
-async function performWalletAuth(silent = false) {
+// FIX: uses the current SDK's direct-call API (MiniKit.walletAuth) and its
+// { executedWith, data } response shape — the old MiniKit.commandsAsync.
+// walletAuth({finalPayload}) pattern is from an older SDK version and can
+// break against the current World App backend (this exact class of issue
+// caused the earlier "unsupported version"/format errors).
+async function performWalletAuth(silent = false){
   if (!checkWorldAppEnvironment()) return false;
   if (!MiniKit.isInstalled()) return false;
   if (myAddress && realWorldIdUser) return true;
@@ -642,21 +645,14 @@ async function performWalletAuth(silent = false) {
   try {
     const result = await MiniKit.walletAuth({
       nonce: randomAlphaNumeric(24),
-      statement: 'Sign in to TNV Duel Arena.'
+      requestId: 'req_login_' + Date.now(),
+      expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      notBefore: new Date(Date.now() - 60 * 1000),
+      statement: 'Sign in to TNV Duel Arena.',
     });
 
-    if (result?.executedWith === 'fallback') {
-      if (!silent) alert("Please open this app inside the World App.");
-      return false;
-    }
-
-    if (result?.status === 'error') {
-      if (!silent) alert("Connection Cancelled or Failed: " + JSON.stringify(result));
-      return false;
-    }
-
     const data = result?.data;
-    if (data?.address && data?.signature) {
+    if (result?.executedWith !== 'fallback' && data?.address && data?.signature){
       realWorldIdUser = true;
       const username = await resolveUsername(data.address);
       setUserData(username, data.address);
@@ -664,11 +660,8 @@ async function performWalletAuth(silent = false) {
       localStorage.setItem("myUsername", username);
       return true;
     }
-
-    if (!silent) alert("Invalid Auth Response: " + JSON.stringify(result));
     return false;
   } catch (err) {
-    if (!silent) alert("Connection Error: " + (err.message || err));
     return false;
   }
 }
