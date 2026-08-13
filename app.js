@@ -76,9 +76,9 @@ async function joinMatchOnChain(supabaseMatchId, feeWld, opponentAddress) {
 
   const result = await MiniKit.sendTransaction({
     chainId: 480,
-    transactions: [
+    transaction: [
       {
-        to: PERMIT2_ADDRESS,
+        address: PERMIT2_ADDRESS,
         data: encodeFunctionData({
           abi: PERMIT2_APPROVE_ABI,
           functionName: "approve",
@@ -86,7 +86,7 @@ async function joinMatchOnChain(supabaseMatchId, feeWld, opponentAddress) {
         }),
       },
       {
-        to: CONTRACT_ADDRESS,
+        address: CONTRACT_ADDRESS,
         data: encodeFunctionData({
           abi: JOIN_MATCH_ABI,
           functionName: "joinMatch",
