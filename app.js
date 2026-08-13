@@ -175,7 +175,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
     if ($('landingHint')) $('landingHint').textContent = 'World App detected — signing in...';
-    try { await performWalletAuth(true); } catch(err) {}
+    try { await performWalletAuth(false); } catch(err) { alert('Auth crashed: ' + (err.message || err)); }
   }
 
   if (myAddress) {
