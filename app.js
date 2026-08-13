@@ -890,8 +890,19 @@ async function cancelMatchmaking(showAlert = true) {
       await supabaseClient.rpc('secure_leave_waiting_match', {  
         p_match_id: matchId, p_wallet: myAddress  
       });  
+
+      // Queue an on-chain refund — the resolver worker picks this up,  
+      // re-verifies the match on-chain, and calls cancelWaitingMatch()  
+      // using the operator wallet. This is what makes the refund actually  
+      // automatic instead of requiring an emergencyTokenTransfer later.  
+      try {  
+        await supabaseClient.rpc('queue_refund_request', {  
+          p_match_id: matchId, p_wallet: myAddress  
+        });  
+      } catch (e) {}  
+
       if (showAlert) {  
-        alert(`Search cancelled. Your ${selectedFee} WLD is secure.`);  
+        alert(`Search cancelled. Your ${selectedFee} WLD refund is being processed on-chain.`);  
       }  
     } catch(e) {}  
   }  
