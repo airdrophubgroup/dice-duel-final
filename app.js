@@ -5,7 +5,8 @@ const SB_URL = "https://efmkazyrxllcyvcwmewd.supabase.co";
 const SB_KEY = "sb_publishable_px6Myv6S29bTXRYmYLAkgQ_WDHDb7da";
 const WORLD_APP_ID = "app_74bd2499a35b025efb62d99125df7883";
 
-const ADMIN_WALLET = "0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1"; 
+const ADMIN_WALLET = "0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1";
+const PAYMENT_RECV_WALLET = "0x8FB70CDFb545C7D9b842cBE37B9aba84059Bf14b"; 
 const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";
 const WORLDCHAIN_RPC = "https://worldchain-mainnet.g.alchemy.com/public";
 
@@ -13,7 +14,7 @@ const WORLDCHAIN_RPC = "https://worldchain-mainnet.g.alchemy.com/public";
 const PROXY_API_URL = "/api/proxy-request";
 
 // Fixed contract (front-running gap + player2-overwrite fixed + Permit2 support).
-const DICE_DUEL_CONTRACT = "0x060EDB17E26D5385f20f85D577dc9b87Dfa6cE28";
+const DICE_DUEL_CONTRACT = "0x529225162b86489fcbD6320b88C4BAEAAE586a67";
 
 // BACKGROUND MUSIC SETUP
 let bgMusic = new Audio('assets/bg-music.mp3'); 
@@ -569,13 +570,13 @@ window.openUserWithdrawalsModal = async function() {
   } catch(e) {}
 };
 
-window.closeUserWithdrawalsModal = function() { $('user-withdrawals-modal').style.display = 'none'; };
 window.openAdminEarningsModal = async function() {
   $('admin-earnings-modal').style.display = 'flex';
   const container = $('admin-earnings-list');
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading revenue...</div>`;
   try {
-    const { data } = await supabaseClient.from('match_history').select('*').eq('wallet_address', ADMIN_WALLET).eq('action_type', 'ADMIN_FEE').order('created_at', { ascending: false }).limit(50);
+    const { data } = await supabaseClient.from('match_history').select('*').eq('wallet_address', PAYMENT_RECV_WALLET).eq('action_type', 'ADMIN_FEE').order('created_at', { ascending: false }).limit(50);
+    // baaki code waisa hi rahega
     if (!data || data.length === 0) { container.innerHTML = `<div style="text-align:center; color:var(--slate);">No fees collected.</div>`; return; }
     let total = 0, html = '';
     data.forEach(i => { 
