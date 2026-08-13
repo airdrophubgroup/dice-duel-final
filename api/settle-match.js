@@ -4,13 +4,12 @@ import { ethers } from "ethers";
 const CONTRACT_ADDRESS = "0x529225162b86489fcbD6320b88C4BAEAAE586a67";
 const RPC_URL = "https://worldchain-mainnet.g.alchemy.com/public";
 
-// ABI mein hume backend ke liye sirf settleMatch chahiye
+// ABI mein backend ke liye settleMatch function
 const ABI = [
   "function settleMatch(bytes32 matchId, address winner) external"
 ];
 
 export default async function handler(req, res) {
-  // Sirf POST request allow karni hai
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -25,18 +24,20 @@ export default async function handler(req, res) {
     // 1. Provider setup
     const provider = new ethers.JsonRpcProvider(RPC_URL);
 
-    // 2. Vercel Environment Variables se Operator Wallet ka Private Key nikalna
-    const privateKey = process.env.OPERATOR_PRIVATE_KEY;
+    // 2. Environment Variable se Private Key nikalna (Ensure naam `.env` aur Vercel se match kare)
+    const privateKey = process.env.RESOLVER_PRIVATE_KEY || process.env.OPERATOR_PRIVATE_KEY;
     
     if (!privateKey) {
-      throw new Error("Operator Private Key is not set in Vercel environment variables");
+      throw new Error("Private Key is not set in environment variables");
     }
 
     const operatorWallet = new ethers.Wallet(privateKey, provider);
     const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, operatorWallet);
 
-    // 3. Supabase UUID (matchId) ko exact ussi bytes32 me convert karna jo frontend ne kiya tha
-    const bytes32MatchId = ethers.keccak256(ethers.toUtf8Bytes(matchId));
+    // 3. Frontend ke matching SHA-256 logic se matchId ko bytes32 mein convert karna
+    const encoder = new TextEncoder();
+    const hashBuf = await crypto.subtle.digest('SHA-256', encoder.encode(matchId));
+    const bytes32MatchId = '0x' + Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
 
     console.log(`Settling match ${matchId} for winner ${winnerAddress}...`);
     
