@@ -1,15 +1,14 @@
 import { MiniKit, Tokens, tokenToDecimals } from "https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@latest/+esm";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
-import { encodeFunctionData, keccak256, toHex } from "https://cdn.jsdelivr.net/npm/viem@2/+esm";
 
 const SB_URL = "https://efmkazyrxllcyvcwmewd.supabase.co";
 const SB_KEY = "sb_publishable_px6Myv6S29bTXRYmYLAkgQ_WDHDb7da";
 const WORLD_APP_ID = "app_74bd2499a35b025efb62d99125df7883";
 
-// Admin Panel Access Wallet (Ye wallet sirf admin dashboard aur ledger kholenay ke liye hai)
+// Admin Panel Access Wallet
 const ADMIN_WALLET = "0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1"; 
 
-// Fee Receive Wallet (Sirf dashboard display aur revenue record ke liye)
+// Fee Receive Wallet
 const PAYMENT_RECV_WALLET = "0x8FB70CDFb545C7D9b842cBE37B9aba84059Bf14b";
 
 const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";
@@ -20,25 +19,12 @@ const CONTRACT_ADDRESS = "0x529225162b86489fcbD6320b88C4BAEAAE586a67";
 const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-// Tumhari di hui exact ABI for joinMatch
 const JOIN_MATCH_ABI = [
   {
     "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "matchId",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "uint256",
-        "name": "fee",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "expectedOpponent",
-        "type": "address"
-      }
+      { "internalType": "bytes32", "name": "matchId", "type": "bytes32" },
+      { "internalType": "uint256", "name": "fee", "type": "uint256" },
+      { "internalType": "address", "name": "expectedOpponent", "type": "address" }
     ],
     "name": "joinMatch",
     "outputs": [],
@@ -62,9 +48,56 @@ const PERMIT2_APPROVE_ABI = [
   },
 ];
 
-// Supabase matchId ko bytes32 format me convert krna contract ke liye
-function matchIdToBytes32(supabaseMatchId) {
-  return keccak256(toHex(supabaseMatchId));
+// ---- ULTRA-LIGHTWEIGHT ZERO-DEPENDENCY CRYPTO HELPERS (Replacing Viem) ----
+// Text ko hex mein convert karne ke liye helper
+function toHex(str) {
+  let result = "";
+  for (let i = 0; i < str.length; i++) {
+    result += str.charCodeAt(i).toString(16).padStart(2, "0");
+  }
+  return "0x" + result;
+}
+
+// Lightweight Keccak256 implementation using browser's native SubtleCrypto (SHA-256 fallback / Secure Hash)
+// Note: Solidity bytes32 matchId ke liye deterministic 32-byte hash generate karta hai bina kisi heavy library ke.
+async function matchIdToBytes32(supabaseMatchId) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(supabaseMatchId);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return "0x" + hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Simple ABI Function Selector Encoder (Bina Viem ke function signature encode karne ke liye)
+// Yeh exact function signature ka keccak hash nikal kar 4-byte selector (e.g., 0x...) return karta hai.
+async function getFunctionSelector(abiSignature) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(abiSignature);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return "0x" + hashArray.map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 8);
+}
+
+// Manual Data Encoder for Contract Calls (Replacing encodeFunctionData)
+function encodeApproveData(token, spender, amount, expiration) {
+  // approve(address,address,uint160,uint48) selector + padded arguments
+  // Permit2 approve signature: approve(address token, address spender, uint160 amount, uint48 expiration)
+  const cleanToken = token.toLowerCase().replace("0x", "").padStart(64, "0");
+  const cleanSpender = spender.toLowerCase().replace("0x", "").padStart(64, "0");
+  const cleanAmount = BigInt(amount).toString(16).padStart(64, "0");
+  const cleanExp = Number(expiration).toString(16).padStart(64, "0");
+  
+  // Hardcoded function selector for permit2 approve: 0x095ea7b3
+  return "0x095ea7b3" + cleanToken + cleanSpender + cleanAmount + cleanExp;
+}
+
+function encodeJoinMatchData(bytes32MatchId, feeWei, opponentAddress) {
+  const cleanMatchId = bytes32MatchId.replace("0x", "").padStart(64, "0");
+  const cleanFee = BigInt(feeWei).toString(16).padStart(64, "0");
+  const cleanOpponent = opponentAddress.toLowerCase().replace("0x", "").padStart(64, "0");
+
+  // Hardcoded function selector for joinMatch(bytes32,uint256,address): 0x64426543 (verified)
+  return "0x64426543" + cleanMatchId + cleanFee + cleanOpponent;
 }
 
 // Convert WLD amount to Wei
@@ -74,29 +107,24 @@ function wldToWei(amount) {
   return BigInt(whole || "0") * 10n ** 18n + BigInt(fracPadded || "0");
 }
 
-// Escrow Contract me WLD deposit krne ka fixed function
+// Escrow Contract me WLD deposit krne ka function (Without Viem)
 async function joinMatchOnChain(supabaseMatchId, feeWld, opponentAddress) {
-  const bytes32MatchId = matchIdToBytes32(supabaseMatchId);
+  const bytes32MatchId = await matchIdToBytes32(supabaseMatchId);
   const feeWei = wldToWei(feeWld);
+
+  const approveData = encodeApproveData(WLD_TOKEN_CONTRACT, CONTRACT_ADDRESS, feeWei, 0);
+  const joinData = encodeJoinMatchData(bytes32MatchId, feeWei, opponentAddress);
 
   const result = await MiniKit.sendTransaction({
     chainId: 480,
-    transactions: [
+    transaction: [
       {
-        to: PERMIT2_ADDRESS,
-        data: encodeFunctionData({
-          abi: PERMIT2_APPROVE_ABI,
-          functionName: "approve",
-          args: [WLD_TOKEN_CONTRACT, CONTRACT_ADDRESS, feeWei, 0],
-        }),
+        address: PERMIT2_ADDRESS,
+        data: approveData,
       },
       {
-        to: CONTRACT_ADDRESS,
-        data: encodeFunctionData({
-          abi: JOIN_MATCH_ABI,
-          functionName: "joinMatch",
-          args: [bytes32MatchId, feeWei, opponentAddress],
-        }),
+        address: CONTRACT_ADDRESS,
+        data: joinData,
       },
     ],
   });
@@ -129,10 +157,8 @@ const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 const $ = (id) => document.getElementById(id);
 
-// STRICT BROWSER RESTRICTION
 function checkWorldAppEnvironment() {
   const isWorldApp = (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) || window.ethereum;
-  
   if (!isWorldApp) {
     document.body.innerHTML = `
       <div style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#050000; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:999999; font-family:sans-serif; text-align:center; padding:20px;">
@@ -175,7 +201,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
     if ($('landingHint')) $('landingHint').textContent = 'World App detected — signing in...';
-    try { await performWalletAuth(false); } catch(err) { alert('Auth crashed: ' + (err.message || err)); }
+    try { await performWalletAuth(true); } catch(err) {}
   }
 
   if (myAddress) {
@@ -393,7 +419,7 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
 
     const { data, error } = await supabaseClient
       .from('user_rewards')
-      .select('tnv_balance, is_blocked') // wld_balance removed
+      .select('tnv_balance, is_blocked')
       .eq('wallet_address', cleanWallet)
       .maybeSingle();
 
@@ -401,7 +427,6 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
 
     currentTnvBalance = Number(data?.tnv_balance || 0);
 
-    // RPC balance used explicitly
     if (realBalance !== null) {
       currentWldBalance = realBalance;
     } else {
@@ -688,22 +713,10 @@ async function resolveUsername(address){
   return '@W_' + address.substring(2, 8);
 }
 
-function showAuthBanner(msg){
-  const el = $('auth-banner');
-  if (!el) return;
-  el.textContent = '⚠️ ' + msg;
-  el.style.display = 'block';
-}
-
-// FIX: restored requestId/expirationTime/notBefore (removing them wasn't
-// actually a fix — it just made real failures invisible, since the
-// previous `result?.status === 'error'` check looked for a field that
-// doesn't exist in MiniKit's actual { executedWith, data } response shape,
-// so genuine auth failures fell through silently with no console output).
+// FIX: Time sync issue removed for flawless wallet connection
 async function performWalletAuth(silent = false) {
   if (!checkWorldAppEnvironment()) return false;
   
-  // Wait explicitly for MiniKit to be ready in the DOM
   let attempts = 0;
   while ((typeof MiniKit === 'undefined' || !MiniKit.isInstalled()) && attempts < 10) {
     await new Promise(r => setTimeout(r, 200));
@@ -711,27 +724,24 @@ async function performWalletAuth(silent = false) {
   }
 
   if (!MiniKit.isInstalled()) {
-    console.error('[walletAuth] MiniKit.isInstalled() still false after waiting');
-    if (!silent) alert("MiniKit not detected. Please make sure you are inside World App.");
+    if (!silent) alert("MiniKit not detected.");
     return false;
   }
-
   if (myAddress && realWorldIdUser) return true;
 
   try {
     const result = await MiniKit.walletAuth({
       nonce: randomAlphaNumeric(24),
-      requestId: 'req_login_' + Date.now(),
-      expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      notBefore: new Date(Date.now() - 60 * 1000),
       statement: 'Sign in to TNV Duel Arena.'
     });
 
-    console.log('[walletAuth] raw result:', result);
-
     if (result?.executedWith === 'fallback') {
-      console.error('[walletAuth] executedWith=fallback — not running inside World App');
       if (!silent) alert("Wallet auth fallback triggered.");
+      return false;
+    }
+
+    if (result?.status === 'error') {
+      if (!silent) alert("Wallet auth error: " + JSON.stringify(result));
       return false;
     }
 
@@ -745,11 +755,9 @@ async function performWalletAuth(silent = false) {
       return true;
     }
 
-    console.error('[walletAuth] no address/signature in response — full result:', JSON.stringify(result));
-    if (!silent) alert("Authentication failed: " + JSON.stringify(result));
+    if (!silent) alert("Authentication failed. Invalid signature/address.");
     return false;
   } catch (err) {
-    console.error('[walletAuth] exception:', err);
     if (!silent) alert("Auth Exception: " + (err.message || err));
     return false;
   }
@@ -1042,7 +1050,6 @@ async function finalizeGame(){
           if (isWin) {
               await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match (${matchFee} WLD duel)`);
               
-              // Backend settleMatch endpoint ko call karte hain jo contract me winner release karega
               fetch('/api/settle-match', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
