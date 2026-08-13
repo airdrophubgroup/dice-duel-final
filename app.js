@@ -5,32 +5,9 @@ const SB_URL = "https://efmkazyrxllcyvcwmewd.supabase.co";
 const SB_KEY = "sb_publishable_px6Myv6S29bTXRYmYLAkgQ_WDHDb7da";
 const WORLD_APP_ID = "app_74bd2499a35b025efb62d99125df7883";
 
-// Admin Panel Access Wallet (Ye wallet sirf admin dashboard aur ledger kholenay ke liye hai)
 const ADMIN_WALLET = "0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1"; 
-
-// Payment & Payout/Refund Wallet (Yahan saari entry fees aayengi aur refunds honge)
-const PAYMENT_RECV_WALLET = "0x8FB70CDFb545C7D9b842cBE37B9aba84059Bf14b";
-
 const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";
 const WORLDCHAIN_RPC = "https://worldchain-mainnet.g.alchemy.com/public";
-
-// BACKGROUND MUSIC SETUP
-let bgMusic = new Audio('assets/bg-music.mp3'); 
-bgMusic.loop = true; 
-bgMusic.volume = 0.4; 
-
-function startBackgroundMusic() {
-  try {
-    bgMusic.play().catch(err => console.log("Audio play blocked:", err));
-  } catch (e) {}
-}
-
-function stopBackgroundMusic() {
-  try {
-    bgMusic.pause();
-    bgMusic.currentTime = 0;
-  } catch (e) {}
-}
 
 const supabaseClient = createClient(SB_URL, SB_KEY);
 
@@ -50,15 +27,17 @@ const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 const $ = (id) => document.getElementById(id);
 
+// STRICT BROWSER RESTRICTION & RED WARNING SCREEN
 function checkWorldAppEnvironment() {
   const isWorldApp = (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) || window.ethereum;
+  
   if (!isWorldApp) {
     document.body.innerHTML = `
       <div style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#050000; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:999999; font-family:sans-serif; text-align:center; padding:20px;">
         <div style="background:rgba(255, 0, 0, 0.08); border:2px solid #ff3333; padding:30px; border-radius:20px; box-shadow: 0 0 30px rgba(255, 0, 0, 0.4); max-width:400px;">
-          <h1 style="color:#ff3333; font-size:24px; margin-bottom:15px;">⚠️ ACCESS DENIED</h1>
+          <h1 style="color:#ff3333; font-size:24px; margin-bottom:15px; text-shadow: 0 0 10px rgba(255,51,51,0.5);">⚠️ ACCESS DENIED</h1>
           <p style="color:#ffffff; font-size:16px; line-height:1.5; margin-bottom:20px;">This mini app can only be accessed and used inside the official <b>World App</b>.</p>
-          <div style="background:#ff3333; color:#000; font-weight:bold; padding:12px 20px; border-radius:10px; font-size:15px;">
+          <div style="background:#ff3333; color:#000; font-weight:bold; padding:12px 20px; border-radius:10px; font-size:15px; box-shadow: 0 0 15px #ff3333;">
             Please open inside World App
           </div>
         </div>
@@ -85,16 +64,24 @@ function waitForMiniKitReady(timeoutMs = 2000) {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
-  startBackgroundMusic();
-
-  try { MiniKit.install(WORLD_APP_ID); } catch(e) {}
+  try { 
+    MiniKit.install(WORLD_APP_ID); 
+  } catch(e) {}
 
   const ready = await waitForMiniKitReady();
   if (!ready) { checkWorldAppEnvironment(); return; }
 
   if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
     if ($('landingHint')) $('landingHint').textContent = 'World App detected — signing in...';
-    try { await performWalletAuth(true); } catch(err) {}
+    
+    try {
+      await Promise.race([
+        performWalletAuth(true),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Auth timeout')), 4000))
+      ]);
+    } catch(err) {
+      alert("Authentication failed or cancelled inside World App.");
+    }
   }
 
   if (myAddress) {
@@ -108,7 +95,13 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (stuckMatches && stuckMatches.length > 0) {
         for (let match of stuckMatches) {
           if (!match.game_started) {
-            await supabaseClient.rpc('secure_leave_waiting_match', { p_match_id: match.id, p_wallet: myAddress });
+            let feeToRefund = Number(match.fee || selectedFee);
+            const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
+            let curBal = Number(usrData?.wld_balance || 0);
+            let refundBal = Number((curBal + feeToRefund).toFixed(2));
+            await supabaseClient.from('user_rewards').update({ wld_balance: refundBal }).eq('wallet_address', myAddress);
+            await logMatchHistory(myAddress, 'REFUND', feeToRefund, `Search interrupted (reload) & fee refunded (${feeToRefund} WLD)`);
+            await supabaseClient.from('matches').delete().eq('id', match.id);
           }
         }
       }
@@ -126,35 +119,47 @@ window.addEventListener('DOMContentLoaded', async () => {
     waitingOverlay.appendChild(cancelBtn);
   }
 
-  if (typeof initGlobalChat === 'function') initGlobalChat();
+  if (typeof initGlobalChat === 'function') {
+    initGlobalChat();
+  }
   fetchLeaderboard();
   await resumeGameIfActive();
 });
 
 window.addEventListener('beforeunload', () => {
-  if (matchmakingActive && matchId && !gameActive) cancelMatchmaking(false);
+  if (matchmakingActive && matchId && !gameActive) {
+    cancelMatchmaking(false);
+  }
 });
 
 function initGlobalChat() {
   loadAndCleanChatHistory();
+
   globalChatChannel = supabaseClient.channel('global_community_chat', {
     config: { presence: { key: myUsername || 'Guest' }, broadcast: { self: true } }
   });
 
   globalChatChannel
     .on('broadcast', { event: 'new_chat_msg' }, ({ payload }) => {
-      if (payload && payload.message) saveAndAppendChatMessage(payload.sender, payload.message, payload.address, payload.timestamp);
+      if (payload && payload.message) {
+        saveAndAppendChatMessage(payload.sender, payload.message, payload.address, payload.timestamp);
+      }
     })
     .on('broadcast', { event: 'live_bet_alert' }, ({ payload }) => {
-      if (!matchmakingActive && !gameActive && payload && payload.address !== myAddress) showLiveBetNotification(payload.username, payload.fee);
+      if (!matchmakingActive && !gameActive && payload && payload.address !== myAddress) {
+        showLiveBetNotification(payload.username, payload.fee);
+      }
     })
     .on('presence', { event: 'sync' }, () => {
       const state = globalChatChannel.presenceState();
       const onlineCount = Object.keys(state).length || 1;
-      if ($('online-count')) $('online-count').innerText = onlineCount;
+      const onlineElem = $('online-count');
+      if (onlineElem) onlineElem.innerText = onlineCount;
     })
     .subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') await globalChatChannel.track({ online_at: new Date().toISOString() });
+      if (status === 'SUBSCRIBED') {
+        await globalChatChannel.track({ online_at: new Date().toISOString() });
+      }
     });
 }
 
@@ -174,11 +179,12 @@ function showLiveBetNotification(username, fee) {
   }
 
   const ticker = document.createElement('div');
-  ticker.style.cssText = 'background:rgba(17,17,32,0.92); border:1px solid rgba(41,217,194,0.4); backdrop-filter:blur(8px); color:#f1eee6; padding:8px 12px; border-radius:12px; font-size:11.5px; opacity:0; transition:all 0.3s ease; text-align:center;';
-  ticker.innerHTML = `🔥 <span style="color:var(--photon); font-weight:700;">${escapeHtml(username)}</span> started a <span style="color:var(--gold); font-weight:700;">${escapeHtml(fee)}</span> WLD duel!`;
+  ticker.style.cssText = 'background:rgba(17,17,32,0.92); border:1px solid rgba(41,217,194,0.4); backdrop-filter:blur(8px); color:#f1eee6; padding:8px 12px; border-radius:12px; font-size:11.5px; font-family:"Space Grotesk", sans-serif; box-shadow:0 8px 24px rgba(0,0,0,0.5); opacity:0; transition:all 0.3s ease; text-align:center;';
+  ticker.innerHTML = `🔥 <span style="color:var(--photon); font-weight:700;">${escapeHtml(username || 'A player')}</span> started a <span style="color:var(--gold); font-weight:700;">${escapeHtml(fee)}</span> WLD duel!`;
   
   existingContainer.appendChild(ticker);
   setTimeout(() => { ticker.style.opacity = '1'; }, 50);
+
   setTimeout(() => {
     ticker.style.opacity = '0';
     setTimeout(() => { ticker.remove(); }, 300);
@@ -196,7 +202,9 @@ function loadAndCleanChatHistory() {
 
     const container = $('chat-messages-container');
     container.innerHTML = `<div style="text-align:center; color:var(--slate); font-size:11px;">Messages are saved for 24 hours. Chat freely!</div>`;
-    history.forEach(item => renderChatMessageUI(item.sender, item.message, item.address, item.timestamp));
+    history.forEach(item => {
+      renderChatMessageUI(item.sender, item.message, item.address, item.timestamp);
+    });
   } catch (e) {}
 }
 
@@ -230,7 +238,8 @@ function renderChatMessageUI(sender, message, senderAddress, timestamp) {
 
 window.openChatModal = function() {
   $('chat-modal').style.display = 'flex';
-  $('chat-messages-container').scrollTop = $('chat-messages-container').scrollHeight;
+  const container = $('chat-messages-container');
+  container.scrollTop = container.scrollHeight;
 };
 
 window.closeChatModal = function() { $('chat-modal').style.display = 'none'; };
@@ -240,11 +249,13 @@ window.sendChatMessage = function() {
   const msg = input.value.trim();
   if (!msg) return;
 
+  let senderName = myUsername || '@Guest';
   globalChatChannel.send({
     type: 'broadcast',
     event: 'new_chat_msg',
-    payload: { sender: myUsername || '@Guest', message: msg, address: myAddress, timestamp: Date.now() }
+    payload: { sender: senderName, message: msg, address: myAddress, timestamp: Date.now() }
   });
+
   input.value = '';
 };
 
@@ -269,7 +280,8 @@ function playVictorySound() {
 
 window.toggleSupportDropdown = function(event) {
   event.stopPropagation();
-  $('support-dropdown').classList.toggle('show');
+  const dropdown = $('support-dropdown');
+  dropdown.classList.toggle('show');
 };
 
 window.addEventListener('click', () => {
@@ -278,7 +290,11 @@ window.addEventListener('click', () => {
 });
 
 function calculatePayout(fee) {
-  return Number((fee * 1.6).toFixed(2));
+  const exactPayouts = {
+    0.1: 0.17, 0.2: 0.34, 0.5: 0.80, 1: 1.60, 2: 3.20,
+    5: 8.80, 10: 17.8, 20: 36.0, 30: 54.0, 40: 72.0, 50: 90.0
+  };
+  return exactPayouts[fee] || Number((fee * 1.6).toFixed(2));
 }
 
 function getTnvRewardForFee(fee) {
@@ -296,15 +312,22 @@ async function fetchRealWldBalance(walletAddress) {
       body: JSON.stringify({
         jsonrpc: '2.0',
         method: 'eth_call',
-        params: [{ to: WLD_TOKEN_CONTRACT, data: '0x70a08231' + paddedAddress }, 'latest'],
+        params: [{
+          to: WLD_TOKEN_CONTRACT,
+          data: '0x70a08231' + paddedAddress
+        }, 'latest'],
         id: 1
       })
     });
     const result = await response.json();
+    if (result.error) return null;
     if (result.result && result.result !== '0x') {
-      return Number(BigInt(result.result)) / 1e18;
+      const balanceWei = BigInt(result.result);
+      return Number(balanceWei) / 1e18;
     }
-  } catch (e) {}
+  } catch (e) {
+    console.error("On-chain WLD balance fetch failed:", e);
+  }
   return null;
 }
 
@@ -319,30 +342,47 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
   }
 
   try {
-    const cleanWallet = wallet.toLowerCase().trim();
+    const cleanWallet = wallet ? wallet.toLowerCase().trim() : '';
     const realBalance = await fetchRealWldBalance(cleanWallet);
-    const { data } = await supabaseClient.from('user_rewards').select('tnv_balance, wld_balance, is_blocked').eq('wallet_address', cleanWallet).maybeSingle();
 
-    if (data && data.is_blocked) { $('blocked-screen').style.display = 'flex'; return; }
+    const { data, error } = await supabaseClient
+      .from('user_rewards')
+      .select('tnv_balance, wld_balance, is_blocked')
+      .eq('wallet_address', cleanWallet)
+      .maybeSingle();
+
+    if (!error && data && data.is_blocked) { $('blocked-screen').style.display = 'flex'; return; }
 
     currentTnvBalance = Number(data?.tnv_balance || 0);
-    currentWldBalance = realBalance !== null ? realBalance : Number(data?.wld_balance || 0);
+
+    if (realBalance !== null) {
+      currentWldBalance = realBalance;
+      const upsertPayload = { wallet_address: cleanWallet, wld_balance: realBalance };
+      if (!data) { upsertPayload.tnv_balance = 0; upsertPayload.is_blocked = false; }
+      await supabaseClient.from('user_rewards').upsert(upsertPayload, { onConflict: 'wallet_address' });
+    } else {
+      currentWldBalance = Number(data?.wld_balance || 0);
+      if (!data) {
+        await supabaseClient.from('user_rewards').upsert({ wallet_address: cleanWallet, tnv_balance: 0, wld_balance: 0, is_blocked: false });
+      }
+    }
 
     $('balance-num').innerText = currentTnvBalance;
     if ($('wld-balance-num')) $('wld-balance-num').innerText = currentWldBalance.toFixed(2);
     $('progress-text').innerText = `${currentTnvBalance.toLocaleString()} / 5,000 TNV`;
     $('p-fill').style.width = Math.min(100, (currentTnvBalance / 5000) * 100) + '%';
-    
     if (currentTnvBalance >= 5000) $('withdraw-btn').removeAttribute('disabled');
     else $('withdraw-btn').setAttribute('disabled', 'true');
-  } catch (e) {}
+  } catch (e) {
+    console.error("Balance fetch error:", e);
+  }
   fetchLeaderboard();
 }
 
 async function logMatchHistory(wallet, type, amount, details) {
   try {
     await supabaseClient.from('match_history').insert({
-      wallet_address: wallet.toLowerCase().trim(), 
+      wallet_address: wallet ? wallet.toLowerCase().trim() : '', 
       action_type: type, 
       amount: amount, 
       description: details, 
@@ -353,10 +393,11 @@ async function logMatchHistory(wallet, type, amount, details) {
 
 async function fetchAdminWithdrawRequests() {
   try {
-    const { data } = await supabaseClient.from('withdraw_requests').select('*').eq('status', 'pending').order('created_at', { ascending: false });
+    const { data, error } = await supabaseClient.from('withdraw_requests').select('*').eq('status', 'pending').order('created_at', { ascending: false });
     const container = $('admin-req-container');
-    if (!container || !data || data.length === 0) {
-      if (container) container.innerHTML = `<div style="font-size:11px; color:var(--slate); text-align:center;">No pending requests</div>`;
+    if (!container) return;
+    if (error || !data || data.length === 0) {
+      container.innerHTML = `<div style="font-size:11px; color:var(--slate); text-align:center;">No pending requests</div>`;
       return;
     }
     let html = '';
@@ -366,9 +407,10 @@ async function fetchAdminWithdrawRequests() {
         <div class="admin-req-item">
           <div class="admin-req-row">
             <span style="color:var(--photon); font-family:'JetBrains Mono', monospace;" title="${req.wallet_address}">${shortAddr}</span>
-            <span style="color:var(--gold); font-weight:700;">${req.amount} TNV</span>
+            <button onclick="navigator.clipboard.writeText('${req.wallet_address}'); alert('User address copied!');" style="background:rgba(255,255,255,0.1); border:none; color:#fff; font-size:9px; padding:2px 6px; border-radius:4px; cursor:pointer;">Copy Addr</button>
+            <span style="color:var(--gold); font-family:'JetBrains Mono', monospace; font-weight:700;">${req.amount} TNV</span>
           </div>
-          <div class="admin-req-row"><span>${new Date(req.created_at).toLocaleString()}</span><button class="approve-btn" onclick="openAdminModal('${req.id}', '${req.wallet_address}', ${req.amount})">APPROVE</button></div>
+          <div class="admin-req-row"><span style="font-size:10px; color:var(--slate);">${new Date(req.created_at).toLocaleString()}</span><button class="approve-btn" onclick="openAdminModal('${req.id}', '${req.wallet_address}', ${req.amount})">APPROVE / PAY</button></div>
         </div>
       `;
     });
@@ -378,53 +420,110 @@ async function fetchAdminWithdrawRequests() {
 
 async function fetchAdminCheaters() {
   try {
-    const { data } = await supabaseClient.from('cheater_logs').select('*').order('detected_at', { ascending: false }).limit(20);
+    const { data, error } = await supabaseClient.from('cheater_logs').select('*').order('detected_at', { ascending: false }).limit(20);
     const container = $('admin-cheaters-container');
-    if (!container || !data || data.length === 0) return;
+    if (!container) return;
+    if (error || !data || data.length === 0) {
+      container.innerHTML = `<div style="font-size:11px; color:var(--slate); text-align:center;">No suspicious activity</div>`;
+      return;
+    }
     let html = '';
     data.forEach(log => {
-      html += `<div class="admin-req-item"><div class="admin-req-row"><span style="color:var(--signal);">${log.wallet_address.slice(0,6)}...</span><span>Attempts: ${log.click_count}x</span></div></div>`;
+      let shortAddr = log.wallet_address.slice(0, 6) + '...' + log.wallet_address.slice(-4);
+      html += `
+        <div class="admin-req-item">
+          <div class="admin-req-row"><span style="color:var(--signal); font-family:'JetBrains Mono', monospace;">${shortAddr}</span><span style="font-size:10px; color:var(--slate);">${new Date(log.detected_at).toLocaleString()}</span></div>
+          <div class="admin-req-row"><span style="font-size:11px; color:var(--gold); font-weight:600;">Attempts: ${log.click_count}x</span><button class="block-btn" onclick="promptBlockUser('${log.wallet_address}')">BLOCK</button></div>
+        </div>
+      `;
     });
     container.innerHTML = html;
   } catch (e) {}
 }
 
+window.promptBlockUser = async function(walletToBlock) {
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
+  if (confirm(`⚠️ Block user: ${walletToBlock}?`)) {
+    await supabaseClient.from('user_rewards').update({ is_blocked: true }).eq('wallet_address', walletToBlock);
+    alert('User blocked.');
+    fetchAdminCheaters();
+  }
+};
+
 window.openAdminModal = function(reqId, userWallet, amount) {
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
   activeAdminReqId = reqId;
-  $('admin-modal-info').innerText = `Paying ${amount} TNV to ${userWallet}`;
+  $('admin-modal-info').innerText = `Paying ${amount} TNV to ${userWallet.slice(0,6)}...${userWallet.slice(-4)}`;
+  $('admin-tx-input').value = "";
   $('admin-approve-modal').style.display = 'flex';
 };
+
 window.closeAdminModal = function() { $('admin-approve-modal').style.display = 'none'; };
 
 window.confirmAdminApproval = async function() {
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
   let txProof = $('admin-tx-input').value.trim();
   if (!txProof) { alert('Enter Tx Hash'); return; }
-  await supabaseClient.rpc('admin_approve_withdrawal', { p_admin_wallet: myAddress, p_req_id: activeAdminReqId, p_tx_hash: txProof });
+
+  const { error } = await supabaseClient.rpc('admin_approve_withdrawal', {
+    p_admin_wallet: myAddress,
+    p_req_id: activeAdminReqId,
+    p_tx_hash: txProof
+  });
+
+  if (error) {
+    alert('Approval failed: ' + error.message);
+    return;
+  }
+
   alert('Approved successfully!');
   closeAdminModal();
   fetchAdminWithdrawRequests();
 };
 
 window.openUserHistoryModal = async function() {
-  if (!myAddress) { alert('Sign in first!'); return; }
+  if (!myAddress) { alert('Please sign in first!'); return; }
   $('user-history-modal').style.display = 'flex';
   const container = $('user-history-list');
-  const { data } = await supabaseClient.from('match_history').select('*').eq('wallet_address', myAddress).order('created_at', { ascending: false }).limit(20);
-  if (!data || data.length === 0) { container.innerHTML = `<div>No history found.</div>`; return; }
-  let html = '';
-  data.forEach(item => {
-    html += `<div style="padding:6px; border-bottom:1px solid rgba(255,255,255,0.05);"><b>${item.action_type}</b>: ${item.amount} WLD (${item.description})</div>`;
-  });
-  container.innerHTML = html;
+  container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading history...</div>`;
+  try {
+    const { data } = await supabaseClient.from('match_history').select('*').eq('wallet_address', myAddress).neq('action_type', 'ADMIN_FEE').order('created_at', { ascending: false }).limit(20);
+    if (!data || data.length === 0) { container.innerHTML = `<div style="text-align:center; color:var(--slate);">No match history found.</div>`; return; }
+    let html = '';
+    data.forEach(item => {
+      let color = item.action_type === 'DEFEAT' ? 'var(--signal)' : 'var(--photon)';
+      let timeStr = new Date(item.created_at).toLocaleString();
+      html += `<div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); padding:8px 10px; border-radius:8px;"><div style="display:flex; justify-content:space-between; font-weight:700; color:${color};"><span>${item.action_type}</span><span>${item.amount} WLD</span></div><div style="color:var(--slate); font-size:10.5px;">${item.description}</div><div style="color:#777; font-size:9.5px; text-align:right; margin-top:2px;">${timeStr}</div></div>`;
+    });
+    container.innerHTML = html;
+  } catch(e) {}
 };
-window.closeUserHistoryModal = function() { $('user-history-modal').style.display = 'none'; };
 
+window.closeUserHistoryModal = function() { $('user-history-modal').style.display = 'none'; };
+window.openUserWithdrawalsModal = async function() {
+  if (!myAddress) { alert('Please sign in first!'); return; }
+  $('user-withdrawals-modal').style.display = 'flex';
+  const container = $('user-withdrawals-list');
+  container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading requests...</div>`;
+  try {
+    const { data } = await supabaseClient.from('withdraw_requests').select('*').eq('wallet_address', myAddress).order('created_at', { ascending: false });
+    if (!data || data.length === 0) { container.innerHTML = `<div style="text-align:center; color:var(--slate);">No requests found.</div>`; return; }
+    let html = '';
+    data.forEach(req => {
+      let statusColor = req.status === 'approved' ? 'var(--photon)' : 'var(--gold)';
+      html += `<div style="background:rgba(255,255,255,0.03); padding:8px; border-radius:8px;"><div style="display:flex; justify-content:space-between; color:${statusColor};"><span>${req.amount} TNV</span><span>${req.status.toUpperCase()}</span></div></div>`;
+    });
+    container.innerHTML = html;
+  } catch(e) {}
+};
+
+window.closeUserWithdrawalsModal = function() { $('user-withdrawals-modal').style.display = 'none'; };
 window.openAdminEarningsModal = async function() {
   $('admin-earnings-modal').style.display = 'flex';
   const container = $('admin-earnings-list');
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading revenue...</div>`;
   try {
-    const { data } = await supabaseClient.from('match_history').select('*').eq('wallet_address', PAYMENT_RECV_WALLET).eq('action_type', 'ADMIN_FEE').order('created_at', { ascending: false }).limit(50);
+    const { data } = await supabaseClient.from('match_history').select('*').eq('wallet_address', ADMIN_WALLET).eq('action_type', 'ADMIN_FEE').order('created_at', { ascending: false }).limit(50);
     if (!data || data.length === 0) { container.innerHTML = `<div style="text-align:center; color:var(--slate);">No fees collected.</div>`; return; }
     let total = 0, html = '';
     data.forEach(i => { 
@@ -440,7 +539,7 @@ window.openAdminEarningsModal = async function() {
         </div>
       `; 
     });
-    container.innerHTML = `<div style="color:var(--gold); font-weight:700; margin-bottom:8px;">Total Fees: ${total.toFixed(2)} WLD</div>` + html;
+    container.innerHTML = `<div style="color:var(--gold); font-weight:700; margin-bottom:8px;">Total: ${total.toFixed(2)} WLD</div>` + html;
   } catch(e) {}
 };
 
@@ -450,11 +549,12 @@ async function fetchLeaderboard() {
   try {
     const { data } = await supabaseClient.from('user_rewards').select('wallet_address, tnv_balance').order('tnv_balance', { ascending: false }).limit(10);
     const lbContainer = $('lb-container');
-    if (!data || data.length === 0) return;
+    if (!data || data.length === 0) { lbContainer.innerHTML = `<div class="lb-item" style="justify-content:center; color:var(--slate);">No leaders yet</div>`; return; }
     let html = '';
     data.forEach((row, index) => {
-      let shortWallet = row.wallet_address.slice(0, 6) + '...' + row.wallet_address.slice(-4);
-      html += `<div class="lb-item"><span class="lb-rank">#${index + 1}</span><span class="lb-user">${shortWallet}</span><span class="lb-score">${row.tnv_balance} TNV</span></div>`;
+      let rankClass = index === 0 ? 'top-1' : (index === 1 ? 'top-2' : (index === 2 ? 'top-3' : ''));
+      let shortWallet = row.wallet_address.startsWith('0xDEV') ? 'Dev_' + row.wallet_address.slice(-4) : row.wallet_address.slice(0, 6) + '...' + row.wallet_address.slice(-4);
+      html += `<div class="lb-item ${rankClass}"><span class="lb-rank">#${index + 1}</span><span class="lb-user">${shortWallet}</span><span class="lb-score">${row.tnv_balance} TNV</span></div>`;
     });
     lbContainer.innerHTML = html;
   } catch (e) {}
@@ -463,14 +563,18 @@ async function fetchLeaderboard() {
 window.openWithdrawModal = function() {
   if (currentTnvBalance < 5000) { alert('Min 5,000 TNV required!'); return; }
   $('modal-bal').innerText = currentTnvBalance;
+  $('withdraw-input-container').style.display = 'block';
   $('withdraw-amount-input').value = currentTnvBalance;
   $('withdraw-modal').style.display = 'flex';
 };
+
 window.closeWithdrawModal = function() { $('withdraw-modal').style.display = 'none'; };
 
 window.submitWithdrawRequest = async function() {
   let withdrawAmt = Number($('withdraw-amount-input').value);
-  await supabaseClient.rpc('secure_submit_withdraw_request', { p_wallet: myAddress, p_amount: withdrawAmt });
+  if (isNaN(withdrawAmt) || withdrawAmt < 5000 || withdrawAmt > currentTnvBalance) { alert('Invalid amount'); return; }
+  await supabaseClient.from('withdraw_requests').insert({ wallet_address: myAddress, amount: withdrawAmt, status: 'pending' });
+  await supabaseClient.from('user_rewards').update({ tnv_balance: currentTnvBalance - withdrawAmt }).eq('wallet_address', myAddress);
   alert('Withdrawal requested!');
   closeWithdrawModal();
   fetchUserBalanceAndLeaderboard(myAddress);
@@ -540,6 +644,13 @@ async function resolveUsername(address){
   return '@W_' + address.substring(2, 8);
 }
 
+function showAuthBanner(msg){
+  const el = $('auth-banner');
+  if (!el) return;
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+
 async function performWalletAuth(silent = false){
   if (!checkWorldAppEnvironment()) return false;
   if (!MiniKit.isInstalled()) return false;
@@ -562,26 +673,15 @@ async function performWalletAuth(silent = false){
       localStorage.setItem("myUsername", username);
       return true;
     }
+
+    showAuthBanner(`Sign-in did not complete (status: ${finalPayload?.status || 'unknown'})`);
+    if (!silent) alert("Sign-in cancelled or failed.");
     return false;
   } catch (err) {
+    showAuthBanner(`Wallet auth error: ${err?.message || String(err)}`);
+    if (!silent) alert("Wallet authentication error.");
     return false;
   }
-}
-
-async function checkActiveMatchBeforePlay(walletAddress) {
-  try {
-    const { data, error } = await supabaseClient
-      .from('matches')
-      .select('*')
-      .or(`p1_address.eq.${walletAddress},p2_address.eq.${walletAddress}`)
-      .in('status', ['waiting', 'playing'])
-      .maybeSingle();
-
-    if (data) {
-      return true; // Matlab user ka pehle se match chal raha hai ya waiting me hai
-    }
-  } catch (e) {}
-  return false;
 }
 
 async function handlePlayButtonClick(){
@@ -595,77 +695,84 @@ async function handlePlayButtonClick(){
 
   $('start-btn').disabled = true;
 
-  const freshBalance = await fetchRealWldBalance(myAddress);
-  if (freshBalance !== null) currentWldBalance = freshBalance;
+  // Secure Atomic Payment check via Database RPC before proceeding
+  try {
+    const { data: payCheck, error: payErr } = await supabaseClient.rpc('secure_join_match', {
+      p_address: myAddress,
+      p_fee: selectedFee,
+      p_username: myUsername
+    });
 
-  if (currentWldBalance < selectedFee) {
-    alert("Insufficient balance!");
+    if (payErr || !payCheck || !payCheck.success) {
+      alert(payCheck?.message || "Payment verification failed in database.");
+      $('start-btn').disabled = false;
+      return;
+    }
+  } catch (err) {
+    alert("Secure matchmaking error.");
     $('start-btn').disabled = false;
     return;
   }
 
-  matchmakingActive = true;
-  $('waiting-overlay').style.display = 'flex';
-  $('wait-status').innerText = `Confirm payment in World App...`;
-
   let paymentSuccessful = false;
   try {
-    const payPayload = {
-      reference: randomAlphaNumeric(16),
-      to: PAYMENT_RECV_WALLET,
-      tokens: [{ symbol: Tokens.WLD, token_amount: tokenToDecimals(selectedFee, Tokens.WLD).toString() }],
-      description: `TNV Duel Entry Fee (${selectedFee} WLD)`
+    const paymentPayload = {
+      reference: 'ref_' + randomAlphaNumeric(16),
+      to: ADMIN_WALLET,
+      tokens: [
+        {
+          symbol: Tokens.WLD,
+          token_amount: tokenToDecimals(selectedFee, Tokens.WLD).toString(),
+        },
+      ],
+      description: `TNV Duel Arena Bet: ${selectedFee} WLD`,
     };
 
-    const { finalPayload } = await MiniKit.commandsAsync.pay(payPayload);
+    const { finalPayload } = await MiniKit.commandsAsync.pay(paymentPayload);
     paymentSuccessful = (finalPayload?.status === 'success');
+
   } catch (err) {
+    console.warn("Payment error:", err);
     paymentSuccessful = false;
   }
 
   if (!paymentSuccessful) {
-    alert('Payment was cancelled or failed.');
-    resetToHome();
-    return;
-  }
-
-  let matchRow;
-  try {
-    const { data, error } = await supabaseClient.rpc('join_or_create_match', {
-      p_address: myAddress, p_fee: selectedFee, p_username: myUsername,
-    });
-    if (error || !data) { resetToHome(); return; }
-    matchRow = Array.isArray(data) ? data[0] : data;
-    if (!matchRow) { resetToHome(); return; }
-  } catch (err) {
-    resetToHome();
-    return;
-  }
-
-  matchId = matchRow.id;
-  isP1 = (matchRow.p1_address === myAddress);
-
-  $('wait-status').innerText = `SEARCHING... (Cancel anytime)`;
-
-  if (globalChatChannel) {
-    globalChatChannel.send({
-      type: 'broadcast',
-      event: 'live_bet_alert',
-      payload: { username: myUsername || '@Player', fee: selectedFee, address: myAddress }
-    });
-  }
-
-  let timeLeft = 60;
-  mTimer = setInterval(async () => {
-    timeLeft--;
-    if (timeLeft <= 0){
-      clearInterval(mTimer);
-      if (!gameActive) await cancelMatchmaking(false);
+    let existingWarning = document.getElementById('neon-payment-warning');
+    if (!existingWarning) {
+      existingWarning = document.createElement('div');
+      existingWarning.id = 'neon-payment-warning';
+      existingWarning.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:rgba(15,5,10,0.95); border:2px solid #ff3366; color:#ff3366; padding:14px 20px; border-radius:12px; font-family:"Space Grotesk", sans-serif; font-size:13px; font-weight:700; text-align:center; box-shadow:0 0 20px rgba(255,51,102,0.6); backdrop-filter:blur(8px); transition:opacity 0.3s ease;';
+      document.body.appendChild(existingWarning);
     }
-  }, 1000);
+    existingWarning.innerHTML = '⚠️ Payment was cancelled or failed.';
+    existingWarning.style.opacity = '1';
 
-  setupChannel();
-  pollTimer = setInterval(checkBothReady, 1000);
+    setTimeout(() => {
+      existingWarning.style.opacity = '0';
+      setTimeout(() => { existingWarning.remove(); }, 300);
+    }, 4000);
+
+    $('start-btn').disabled = false;
+    return;
+  }
+
+  let existingSuccess = document.getElementById('neon-payment-success');
+  if (!existingSuccess) {
+    existingSuccess = document.createElement('div');
+    existingSuccess.id = 'neon-payment-success';
+    existingSuccess.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:rgba(5,15,10,0.95); border:2px solid #29d9c2; color:#29d9c2; padding:14px 20px; border-radius:12px; font-family:"Space Grotesk", sans-serif; font-size:13px; font-weight:700; text-align:center; box-shadow:0 0 20px rgba(41,217,194,0.6); backdrop-filter:blur(8px); transition:opacity 0.3s ease;';
+    document.body.appendChild(existingSuccess);
+  }
+  existingSuccess.innerHTML = '✨ Payment Successful!';
+  existingSuccess.style.opacity = '1';
+
+  setTimeout(() => {
+    existingSuccess.style.opacity = '0';
+    setTimeout(() => { existingSuccess.remove(); }, 300);
+  }, 3000);
+
+  await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', selectedFee, `Entry fee payment from ${myUsername || myAddress}`);
+  initMatchmakingAfterPayment();
 }
 
 function selectFee(amount, element){
@@ -697,12 +804,66 @@ function setupChannel() {
     .subscribe();
 }
 
+async function initMatchmakingAfterPayment(){
+  matchmakingActive = true;
+  $('start-btn').disabled = true;
+  $('waiting-overlay').style.display = 'flex';
+  $('wait-status').innerText = `SEARCHING... (Cancel anytime)`;
+
+  if (globalChatChannel) {
+    globalChatChannel.send({
+      type: 'broadcast',
+      event: 'live_bet_alert',
+      payload: { username: myUsername || '@Player', fee: selectedFee, address: myAddress }
+    });
+  }
+
+  let timeLeft = 60;
+  mTimer = setInterval(async () => {
+    timeLeft--;
+    if (timeLeft <= 0){
+      clearInterval(mTimer);
+      if (!gameActive) await cancelMatchmaking(false);
+    }
+  }, 1000);
+
+  try{
+    const { data, error } = await supabaseClient.rpc('join_or_create_match', {
+      p_address: myAddress, p_fee: selectedFee, p_username: myUsername,
+    });
+
+    if (error || !data){ resetToHome(); return; }
+    const matchRow = Array.isArray(data) ? data[0] : data;
+    if (!matchRow) { resetToHome(); return; }
+
+    matchId = matchRow.id;
+    isP1 = (matchRow.p1_address === myAddress);
+
+    setupChannel();
+    pollTimer = setInterval(checkBothReady, 1000);
+  }catch(err){ resetToHome(); }
+}
+
 async function cancelMatchmaking(showAlert = true) {
   if (!matchmakingActive || gameActive) return;
   if (matchId) {
     try {
-      await supabaseClient.rpc('secure_leave_waiting_match', { p_match_id: matchId, p_wallet: myAddress });
-      if (showAlert) alert('Search cancelled.');
+      const { data: matchCheck } = await supabaseClient.from('matches').select('status, game_started, fee').eq('id', matchId).single();
+
+      if (matchCheck && !matchCheck.game_started && matchCheck.status === 'waiting') {
+        let matchFee = Number(matchCheck.fee || selectedFee);
+        const { data: usrData } = await supabaseClient.from('user_rewards').select('wld_balance').eq('wallet_address', myAddress).maybeSingle();
+        const currentBal = Number(usrData?.wld_balance || 0);
+        const refundBal = Number((currentBal + matchFee).toFixed(2));
+
+        await supabaseClient.from('user_rewards').update({ wld_balance: refundBal }).eq('wallet_address', myAddress);
+        await logMatchHistory(myAddress, 'REFUND', matchFee, `Search cancelled & fee refunded (${matchFee} WLD)`);
+        await supabaseClient.from('matches').delete().eq('id', matchId).eq('status', 'waiting');
+
+        if (showAlert) alert(`Search cancelled. ${matchFee} WLD entry fee has been refunded.`);
+      } else {
+        if (showAlert) alert(`Search cancelled.`);
+      }
     } catch(e) {}
   }
   resetToHome();
@@ -731,10 +892,8 @@ async function startSyncCountdown(){
   clearInterval(mTimer);
   if (pollTimer) clearInterval(pollTimer);
 
-  stopBackgroundMusic();
-
   if (isP1) {
-    await supabaseClient.rpc('secure_start_match', { p_match_id: matchId, p_wallet: myAddress });
+    await supabaseClient.from("matches").update({ game_started: true, status: "playing", start_time: new Date().toISOString() }).eq("id", matchId);
   }
 
   $('wait-status').style.color = 'var(--photon)';
@@ -790,11 +949,13 @@ async function rollDice(){
 
   channel.send({ type: 'broadcast', event: 'score_update', payload: { sender: myAddress, score: myScore } });
   
-  const { data: rpcRes } = await supabaseClient.rpc('secure_roll_dice', {
+  const { data: rpcRes, error: rpcErr } = await supabaseClient.rpc('secure_roll_dice', {
     p_match_id: matchId, p_wallet: myAddress, p_roll: roll
   });
 
-  if (rpcRes && rpcRes.taps_left !== undefined) {
+  if (rpcErr || (rpcRes && !rpcRes.success)) {
+    console.warn("Roll rejected");
+  } else if (rpcRes && rpcRes.taps_left !== undefined) {
     myTurnsLeft = rpcRes.taps_left;
   }
 
@@ -821,8 +982,15 @@ async function finalizeGame(){
   let matchFee = Number(m.fee || selectedFee);
 
   if (m.status !== 'completed'){
-    const { data: completeResult } = await supabaseClient.rpc('secure_complete_match', { p_match_id: matchId, p_wallet: myAddress });
-    if (completeResult && completeResult.match) finalRow = completeResult.match;
+    let winnerAddress = null, winnerUsername = null, payout = calculatePayout(matchFee);
+    if (m.p1_score > m.p2_score) { winnerAddress = m.p1_address; winnerUsername = m.p1_username; }
+    else if (m.p2_score > m.p1_score) { winnerAddress = m.p2_address; winnerUsername = m.p2_username; }
+
+    const { data: updated } = await supabaseClient
+      .from('matches')
+      .update({ status: 'completed', winner_address: winnerAddress, winner_username: winnerUsername, payout_amount: payout })
+      .eq('id', matchId).eq('status', 'playing').select().single();
+    if (updated) finalRow = updated;
   }
 
   const myFinal = isP1 ? finalRow.p1_score : finalRow.p2_score;
@@ -830,39 +998,61 @@ async function finalizeGame(){
   const isWin = myFinal > opFinal;
 
   const exactChipEarn = calculatePayout(matchFee); 
+  const totalPool = Number((matchFee * 2).toFixed(2)); 
+  const adminFeeAmount = Number(Math.max(0, totalPool - exactChipEarn).toFixed(2)); 
 
   if (myAddress && !sessionStorage.getItem(`settled_${matchId}_${myAddress}`)) {
       sessionStorage.setItem(`settled_${matchId}_${myAddress}`, "true");
       try {
-if (isWin) {
-              await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match (${matchFee} WLD duel)`);
-              
-              // Background mein fetch call karein taaki screen freeze na ho
-              fetch('/api/settle-match', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                      matchId: matchId,
-                      winnerAddress: myAddress,
-                      loserAddress: isP1 ? finalRow.p2_address : finalRow.p1_address,
-                      fee: matchFee
-                  })
-              }).catch(err => console.error("Background payout error:", err));
+          if (isWin) {
+              await supabaseClient.rpc('settle_match_result', {
+                  p_match_id: matchId,
+                  p_winner_address: myAddress,
+                  p_payout: exactChipEarn,
+                  p_admin_fee: adminFeeAmount
+              });
 
+              await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match (${matchFee} WLD duel)`);
+              await logMatchHistory(ADMIN_WALLET, 'ADMIN_FEE', adminFeeAmount, `Platform fee from match`);
           } else {
               await logMatchHistory(myAddress, 'DEFEAT', -matchFee, `Lost match (${matchFee} WLD duel)`);
           }
-      } catch(e){
-          console.error("Payout trigger error:", e);
-      }
+      } catch(e){}
   }
 
   let winTnv = getTnvRewardForFee(matchFee);
   let earnedTnv = isWin ? winTnv : Math.floor(winTnv / 3);
 
   if (myAddress && !sessionStorage.getItem(`tnv_settled_${matchId}_${myAddress}`)) {
-      sessionStorage.setItem(`tnv_settled_${matchId}_${myAddress}`, "true");
+    sessionStorage.setItem(`tnv_settled_${matchId}_${myAddress}`, "true");
+    try {
+      const { data: usrData } = await supabaseClient.from('user_rewards').select('tnv_balance, total_games, games_played, games_won').eq('wallet_address', myAddress).maybeSingle();
+      if (usrData) {
+        await supabaseClient.from('user_rewards').update({ 
+          tnv_balance: Number(usrData.tnv_balance || 0) + earnedTnv,
+          total_games: Number(usrData.total_games || 0) + 1,
+          games_played: Number(usrData.games_played || 0) + 1,
+          games_won: Number(usrData.games_won || 0) + (isWin ? 1 : 0)
+        }).eq('wallet_address', myAddress);
+      }
+    } catch(e) {}
   }
+
+  if (isWin){
+    $('result-icon').innerText = '🏆';
+    $('result-title').innerText = 'VICTORY!';
+    $('result-msg').innerText = `+${exactChipEarn} WLD & +${earnedTnv} TNV`;
+    $('result-card').className = 'result-card result-victory';
+    playVictorySound();
+  } else {
+    $('result-icon').innerText = '💀';
+    $('result-title').innerText = 'DEFEAT!';
+    $('result-msg').innerText = `Fee deducted & +${earnedTnv} TNV (Consolation)`;
+    $('result-card').className = 'result-card result-defeat';
+  }
+
+  $('result-overlay').style.display = 'flex';
+  fetchUserBalanceAndLeaderboard(myAddress);
 }
 
 function resetToHome(){
