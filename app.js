@@ -698,34 +698,30 @@ function showAuthBanner(msg){
 // FIX: Time sync issue removed for flawless wallet connection
 async function performWalletAuth(silent = false) {
   if (!checkWorldAppEnvironment()) return false;
-  if (!MiniKit.isInstalled()) return false;
+  if (!MiniKit.isInstalled()) {
+    if (!silent) alert("MiniKit is not installed or not detected.");
+    return false;
+  }
   if (myAddress && realWorldIdUser) return true;
 
   try {
-    // Pehle check karte hain agar MiniKit mein user pehle se logged-in hai
-    if (MiniKit.user && MiniKit.user.walletAddress) {
-      realWorldIdUser = true;
-      const addr = MiniKit.user.walletAddress;
-      const username = MiniKit.user.username ? '@' + MiniKit.user.username : '@W_' + addr.substring(2, 8);
-      setUserData(username, addr);
-      localStorage.setItem("myAddress", myAddress);
-      localStorage.setItem("myUsername", username);
-      return true;
-    }
+    // Debug step: Check if MiniKit object exists
+    console.log("Attempting walletAuth...");
 
-    // Agar logged-in nahi hai, toh walletAuth prompt trigger karo
     const result = await MiniKit.walletAuth({
       nonce: randomAlphaNumeric(24),
       statement: 'Sign in to TNV Duel Arena.'
     });
 
+    console.log("walletAuth result:", JSON.stringify(result));
+
     if (result?.executedWith === 'fallback') {
-      if (!silent) alert("Please open this app inside the World App.");
+      if (!silent) alert("Fallback triggered: Please open this app strictly inside the World App.");
       return false;
     }
 
     if (result?.status === 'error') {
-      if (!silent) alert("Connection Cancelled or Failed: " + JSON.stringify(result));
+      if (!silent) alert("Auth Error Status: " + JSON.stringify(result));
       return false;
     }
 
@@ -739,10 +735,11 @@ async function performWalletAuth(silent = false) {
       return true;
     }
 
-    if (!silent) alert("Invalid Auth Response: " + JSON.stringify(result));
+    if (!silent) alert("Auth response missing address/signature: " + JSON.stringify(result));
     return false;
   } catch (err) {
-    if (!silent) alert("Connection Error: " + (err.message || err));
+    console.error("Wallet auth exception:", err);
+    if (!silent) alert("Wallet Auth Exception: " + (err.message || JSON.stringify(err)));
     return false;
   }
 }
