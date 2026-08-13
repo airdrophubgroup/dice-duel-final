@@ -702,6 +702,18 @@ async function performWalletAuth(silent = false) {
   if (myAddress && realWorldIdUser) return true;
 
   try {
+    // Pehle check karte hain agar MiniKit mein user pehle se logged-in hai
+    if (MiniKit.user && MiniKit.user.walletAddress) {
+      realWorldIdUser = true;
+      const addr = MiniKit.user.walletAddress;
+      const username = MiniKit.user.username ? '@' + MiniKit.user.username : '@W_' + addr.substring(2, 8);
+      setUserData(username, addr);
+      localStorage.setItem("myAddress", myAddress);
+      localStorage.setItem("myUsername", username);
+      return true;
+    }
+
+    // Agar logged-in nahi hai, toh walletAuth prompt trigger karo
     const result = await MiniKit.walletAuth({
       nonce: randomAlphaNumeric(24),
       statement: 'Sign in to TNV Duel Arena.'
@@ -713,7 +725,7 @@ async function performWalletAuth(silent = false) {
     }
 
     if (result?.status === 'error') {
-      if (!silent) alert("Connection Cancelled or Failed");
+      if (!silent) alert("Connection Cancelled or Failed: " + JSON.stringify(result));
       return false;
     }
 
@@ -727,7 +739,7 @@ async function performWalletAuth(silent = false) {
       return true;
     }
 
-    if (!silent) alert("Invalid Auth Response");
+    if (!silent) alert("Invalid Auth Response: " + JSON.stringify(result));
     return false;
   } catch (err) {
     if (!silent) alert("Connection Error: " + (err.message || err));
