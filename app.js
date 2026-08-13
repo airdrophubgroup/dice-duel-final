@@ -49,7 +49,6 @@ const PERMIT2_APPROVE_ABI = [
 ];
 
 // ---- ULTRA-LIGHTWEIGHT ZERO-DEPENDENCY CRYPTO HELPERS (Replacing Viem) ----
-// Text ko hex mein convert karne ke liye helper
 function toHex(str) {
   let result = "";
   for (let i = 0; i < str.length; i++) {
@@ -58,8 +57,6 @@ function toHex(str) {
   return "0x" + result;
 }
 
-// Lightweight Keccak256 implementation using browser's native SubtleCrypto (SHA-256 fallback / Secure Hash)
-// Note: Solidity bytes32 matchId ke liye deterministic 32-byte hash generate karta hai bina kisi heavy library ke.
 async function matchIdToBytes32(supabaseMatchId) {
   const encoder = new TextEncoder();
   const data = encoder.encode(supabaseMatchId);
@@ -68,26 +65,11 @@ async function matchIdToBytes32(supabaseMatchId) {
   return "0x" + hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-// Simple ABI Function Selector Encoder (Bina Viem ke function signature encode karne ke liye)
-// Yeh exact function signature ka keccak hash nikal kar 4-byte selector (e.g., 0x...) return karta hai.
-async function getFunctionSelector(abiSignature) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(abiSignature);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return "0x" + hashArray.map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 8);
-}
-
-// Manual Data Encoder for Contract Calls (Replacing encodeFunctionData)
 function encodeApproveData(token, spender, amount, expiration) {
-  // approve(address,address,uint160,uint48) selector + padded arguments
-  // Permit2 approve signature: approve(address token, address spender, uint160 amount, uint48 expiration)
   const cleanToken = token.toLowerCase().replace("0x", "").padStart(64, "0");
   const cleanSpender = spender.toLowerCase().replace("0x", "").padStart(64, "0");
   const cleanAmount = BigInt(amount).toString(16).padStart(64, "0");
   const cleanExp = Number(expiration).toString(16).padStart(64, "0");
-  
-  // Hardcoded function selector for permit2 approve: 0x095ea7b3
   return "0x095ea7b3" + cleanToken + cleanSpender + cleanAmount + cleanExp;
 }
 
@@ -95,19 +77,15 @@ function encodeJoinMatchData(bytes32MatchId, feeWei, opponentAddress) {
   const cleanMatchId = bytes32MatchId.replace("0x", "").padStart(64, "0");
   const cleanFee = BigInt(feeWei).toString(16).padStart(64, "0");
   const cleanOpponent = opponentAddress.toLowerCase().replace("0x", "").padStart(64, "0");
-
-  // Hardcoded function selector for joinMatch(bytes32,uint256,address): 0x64426543 (verified)
   return "0x64426543" + cleanMatchId + cleanFee + cleanOpponent;
 }
 
-// Convert WLD amount to Wei
 function wldToWei(amount) {
   const [whole, frac = ""] = String(amount).split(".");
   const fracPadded = (frac + "0".repeat(18)).slice(0, 18);
   return BigInt(whole || "0") * 10n ** 18n + BigInt(fracPadded || "0");
 }
 
-// Escrow Contract me WLD deposit krne ka function (Without Viem)
 async function joinMatchOnChain(supabaseMatchId, feeWld, opponentAddress) {
   const bytes32MatchId = await matchIdToBytes32(supabaseMatchId);
   const feeWei = wldToWei(feeWld);
@@ -118,14 +96,8 @@ async function joinMatchOnChain(supabaseMatchId, feeWld, opponentAddress) {
   const result = await MiniKit.sendTransaction({
     chainId: 480,
     transaction: [
-      {
-        address: PERMIT2_ADDRESS,
-        data: approveData,
-      },
-      {
-        address: CONTRACT_ADDRESS,
-        data: joinData,
-      },
+      { address: PERMIT2_ADDRESS, data: approveData },
+      { address: CONTRACT_ADDRESS, data: joinData },
     ],
   });
 
@@ -713,52 +685,47 @@ async function resolveUsername(address){
   return '@W_' + address.substring(2, 8);
 }
 
-// FIX: Time sync issue removed for flawless wallet connection
 async function performWalletAuth(silent = false) {
   if (!checkWorldAppEnvironment()) return false;
-  
-  let attempts = 0;
-  while ((typeof MiniKit === 'undefined' || !MiniKit.isInstalled()) && attempts < 10) {
-    await new Promise(r => setTimeout(r, 200));
-    attempts++;
-  }
-
-  if (!MiniKit.isInstalled()) {
-    if (!silent) alert("MiniKit not detected.");
-    return false;
-  }
   if (myAddress && realWorldIdUser) return true;
 
   try {
-    const result = await MiniKit.walletAuth({
-      nonce: randomAlphaNumeric(24),
-      statement: 'Sign in to TNV Duel Arena.'
-    });
+    if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {
+      const result = await MiniKit.walletAuth({
+        nonce: randomAlphaNumeric(24),
+        statement: 'Sign in to TNV Duel Arena.'
+      });
 
-    if (result?.executedWith === 'fallback') {
-      if (!silent) alert("Wallet auth fallback triggered.");
-      return false;
+      if (result?.status === 'success' && result?.data?.address) {
+        realWorldIdUser = true;
+        const addr = result.data.address;
+        const username = await resolveUsername(addr);
+        setUserData(username, addr);
+        localStorage.setItem("myAddress", myAddress);
+        localStorage.setItem("myUsername", username);
+        return true;
+      }
     }
 
-    if (result?.status === 'error') {
-      if (!silent) alert("Wallet auth error: " + JSON.stringify(result));
-      return false;
+    if (window.ethereum) {
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      if (accounts && accounts.length > 0) {
+        realWorldIdUser = true;
+        const addr = accounts[0];
+        const username = '@W_' + addr.substring(2, 8);
+        setUserData(username, addr);
+        localStorage.setItem("myAddress", myAddress);
+        localStorage.setItem("myUsername", username);
+        return true;
+      }
     }
 
-    const data = result?.data;
-    if (data?.address && data?.signature) {
-      realWorldIdUser = true;
-      const username = await resolveUsername(data.address);
-      setUserData(username, data.address);
-      localStorage.setItem("myAddress", myAddress);
-      localStorage.setItem("myUsername", username);
-      return true;
+    if (!silent) {
+      alert("Wallet connection failed. Please ensure you are opening this inside World App and try restarting the app.");
     }
-
-    if (!silent) alert("Authentication failed. Invalid signature/address.");
     return false;
   } catch (err) {
-    if (!silent) alert("Auth Exception: " + (err.message || err));
+    if (!silent) alert("Auth Error: " + (err.message || err));
     return false;
   }
 }
