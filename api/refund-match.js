@@ -1,57 +1,109 @@
+// refund_resolver_worker.js
+//
+// Run this as a small always-on process (or a cron job every ~10-15s) on
+// your backend — NOT in the browser. It holds the operator private key,
+// so it must never be shipped to app.js / the client.
+//
+// npm i ethers @supabase/supabase-js
+
 import { ethers } from "ethers";
+import { createClient } from "@supabase/supabase-js";
 
-// Tumhara Escrow Contract Address
-const CONTRACT_ADDRESS = "0x2f9D3bC7125d563434cbc601b15Add6Ba0F3F3Db";
-const RPC_URL = "https://worldchain-mainnet.g.alchemy.com/public";
+const SB_URL = process.env.SB_URL;                 // same Supabase project as app.js
+const SB_SERVICE_KEY = process.env.SB_SERVICE_KEY;  // service_role key — server-side only, never expose
+const OPERATOR_PRIVATE_KEY = process.env.OPERATOR_PRIVATE_KEY;
+const CONTRACT_ADDRESS = process.env.DICE_DUEL_CONTRACT;
+const WORLDCHAIN_RPC = "https://worldchain-mainnet.g.alchemy.com/public";
 
-// Contract ke actual cancelWaitingMatch function ke hisab se ABI
-const ABI = [
-  "function cancelWaitingMatch(bytes32 matchId) external"
+const CONTRACT_ABI = [
+  "function cancelWaitingMatch(bytes32 matchId) external",
+  "function matches(bytes32) view returns (address p1, address p2, uint256 fee, uint8 status, uint256 createdAt)"
 ];
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+const supabase = createClient(SB_URL, SB_SERVICE_KEY);
+const provider = new ethers.JsonRpcProvider(WORLDCHAIN_RPC);
+const operatorWallet = new ethers.Wallet(OPERATOR_PRIVATE_KEY, provider);
+const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, operatorWallet);
 
-  const { matchId } = req.body;
+// Same hashing app.js uses to turn a Supabase match uuid into the
+// bytes32 matchId the contract expects. Must stay identical to app.js's
+// matchIdToBytes32() — sha256(uuid string) -> 0x-prefixed hex.
+async function matchIdToBytes32(uuidStr) {
+  const enc = new TextEncoder().encode(uuidStr);
+  const hashBuf = await crypto.subtle.digest("SHA-256", enc);
+  const hashArr = Array.from(new Uint8Array(hashBuf));
+  return "0x" + hashArr.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
-  if (!matchId) {
-    return res.status(400).json({ error: 'Missing parameters: matchId is required' });
-  }
+const MatchStatus = { None: 0, Waiting: 1, Active: 2, Settled: 3, Cancelled: 4 };
+
+async function processOneRefund(row) {
+  const { id, match_id, wallet_address } = row;
+
+  // mark as processing so a second worker instance / re-run doesn't double-fire
+  const { error: lockErr } = await supabase
+    .from("refund_queue")
+    .update({ status: "processing" })
+    .eq("id", id)
+    .eq("status", "pending");
+  if (lockErr) return; // someone else grabbed it first
 
   try {
-    // 1. Provider setup
-    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const matchIdBytes32 = await matchIdToBytes32(match_id);
 
-    // 2. Environment Variable se Private Key nikalna
-    const privateKey = process.env.RESOLVER_PRIVATE_KEY || process.env.OPERATOR_PRIVATE_KEY;
-    
-    if (!privateKey) {
-      throw new Error("Private Key is not set in environment variables");
+    // Re-verify on-chain before spending gas / firing the refund —
+    // never trust the queue row alone.
+    const onChainMatch = await contract.matches(matchIdBytes32);
+    if (Number(onChainMatch.status) !== MatchStatus.Waiting) {
+      await supabase
+        .from("refund_queue")
+        .update({ status: "failed", error: "match not in Waiting state on-chain", processed_at: new Date().toISOString() })
+        .eq("id", id);
+      return;
+    }
+    if (onChainMatch.p1.toLowerCase() !== wallet_address.toLowerCase()) {
+      await supabase
+        .from("refund_queue")
+        .update({ status: "failed", error: "wallet mismatch with on-chain p1", processed_at: new Date().toISOString() })
+        .eq("id", id);
+      return;
     }
 
-    const operatorWallet = new ethers.Wallet(privateKey, provider);
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, operatorWallet);
-
-    // 3. Frontend ke matching SHA-256 logic se matchId ko bytes32 mein convert karna
-    const encoder = new TextEncoder();
-    const hashBuf = await crypto.subtle.digest('SHA-256', encoder.encode(matchId));
-    const bytes32MatchId = '0x' + Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
-
-    console.log(`Cancelling waiting match ${matchId}...`);
-    
-    // 4. Contract par cancelWaitingMatch function call karna
-    const tx = await contract.cancelWaitingMatch(bytes32MatchId);
-
-    // 5. Transaction complete hone ka wait karna
+    const tx = await contract.cancelWaitingMatch(matchIdBytes32);
     const receipt = await tx.wait();
-    console.log(`Match cancelled successfully! TX Hash: ${receipt.hash}`);
 
-    return res.status(200).json({ success: true, txHash: receipt.hash });
+    await supabase
+      .from("refund_queue")
+      .update({ status: "done", tx_hash: receipt.hash, processed_at: new Date().toISOString() })
+      .eq("id", id);
 
-  }catch (error) {
-    console.error("Refund error:", error);
-    return res.status(500).json({ success: false, error: error.message || "Internal server error" });
+    console.log(`Refunded match ${match_id} -> tx ${receipt.hash}`);
+  } catch (err) {
+    await supabase
+      .from("refund_queue")
+      .update({ status: "failed", error: String(err?.message || err), processed_at: new Date().toISOString() })
+      .eq("id", id);
+    console.error(`Refund failed for match ${match_id}:`, err);
   }
 }
+
+async function pollLoop() {
+  const { data: rows, error } = await supabase
+    .from("refund_queue")
+    .select("*")
+    .eq("status", "pending")
+    .order("created_at", { ascending: true })
+    .limit(10);
+
+  if (error) {
+    console.error("Poll error:", error);
+    return;
+  }
+
+  for (const row of rows || []) {
+    await processOneRefund(row);
+  }
+}
+
+setInterval(pollLoop, 10_000);
+pollLoop();
