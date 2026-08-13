@@ -698,30 +698,34 @@ function showAuthBanner(msg){
 // FIX: Time sync issue removed for flawless wallet connection
 async function performWalletAuth(silent = false) {
   if (!checkWorldAppEnvironment()) return false;
+  
+  // Wait explicitly for MiniKit to be ready in the DOM
+  let attempts = 0;
+  while ((typeof MiniKit === 'undefined' || !MiniKit.isInstalled()) && attempts < 10) {
+    await new Promise(r => setTimeout(r, 200));
+    attempts++;
+  }
+
   if (!MiniKit.isInstalled()) {
-    if (!silent) alert("MiniKit is not installed or not detected.");
+    if (!silent) alert("MiniKit not detected. Please make sure you are inside World App.");
     return false;
   }
+
   if (myAddress && realWorldIdUser) return true;
 
   try {
-    // Debug step: Check if MiniKit object exists
-    console.log("Attempting walletAuth...");
-
     const result = await MiniKit.walletAuth({
       nonce: randomAlphaNumeric(24),
       statement: 'Sign in to TNV Duel Arena.'
     });
 
-    console.log("walletAuth result:", JSON.stringify(result));
-
     if (result?.executedWith === 'fallback') {
-      if (!silent) alert("Fallback triggered: Please open this app strictly inside the World App.");
+      if (!silent) alert("Wallet auth fallback triggered.");
       return false;
     }
 
     if (result?.status === 'error') {
-      if (!silent) alert("Auth Error Status: " + JSON.stringify(result));
+      if (!silent) alert("Wallet auth error: " + JSON.stringify(result));
       return false;
     }
 
@@ -735,11 +739,10 @@ async function performWalletAuth(silent = false) {
       return true;
     }
 
-    if (!silent) alert("Auth response missing address/signature: " + JSON.stringify(result));
+    if (!silent) alert("Authentication failed. Invalid signature/address.");
     return false;
   } catch (err) {
-    console.error("Wallet auth exception:", err);
-    if (!silent) alert("Wallet Auth Exception: " + (err.message || JSON.stringify(err)));
+    if (!silent) alert("Auth Exception: " + (err.message || err));
     return false;
   }
 }
