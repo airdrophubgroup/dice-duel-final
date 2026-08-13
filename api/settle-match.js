@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
 
 // Tumhara Escrow Contract Address
-const CONTRACT_ADDRESS = "0x529225162b86489fcbD6320b88C4BAEAAE586a67";
+const CONTRACT_ADDRESS = "0x2f9D3bC7125d563434cbc601b15Add6Ba0F3F3Db";
 const RPC_URL = "https://worldchain-mainnet.g.alchemy.com/public";
 
 // ABI mein backend ke liye settleMatch function
