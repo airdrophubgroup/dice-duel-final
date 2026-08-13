@@ -81,9 +81,9 @@ async function joinMatchOnChain(supabaseMatchId, feeWld, opponentAddress) {
 
   const result = await MiniKit.sendTransaction({
     chainId: 480,
-    transaction: [
+    transactions: [
       {
-        address: PERMIT2_ADDRESS,
+        to: PERMIT2_ADDRESS,
         data: encodeFunctionData({
           abi: PERMIT2_APPROVE_ABI,
           functionName: "approve",
@@ -91,7 +91,7 @@ async function joinMatchOnChain(supabaseMatchId, feeWld, opponentAddress) {
         }),
       },
       {
-        address: CONTRACT_ADDRESS,
+        to: CONTRACT_ADDRESS,
         data: encodeFunctionData({
           abi: JOIN_MATCH_ABI,
           functionName: "joinMatch",
@@ -695,7 +695,11 @@ function showAuthBanner(msg){
   el.style.display = 'block';
 }
 
-// FIX: Time sync issue removed for flawless wallet connection
+// FIX: restored requestId/expirationTime/notBefore (removing them wasn't
+// actually a fix — it just made real failures invisible, since the
+// previous `result?.status === 'error'` check looked for a field that
+// doesn't exist in MiniKit's actual { executedWith, data } response shape,
+// so genuine auth failures fell through silently with no console output).
 async function performWalletAuth(silent = false) {
   if (!checkWorldAppEnvironment()) return false;
   
@@ -707,6 +711,7 @@ async function performWalletAuth(silent = false) {
   }
 
   if (!MiniKit.isInstalled()) {
+    console.error('[walletAuth] MiniKit.isInstalled() still false after waiting');
     if (!silent) alert("MiniKit not detected. Please make sure you are inside World App.");
     return false;
   }
@@ -716,16 +721,17 @@ async function performWalletAuth(silent = false) {
   try {
     const result = await MiniKit.walletAuth({
       nonce: randomAlphaNumeric(24),
+      requestId: 'req_login_' + Date.now(),
+      expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      notBefore: new Date(Date.now() - 60 * 1000),
       statement: 'Sign in to TNV Duel Arena.'
     });
 
-    if (result?.executedWith === 'fallback') {
-      if (!silent) alert("Wallet auth fallback triggered.");
-      return false;
-    }
+    console.log('[walletAuth] raw result:', result);
 
-    if (result?.status === 'error') {
-      if (!silent) alert("Wallet auth error: " + JSON.stringify(result));
+    if (result?.executedWith === 'fallback') {
+      console.error('[walletAuth] executedWith=fallback — not running inside World App');
+      if (!silent) alert("Wallet auth fallback triggered.");
       return false;
     }
 
@@ -739,9 +745,11 @@ async function performWalletAuth(silent = false) {
       return true;
     }
 
-    if (!silent) alert("Authentication failed. Invalid signature/address.");
+    console.error('[walletAuth] no address/signature in response — full result:', JSON.stringify(result));
+    if (!silent) alert("Authentication failed: " + JSON.stringify(result));
     return false;
   } catch (err) {
+    console.error('[walletAuth] exception:', err);
     if (!silent) alert("Auth Exception: " + (err.message || err));
     return false;
   }
