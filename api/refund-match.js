@@ -39,6 +39,11 @@ const MatchStatus = { None: 0, Waiting: 1, Active: 2, Settled: 3, Cancelled: 4 }
 
 async function processOneRefund(row) {
   const { id, match_id, wallet_address } = row;
+  // match_id here is refund_queue.match_id, which is a FK to matches.id
+  // (the Supabase row's primary key) — NOT the same as matches.match_id
+  // (a separate random field app.js generates for the on-chain hash).
+  // We must look up that column explicitly, or refunds will always
+  // hash the wrong bytes32 ID and revert on-chain.
 
   // mark as processing so a second worker instance / re-run doesn't double-fire
   const { error: lockErr } = await supabase
@@ -49,7 +54,24 @@ async function processOneRefund(row) {
   if (lockErr) return; // someone else grabbed it first
 
   try {
-    const matchIdBytes32 = await matchIdToBytes32(match_id);
+    const { data: matchRow, error: matchErr } = await supabase
+      .from("matches")
+      .select("match_id")
+      .eq("id", match_id)
+      .single();
+
+    if (matchErr || !matchRow) {
+      await supabase
+        .from("refund_queue")
+        .update({ status: "failed", error: "could not load matches.match_id for on-chain hash", processed_at: new Date().toISOString() })
+        .eq("id", id);
+      return;
+    }
+
+    // Fall back to the row id itself only if the app never set a
+    // separate match_id (e.g. an older match created before that field existed).
+    const onChainIdSource = matchRow.match_id || match_id;
+    const matchIdBytes32 = await matchIdToBytes32(onChainIdSource);
 
     // Re-verify on-chain before spending gas / firing the refund —
     // never trust the queue row alone.
