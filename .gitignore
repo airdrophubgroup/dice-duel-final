@@ -1,3 +1,21 @@
+# Environment / secrets
 .env
+.env.local
+.env.*.local
+*.pem
+
+# Dependencies
 node_modules/
+
+# OS
 .DS_Store
+
+# Supabase CLI local state (no secrets, but project-specific)
+supabase/.temp/
+supabase/.branches/
+
+# Vercel local
+.vercel/
+
+# Freebuff desktop tool state (may contain conversation data)
+.freebuff/

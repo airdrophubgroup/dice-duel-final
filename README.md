@@ -1,49 +1,32 @@
-<div align="center">
+# 🎲 Dice Duel — WLD Mini App
 
-# 🌍 WANT SELL ON WORLD 🌍
-### *The Ultimate Real-Time WLD Product Marketplace & Local Trading in World App*
+Real-time PvP dice duel that runs inside the **World App** (Worldchain). Players pay a WLD entry fee, get matched 1v1, and the winner takes the pot.
 
-<img src="https://img.shields.io/badge/Status-Live%20%26%20Secure-29d9c2?style=for-the-badge&logo=worldcoin&logoColor=white" /> <img src="https://img.shields.io/badge/Network-Worldchain-6c5ce7?style=for-the-badge&logo=ethereum&logoColor=white" /> <img src="https://img.shields.io/badge/Security-RPC%20%26%20Content%20Protected-ffb300?style=for-the-badge&logo=supabase&logoColor=white" />
+## How it works
 
-</div>
+1. **Matchmaking** — `join_or_create_match` creates a `waiting` match or joins you to an open one at the same fee tier.
+2. **Payment** — the player sends the entry fee (WLD) via MiniKit directly to the escrow contract. `/api/record-deposit` verifies the transfer **on-chain** (never trusts MiniKit's status) and marks `p1_paid` / `p2_paid` in Supabase, which is the ledger of record.
+3. **Play** — when both players have paid, the match starts; dice rolls are server-validated via `secure_roll_dice` (15 turns each).
+4. **Settlement** — the winner's device calls `/api/refund-match` (SETTLE_WINNER). The API validates the winner against the Supabase match row and pays the displayed payout (pot minus house cut) via the contract's owner-only `emergencyTokenTransfer`.
+5. **Refund** — if a match is cancelled or times out (60 s no opponent), `queue_refund_request` enqueues a refund; the `refund-resolver` edge function (every 1 min via pg_cron) sends the WLD back.
 
----
+## Architecture notes
 
-## ⚡ ABOUT THE PROJECT
+- The deployed escrow contract (`TnvDuelArena`, `0x2f9D3bC7...`) has **no `recordDeposit` function** and its `joinMatch` (Permit2) path enforces a 5-minute cancel wait, which conflicts with the game's 1-minute auto-refund requirement. The app therefore treats the contract as a WLD holding wallet: **Supabase is the match ledger**, and all payouts/refunds go through owner-operated `emergencyTokenTransfer`.
+- All Supabase writes go through **SECURITY DEFINER RPCs** that validate participants/payment server-side. Direct table access (anon key) is restricted to reads via RLS — see `supabase/harden_refund_flow.sql` and `supabase/cleanup_audit.sql`.
 
-**Want Sell On World** is a secure, location-aware product marketplace mini-app built exclusively for the **World App** ecosystem[cite: 3]. Users can list their products for sale, discover items locally or globally, chat directly with sellers in real-time, and earn exclusive **SOW Coins** with every ad posted![cite: 3]
+## Files
 
----
+| Path | Purpose |
+|---|---|
+| `index.html`, `app.js`, `style.css` | Frontend (vanilla ES modules, MiniKit + Supabase from CDN) |
+| `api/record-deposit.js` | On-chain WLD payment verification |
+| `api/refund-match.js` | Validated refund / winner-payout API |
+| `supabase/functions/refund-resolver/index.ts` | Cron-driven refund processor (deployed as Supabase Edge Function) |
+| `supabase/harden_refund_flow.sql` | Refund-queue validation + one-time settle flag |
+| `supabase/cleanup_audit.sql` | One-time cleanup: orphan tables/functions/columns, RLS fix |
 
-## 🔥 KEY FEATURES
+## Deploy
 
-* 🛡️ **Strict World App Enforcement**: Protected environment validation ensures seamless operation exclusively inside the official World App using native MiniKit wallet authentication[cite: 3].
-* 📍 **GPS Location & Distance Filtering**: Automatically detects user location and filters product listings within a custom radius range (5 km to 500 km)[cite: 3].
-* 🪙 **SOW Coin Rewards & Leaderboard**: Earn **1 SOW Coin** for every successful product ad you post[cite: 3]. Check out top sellers on the live SOW Leaderboard[cite: 3]!
-* 💬 **Secure Real-Time Chat**: Direct messaging between buyers and interested sellers, which automatically persists while the listing is active and cleans up upon deletion[cite: 3].
-* ⭐ **Ratings & Reviews System**: Build trust in the marketplace by leaving verified star ratings and reviews for sellers[cite: 3].
-* 🛡️ **Prohibited Content Security**: Built-in automated keyword filtering that blocks illegal or restricted words in real-time during ad submission.
-* 🛠️ **Admin Dashboard & Management**: Exclusive Admin Panel for managing listings, monitoring stats, and handling storage cleanups[cite: 3].
-
----
-
-## 📖 MARKETPLACE RULES & MECHANICS
-
-1. **Listing Fee**: Posting a product ad requires a fee of **1 WLD** processed securely via MiniKit payment commands[cite: 3].
-2. **Anti-Scam & Safety Protection**: Phone numbers, direct external contact details, and illegal/prohibited keywords are strictly restricted to prevent fraud and maintain safety[cite: 3].
-3. **Storage & Cleanup**: When a product is deleted or sold out, its associated storage images and chat history are permanently and cleanly removed[cite: 3].
-
----
-
-## 🛠️ TECH STACK
-
-* **Frontend**: Vanilla JavaScript (ES Modules), HTML5, CSS3 (Neon Glassmorphism UI)[cite: 3]
-* **Web3 / SDK**: `@worldcoin/minikit-js`, Worldchain Mainnet RPC[cite: 3]
-* **Backend & Security**: Supabase (PostgreSQL, Row Level Security, Storage Buckets, Secure RPC Functions)[cite: 3]
-* **Hosting**: Vercel[cite: 3]
-
----
-
-<div align="center">
-  <p><b>Built with passion for the Worldcoin Community 🚀</b></p>
-</div>
+- **Vercel**: connected to GitHub — push to `main` auto-deploys. Env vars on Vercel: `OPERATOR_PRIVATE_KEY` (the escrow contract owner), `SUPABASE_URL`, `SUPABASE_ANON_KEY` (optional; falls back to the publishable key).
+- **Supabase Edge Function**: `supabase functions deploy refund-resolver --no-verify-jwt`, secrets `OPERATOR_PRIVATE_KEY`, `DICE_DUEL_CONTRACT`, `CRON_SECRET`. pg_cron calls it every minute with the `x-cron-secret` header.

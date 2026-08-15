@@ -12,17 +12,20 @@
 // by the platform — you don't need to set those yourself.
 //
 // Refund flow handled here:
-//   A) Match is booked on-chain (status Waiting, player == p1) ->
-//      cancelWaitingMatch() refunds the player's WLD. This is the normal
-//      case after app.js successfully books the deposit.
-//   B) Match was NEVER booked on-chain (status None) -> the player paid
-//      but record-deposit failed, so the WLD sits unallocated in the
-//      contract. We return the entry fee via the contract's owner-only
-//      emergencyTokenTransfer(). This only succeeds if the operator key
-//      IS the contract owner — if it isn't, the row is marked failed and
-//      the admin must use api/emergengy-transfer.js manually.
-//      IMPORTANT: an emergency refund is only attempted while the match
-//      is in status None. It is never attempted for Active/Settled/Cancelled.
+//   The app does NOT book matches on-chain (the deployed TnvDuelArena
+//   contract has no recordDeposit function; joinMatch/Permit2 conflicts
+//   with the game's 1-minute auto-refund rule). The player's WLD sits in
+//   the contract as an unallocated balance and Supabase is the ledger, so
+//   EVERY refund here goes through the owner-only emergencyTokenTransfer()
+//   (path B below). The on-chain Waiting branch (A) is kept as a defensive
+//   fallback for any future match that was booked via joinMatch.
+//
+//   A) Match IS booked on-chain (status Waiting, player == p1) ->
+//      cancelWaitingMatch() refunds the player's WLD.
+//   B) Match never booked on-chain (status None) -> return the entry fee
+//      via emergencyTokenTransfer(). Only succeeds if the operator key IS
+//      the contract owner. Each row is also validated against the matches
+//      table (wallet must be a PAID participant) before any transfer.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { ethers } from "npm:ethers@6";
