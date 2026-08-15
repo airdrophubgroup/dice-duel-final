@@ -853,6 +853,9 @@ async function cancelMatchmaking(showAlert = true) {
   const paid = hasPaid;
   const targetBytes32 = matchIdBytes32Global;
 
+  // TEMP DEBUG — remove after diagnosing why queue_refund_request isn't firing.
+  alert(`DEBUG cancel:\nhasPaid=${paid}\nmatchIdBytes32Global=${targetBytes32}\ntargetMatchId=${targetMatchId}\ntargetWallet=${targetWallet}`);
+
   if (targetMatchId && targetWallet) {  
     try {  
       await supabaseClient.rpc('secure_leave_waiting_match', {  
