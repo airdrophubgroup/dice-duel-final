@@ -884,35 +884,46 @@ async function handlePlayButtonClick(){
         depositBooked = true;
         paymentVerified = true;
         clearInterval(bookingRetryTimer);
+        // Delayed verification — make sure the DB paid-flag catches up so
+        // matchmaking and refunds both work.
+        try {
+          await supabaseClient.rpc('force_confirm_payment', { p_match_id: matchId, p_is_p1: isP1 });
+        } catch(e) { /* non-fatal */ }
         showNeonToast('✅ Deposit confirmed on-chain', 'success');
       }
     } catch (e) { /* keep retrying */ }
     finally { bookingInFlight = false; }
   }, 5000);
 
-  // Mark the payment as done in the DB so matchmaking can proceed — the
-  // game may start even if the on-chain booking is still settling.
-  try {
-    const { data: fcpData, error: fcpErr } = await supabaseClient.rpc('force_confirm_payment', {
-      p_match_id: matchId,
-      p_is_p1: isP1
-    });
-    if (fcpErr) console.warn('force_confirm_payment error:', fcpErr);
-  } catch(e) {
-    console.warn('force_confirm_payment exception:', e);
-  }
-
-  // If the player cancelled while the payment was still completing, the
-  // match is already cancelled — queue the refund immediately so the
-  // payment that just arrived is not left stuck.
-  try {
-    const { data: chk } = await supabaseClient.from('matches').select('status').eq('id', matchId).single();
-    if (chk && chk.status === 'cancelled') {
-      await supabaseClient.rpc('queue_refund_request', {
-        p_match_id: matchId, p_wallet: myAddress.toLowerCase().trim()
+  // Mark the payment as done in the DB so matchmaking can proceed — but
+  // ONLY when the payment was actually verified on-chain (record-deposit
+  // confirmed it). MiniKit "success" without a real on-chain transfer
+  // (test mode) must NOT mark the player as paid — otherwise fake
+  // payments would queue refund rows. p1_paid/p2_paid are the gate for
+  // both matchmaking and refunds.
+  if (depositBooked || paymentVerified) {
+    try {
+      const { data: fcpData, error: fcpErr } = await supabaseClient.rpc('force_confirm_payment', {
+        p_match_id: matchId,
+        p_is_p1: isP1
       });
+      if (fcpErr) console.warn('force_confirm_payment error:', fcpErr);
+    } catch(e) {
+      console.warn('force_confirm_payment exception:', e);
     }
-  } catch(e) { /* non-fatal */ }
+
+    // If the player cancelled while the payment was still completing, the
+    // match is already cancelled — queue the refund immediately so the
+    // payment that just arrived is not left stuck.
+    try {
+      const { data: chk } = await supabaseClient.from('matches').select('status').eq('id', matchId).single();
+      if (chk && chk.status === 'cancelled') {
+        await supabaseClient.rpc('queue_refund_request', {
+          p_match_id: matchId, p_wallet: myAddress.toLowerCase().trim()
+        });
+      }
+    } catch(e) { /* non-fatal */ }
+  }
 
   if (depositBooked) {
     showNeonToast('✨ Payment confirmed! Waiting for opponent...', 'success');
@@ -998,6 +1009,25 @@ async function cancelMatchmaking(showAlert = true) {
       if (error) console.error('queue_refund_request error:', error);
     } catch (e) {
       console.error('queue_refund_request exception:', e);
+    }
+
+    // Rejected — usually because the paid flag isn't set (payment was
+    // never verified). If the player says they paid, do one final
+    // on-chain check: only a REAL verified payment gets marked paid and
+    // queued for refund. Fake/test payments are rejected here.
+    if (!refundQueued && hasPaid) {
+      try {
+        const r = await recordDepositOnce(matchIdBytes32Global, targetWallet, FEE_WEI[selectedFee] || null, null);
+        if (r.ok) {
+          try {
+            await supabaseClient.rpc('force_confirm_payment', { p_match_id: targetMatchId, p_is_p1: isP1 });
+          } catch(e) { /* non-fatal */ }
+          const { data: d2 } = await supabaseClient.rpc('queue_refund_request', {
+            p_match_id: targetMatchId, p_wallet: targetWallet
+          }).catch(() => ({}));
+          refundQueued = !!d2 && d2.success === true;
+        }
+      } catch (e) { /* non-fatal */ }
     }
   }
 
