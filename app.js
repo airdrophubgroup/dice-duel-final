@@ -399,7 +399,7 @@ async function fetchAdminWithdrawRequests() {
         <div class="admin-req-item">  
           <div class="admin-req-row">  
             <span style="color:var(--photon); font-family:'JetBrains Mono', monospace;" title="${req.wallet_address}">${shortAddr}</span>  
-            <button onclick="navigator.clipboard.writeText('${req.wallet_address}'); alert('User address copied!');" style="background:rgba(255,255,255,0.1); border:none; color:#fff; font-size:9px; padding:2px 6px; border-radius:4px; cursor:pointer;">Copy Addr</button>  
+            <button onclick="navigator.clipboard.writeText('${req.wallet_address}'); showNeonToast('User address copied!','success');" style="background:rgba(255,255,255,0.1); border:none; color:#fff; font-size:9px; padding:2px 6px; border-radius:4px; cursor:pointer;">Copy Addr</button>  
             <span style="color:var(--gold); font-family:'JetBrains Mono', monospace; font-weight:700;">${req.amount} TNV</span>  
           </div>  
           <div class="admin-req-row"><span style="font-size:10px; color:var(--slate);">${new Date(req.created_at).toLocaleString()}</span><button class="approve-btn" onclick="openAdminModal('${req.id}', '${req.wallet_address}', ${req.amount})">APPROVE / PAY</button></div>  
@@ -435,15 +435,15 @@ async function fetchAdminCheaters() {
 
 window.promptBlockUser = async function(walletToBlock) {  
   if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;  
-  if (confirm(`⚠️ Block user: ${walletToBlock}?`)) {  
+  if (await neonConfirm(`⚠️ Block user: ${walletToBlock}?`)) {  
     const { data: result } = await supabaseClient.rpc('secure_admin_block_user', {  
       p_admin_wallet: myAddress, p_target_wallet: walletToBlock  
     });  
     if (result && result.success) {  
-      alert('User blocked.');  
+      showNeonToast('User blocked.', 'success');  
       fetchAdminCheaters();  
     } else {  
-      alert('Block failed: ' + (result?.error || 'unknown error'));  
+      showNeonToast('Block failed: ' + (result?.error || 'unknown error'), 'error');  
     }  
   }  
 };  
@@ -461,7 +461,7 @@ window.closeAdminModal = function() { $('admin-approve-modal').style.display = '
 window.confirmAdminApproval = async function() {  
   if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;  
   let txProof = $('admin-tx-input').value.trim();  
-  if (!txProof) { alert('Enter Tx Hash'); return; }  
+  if (!txProof) { showNeonToast('Enter Tx Hash', 'warning'); return; }  
 
   const { error } = await supabaseClient.rpc('admin_approve_withdrawal', {  
     p_admin_wallet: myAddress,  
@@ -470,17 +470,17 @@ window.confirmAdminApproval = async function() {
   });  
 
   if (error) {  
-    alert('Approval failed: ' + error.message);  
+    showNeonToast('Approval failed: ' + error.message, 'error');  
     return;  
   }  
 
-  alert('Approved successfully!');  
+  showNeonToast('Approved successfully!', 'success');  
   closeAdminModal();  
   fetchAdminWithdrawRequests();  
 };  
 
 window.openUserHistoryModal = async function() {  
-  if (!myAddress) { alert('Please sign in first!'); return; }  
+  if (!myAddress) { showNeonToast('Please sign in first!', 'warning'); return; }  
   $('user-history-modal').style.display = 'flex';  
   const container = $('user-history-list');  
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading history...</div>`;  
@@ -499,7 +499,7 @@ window.openUserHistoryModal = async function() {
 
 window.closeUserHistoryModal = function() { $('user-history-modal').style.display = 'none'; };  
 window.openUserWithdrawalsModal = async function() {  
-  if (!myAddress) { alert('Please sign in first!'); return; }  
+  if (!myAddress) { showNeonToast('Please sign in first!', 'warning'); return; }  
   $('user-withdrawals-modal').style.display = 'flex';  
   const container = $('user-withdrawals-list');  
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading requests...</div>`;  
@@ -558,7 +558,7 @@ async function fetchLeaderboard() {
 }  
 
 window.openWithdrawModal = function() {  
-  if (currentTnvBalance < 5000) { alert('Min 5,000 TNV required!'); return; }  
+  if (currentTnvBalance < 5000) { showNeonToast('Min 5,000 TNV required!', 'warning'); return; }  
   $('modal-bal').innerText = currentTnvBalance;  
   $('withdraw-input-container').style.display = 'block';  
   $('withdraw-amount-input').value = currentTnvBalance;  
@@ -569,18 +569,18 @@ window.closeWithdrawModal = function() { $('withdraw-modal').style.display = 'no
 
 window.submitWithdrawRequest = async function() {  
   let withdrawAmt = Number($('withdraw-amount-input').value);  
-  if (isNaN(withdrawAmt) || withdrawAmt < 5000 || withdrawAmt > currentTnvBalance) { alert('Invalid amount'); return; }  
+  if (isNaN(withdrawAmt) || withdrawAmt < 5000 || withdrawAmt > currentTnvBalance) { showNeonToast('Invalid amount', 'warning'); return; }  
 
   const { data: result, error } = await supabaseClient.rpc('secure_submit_withdraw_request', {  
     p_wallet: myAddress, p_amount: withdrawAmt  
   });  
 
   if (error || !result || !result.success) {  
-    alert('Withdrawal request failed: ' + (result?.error || error?.message || 'unknown error'));  
+    showNeonToast('Withdrawal request failed: ' + (result?.error || error?.message || 'unknown error'), 'error');  
     return;  
   }  
 
-  alert('Withdrawal requested!');  
+  showNeonToast('Withdrawal requested!', 'success');  
   closeWithdrawModal();  
   fetchUserBalanceAndLeaderboard(myAddress);  
 };  
@@ -618,26 +618,80 @@ function showAuthBanner(msg){
   el.style.display = 'block';  
 }  
 
-function showPaymentToast(message, type = 'warning') {  
-  const id = type === 'success' ? 'neon-payment-success' : 'neon-payment-warning';  
-  const border = type === 'success' ? '#29d9c2' : '#ff3366';  
-  const color = type === 'success' ? '#29d9c2' : '#ff3366';  
-  const bg = type === 'success' ? 'rgba(5,15,10,0.95)' : 'rgba(15,5,10,0.95)';  
-  const shadow = type === 'success' ? 'rgba(41,217,194,0.6)' : 'rgba(255,51,102,0.6)';  
-  let el = document.getElementById(id);  
-  if (!el) {  
-    el = document.createElement('div');  
-    el.id = id;  
-    el.style.cssText = `position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:${bg}; border:2px solid ${border}; color:${color}; padding:14px 20px; border-radius:12px; font-family:"Space Grotesk", sans-serif; font-size:13px; font-weight:700; text-align:center; box-shadow:0 0 20px ${shadow}; backdrop-filter:blur(8px); transition:opacity 0.3s ease; max-width:90vw;`;  
-    document.body.appendChild(el);  
-  }  
-  el.innerHTML = message;  
-  el.style.opacity = '1';  
-  clearTimeout(el._toastTimer);  
-  el._toastTimer = setTimeout(() => {  
-    el.style.opacity = '0';  
-    setTimeout(() => el.remove(), 300);  
-  }, 5000);  
+// Neon toast — replaces every native alert() with styled UI.
+// types: 'success' | 'warning' | 'error' | 'info'
+function showNeonToast(message, type = 'info') {
+  const colors = {
+    success: { border: 'var(--photon)', color: 'var(--photon)', shadow: 'rgba(41,217,194,0.45)', icon: '✓' },
+    warning: { border: 'var(--gold)',   color: 'var(--gold)',   shadow: 'rgba(255,179,0,0.4)',   icon: '⚠' },
+    error:   { border: 'var(--signal)', color: 'var(--signal)', shadow: 'rgba(255,95,109,0.45)', icon: '✕' },
+    info:    { border: 'var(--iris)',   color: '#a79bf5',       shadow: 'rgba(108,92,231,0.45)', icon: 'ℹ' },
+  };
+  const c = colors[type] || colors.info;
+  let container = document.getElementById('neon-toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'neon-toast-container';
+    container.style.cssText = 'position:fixed; top:calc(14px + var(--safe-t, 0px)); left:50%; transform:translateX(-50%); z-index:999999; display:flex; flex-direction:column; gap:8px; align-items:center; width:min(92vw, 420px); pointer-events:none;';
+    document.body.appendChild(container);
+  }
+  const el = document.createElement('div');
+  el.style.cssText = `pointer-events:auto; display:flex; align-items:center; gap:10px; width:100%; background:rgba(12,12,22,0.92); border:1.5px solid ${c.border}; color:${c.color}; padding:12px 16px; border-radius:14px; font-family:"Space Grotesk", sans-serif; font-size:12.5px; font-weight:600; line-height:1.4; text-align:left; box-shadow:0 0 22px ${c.shadow}, inset 0 0 12px rgba(255,255,255,0.02); backdrop-filter:blur(10px); opacity:0; transform:translateY(-10px); transition:opacity .25s ease, transform .25s ease; cursor:pointer;`;
+  const icon = document.createElement('span');
+  icon.textContent = c.icon;
+  icon.style.cssText = `flex:0 0 auto; width:22px; height:22px; border-radius:50%; border:1.5px solid ${c.border}; display:flex; align-items:center; justify-content:center; font-size:12px; box-shadow:0 0 10px ${c.shadow};`;
+  const msg = document.createElement('span');
+  msg.style.cssText = 'flex:1; word-break:break-word;';
+  msg.textContent = message;
+  el.appendChild(icon);
+  el.appendChild(msg);
+  el.addEventListener('click', dismiss);
+  container.appendChild(el);
+  requestAnimationFrame(() => { el.style.opacity = '1'; el.style.transform = 'translateY(0)'; });
+  const timer = setTimeout(dismiss, type === 'success' ? 3500 : 6000);
+  function dismiss() {
+    clearTimeout(timer);
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(-10px)';
+    setTimeout(() => el.remove(), 250);
+  }
+}
+
+// Neon confirmation modal — replaces every native confirm() with styled UI.
+// Returns a Promise<boolean>.
+function neonConfirm(message) {
+  return new Promise((resolve) => {
+    document.getElementById('neon-confirm-overlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'neon-confirm-overlay';
+    overlay.style.cssText = 'position:fixed; inset:0; z-index:999998; display:flex; align-items:center; justify-content:center; background:rgba(5,5,12,0.75); backdrop-filter:blur(6px);';
+    const box = document.createElement('div');
+    box.style.cssText = 'width:min(88vw, 360px); background:linear-gradient(160deg, rgba(17,17,32,0.98), rgba(11,11,20,0.98)); border:1.5px solid var(--photon); border-radius:18px; padding:22px; text-align:center; font-family:"Space Grotesk", sans-serif; box-shadow:0 0 30px rgba(41,217,194,0.25), inset 0 0 20px rgba(41,217,194,0.05);';
+    const icon = document.createElement('div');
+    icon.textContent = '⚠️';
+    icon.style.cssText = 'font-size:30px; margin-bottom:10px; filter:drop-shadow(0 0 8px rgba(255,179,0,0.5));';
+    const text = document.createElement('div');
+    text.textContent = message;
+    text.style.cssText = 'color:var(--bone); font-size:13.5px; font-weight:600; line-height:1.5; margin-bottom:18px; word-break:break-word;';
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex; gap:10px;';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.cssText = 'flex:1; padding:10px; border-radius:12px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.04); color:var(--slate); font-family:"Space Grotesk", sans-serif; font-size:12px; font-weight:700; cursor:pointer;';
+    const okBtn = document.createElement('button');
+    okBtn.textContent = 'Confirm';
+    okBtn.style.cssText = 'flex:1; padding:10px; border-radius:12px; border:1.5px solid var(--signal); background:rgba(255,95,109,0.12); color:var(--signal); font-family:"Space Grotesk", sans-serif; font-size:12px; font-weight:700; cursor:pointer; box-shadow:0 0 14px rgba(255,95,109,0.3);';
+    cancelBtn.onclick = () => { overlay.remove(); resolve(false); };
+    okBtn.onclick = () => { overlay.remove(); resolve(true); };
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(okBtn);
+    box.appendChild(icon);
+    box.appendChild(text);
+    box.appendChild(btnRow);
+    overlay.appendChild(box);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) { overlay.remove(); resolve(false); } });
+    document.body.appendChild(overlay);
+  });
 }  
 
 async function performWalletAuth(silent = false){  
@@ -664,11 +718,11 @@ async function performWalletAuth(silent = false){
     }  
 
     showAuthBanner(`Sign-in did not complete (status: ${finalPayload?.status || 'unknown'})`);  
-    if (!silent) alert("Sign-in cancelled or failed.");  
+    if (!silent) showNeonToast("Sign-in cancelled or failed.", 'warning');  
     return false;  
   } catch (err) {  
     showAuthBanner(`Wallet auth error: ${err?.message || String(err)}`);  
-    if (!silent) alert("Wallet authentication error.");  
+    if (!silent) showNeonToast("Wallet authentication error.", 'error');  
     return false;  
   }  
 }  
@@ -688,13 +742,13 @@ async function handlePlayButtonClick(){
   if (freshBalance !== null) currentWldBalance = freshBalance;  
 
   if (currentWldBalance < selectedFee) {  
-    alert(`Insufficient WLD balance. You have ${currentWldBalance.toFixed(2)} WLD, need ${selectedFee} WLD.`);  
+    showNeonToast(`Insufficient WLD balance. You have ${currentWldBalance.toFixed(2)} WLD, need ${selectedFee} WLD.`, 'error');  
     $('start-btn').disabled = false;  
     return;  
   }  
 
   if (DICE_DUEL_CONTRACT.includes('PUT_YOUR_DEPLOYED')) {  
-    alert('DICE_DUEL_CONTRACT address is not set in app.js yet.');  
+    showNeonToast('DICE_DUEL_CONTRACT address is not set in app.js yet.', 'error');  
     $('start-btn').disabled = false;  
     return;  
   }  
@@ -750,7 +804,7 @@ async function handlePlayButtonClick(){
   }  
 
   if (!paymentSuccessful) {  
-    showPaymentToast('⚠️ Payment was cancelled or failed. No WLD was deducted.', 'warning');
+    showNeonToast('⚠️ Payment was cancelled or failed. No WLD was deducted.', 'warning');
 
     try { await supabaseClient.rpc('secure_leave_waiting_match', { p_match_id: matchId, p_wallet: myAddress }); } catch(e) {}  
     resetToHome();  
@@ -805,7 +859,7 @@ async function handlePlayButtonClick(){
         depositBooked = true;
         paymentVerified = true;
         clearInterval(bookingRetryTimer);
-        showPaymentToast('✅ Deposit confirmed on-chain', 'success');
+        showNeonToast('✅ Deposit confirmed on-chain', 'success');
       }
     } catch (e) { /* keep retrying */ }
     finally { bookingInFlight = false; }
@@ -824,10 +878,10 @@ async function handlePlayButtonClick(){
   }
 
   if (depositBooked) {
-    showPaymentToast('✨ Payment confirmed! Waiting for opponent...', 'success');
+    showNeonToast('✨ Payment confirmed! Waiting for opponent...', 'success');
   } else {
     console.warn('record-deposit not booked yet:', lastDepositError);
-    showPaymentToast("⚠️ Payment received — booking deposit. If the match doesn't start, your WLD is refunded automatically.", 'warning');
+    showNeonToast("⚠️ Payment received — booking deposit. If the match doesn't start, your WLD is refunded automatically.", 'warning');
   }
 
   $('wait-status').innerText = `SEARCHING... (Cancel anytime)`;  
@@ -935,23 +989,23 @@ async function cancelMatchmaking(showAlert = true) {
     if (verified) {
       queueRefund();
       if (showAlert) {
-        alert(`Search cancelled. Your ${feeToRefund} WLD refund is being processed automatically (within a minute).`);
+        showNeonToast(`Search cancelled. Your ${feeToRefund} WLD refund is being processed automatically (within a minute).`, 'success');
       }
     } else {
       // MiniKit reported success but the payment was never verified
       // on-chain. Do one final verification in the background; only if
       // the payment turns out to be real do we queue the refund.
-      showPaymentToast("⚠️ Verifying payment... If it went through, your refund will be processed automatically.", 'warning');
+      showNeonToast("⚠️ Verifying payment... If it went through, your refund will be processed automatically.", 'warning');
       recordDepositOnce(targetBytes32, targetWallet, FEE_WEI[feeToRefund] || null, null)
         .then((r) => { if (r.ok) queueRefund(); })
         .catch(() => {});
       if (showAlert) {
-        alert('Search cancelled. If your payment went through, the refund will be processed automatically.');
+        showNeonToast('Search cancelled. If your payment went through, the refund will be processed automatically.', 'info');
       }
     }
   } else {
     if (showAlert) {
-      alert('Search cancelled.');
+      showNeonToast('Search cancelled.', 'info');
     }
   }
 
