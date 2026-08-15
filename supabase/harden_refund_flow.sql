@@ -39,8 +39,10 @@ begin
     return json_build_object('success', false, 'error', 'match not found');
   end if;
 
-  -- Only an un-started match can be refunded.
-  if v_status not in ('waiting', 'searching') then
+  -- Refundable while waiting, searching, or already cancelled (the
+  -- cancel flow marks the match cancelled and then queues the refund —
+  -- a strict 'waiting' check raced and lost against that status update).
+  if v_status not in ('waiting', 'searching', 'cancelled') then
     return json_build_object('success', false, 'error', 'match not refundable in status ' || coalesce(v_status, 'unknown'));
   end if;
 

@@ -67,6 +67,52 @@ Deno.serve(async (req) => {
   const operatorWallet = new ethers.Wallet(OPERATOR_PRIVATE_KEY, provider);
   const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, operatorWallet);
 
+  // ------------------------------------------------------------------
+  // Ghost cleanup (runs BEFORE refund processing so freshly inserted
+  // refund rows are picked up by this same tick):
+  //   - PAID waiting matches older than 2 minutes with no p2 payment
+  //     are abandoned (the app auto-cancels at 60s when it is open; a
+  //     match still waiting after 2 min means the player closed the
+  //     app). Cancel them AND queue an automatic refund so no ghost
+  //     match is joinable and no money stays stuck.
+  // ------------------------------------------------------------------
+  try {
+    const ghostCutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    const { data: ghosts, error: ghostErr } = await supabase
+      .from("matches")
+      .select("id, fee, p1_address")
+      .in("status", ["waiting", "searching"])
+      .eq("p1_paid", true)
+      .eq("p2_paid", false)
+      .lt("created_at", ghostCutoff);
+    if (!ghostErr && ghosts) {
+      for (const g of ghosts) {
+        const { error: cancelErr } = await supabase
+          .from("matches")
+          .update({ status: "cancelled" })
+          .eq("id", g.id)
+          .eq("status", "waiting");
+        if (cancelErr) continue;
+
+        if (g.p1_address && g.fee != null) {
+          const { error: insErr } = await supabase
+            .from("refund_queue")
+            .insert({
+              match_id: g.id,
+              wallet_address: String(g.p1_address).toLowerCase(),
+              fee: g.fee,
+              status: "pending",
+            });
+          if (insErr) {
+            console.error("ghost refund insert error:", insErr.message);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error("paid ghost cleanup exception:", e);
+  }
+
   const { data: rows, error } = await supabase
     .from("refund_queue")
     .select("*")
