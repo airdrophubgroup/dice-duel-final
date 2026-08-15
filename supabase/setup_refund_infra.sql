@@ -28,6 +28,7 @@ create table if not exists public.refund_queue (
   id uuid primary key default gen_random_uuid(),
   match_id uuid not null references public.matches(id) on delete cascade,
   wallet_address text not null,
+  fee numeric not null default 0, -- entry fee in WLD (matches.fee)
   status text not null default 'pending'
     check (status in ('pending', 'processing', 'done', 'failed')),
   tx_hash text,
@@ -51,8 +52,10 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.refund_queue (match_id, wallet_address)
-  values (p_match_id, lower(trim(p_wallet)))
+  insert into public.refund_queue (match_id, wallet_address, fee)
+  select m.id, lower(trim(p_wallet)), m.fee
+    from public.matches m
+   where m.id = p_match_id
   on conflict do nothing;
 end;
 $$;
