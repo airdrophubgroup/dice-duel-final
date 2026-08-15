@@ -860,17 +860,21 @@ async function cancelMatchmaking(showAlert = true) {
       });  
 
       if (paid && targetBytes32) {
-        fetch('/api/refund-match', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            matchIdBytes32: targetBytes32,
-            action: 'CANCEL_REFUND'
-          })
-        }).catch(err => console.error("Refund API Error:", err));
+        // Write to the refund_queue instead of firing a direct fetch —
+        // this Supabase RPC is fast and much more likely to complete
+        // before World App backgrounds/closes than a full on-chain
+        // fetch() call would be. The Edge Function + cron job (already
+        // running every minute) picks this up and completes the actual
+        // on-chain refund independently, even if the app is closed by
+        // the time it runs.
+        try {
+          await supabaseClient.rpc('queue_refund_request', {
+            p_match_id: targetMatchId, p_wallet: targetWallet
+          });
+        } catch (e) {}
 
         if (showAlert) {  
-          alert(`Search cancelled. Your ${feeToRefund} WLD refund has been processed.`);  
+          alert(`Search cancelled. Your ${feeToRefund} WLD refund is being processed automatically.`);  
         }  
       } else {
         if (showAlert) {
