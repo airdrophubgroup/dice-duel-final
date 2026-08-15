@@ -34,12 +34,13 @@ async function matchIdToBytes32(uuidStr) {
 // (The escrow contract has no recordDeposit function, so the deposit is NOT
 // booked on-chain: Supabase p1_paid/p2_paid is the ledger and refunds go
 // through owner emergency transfers.)
-async function recordDepositOnce(matchIdB32, playerAddr, feeWei, txHash) {
+async function recordDepositOnce(matchIdB32, matchUuid, playerAddr, feeWei, txHash) {
   const depositRes = await fetch('/api/record-deposit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       matchIdBytes32: matchIdB32,
+      matchUuid: matchUuid,
       playerAddress: playerAddr,
       feeWei: feeWei,
       txHash: txHash || null,
@@ -821,7 +822,7 @@ async function handlePlayButtonClick(){
     // stuck money and can still get an automatic refund on cancel.
     let recoveredPayment = false;
     try {
-      const r = await recordDepositOnce(matchIdBytes32Global, myAddress, FEE_WEI[selectedFee], null);
+      const r = await recordDepositOnce(matchIdBytes32Global, matchId, myAddress, FEE_WEI[selectedFee], null);
       if (r.ok) recoveredPayment = true;
     } catch (e) { /* on-chain check failed — keep the failure state */ }
 
@@ -856,7 +857,7 @@ async function handlePlayButtonClick(){
   let lastDepositError = '';
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const r = await recordDepositOnce(matchIdBytes32Global, myAddress, FEE_WEI[selectedFee], txHash);
+      const r = await recordDepositOnce(matchIdBytes32Global, matchId, myAddress, FEE_WEI[selectedFee], txHash);
       if (r.ok) { depositBooked = true; paymentVerified = true; break; }
       lastDepositError = JSON.stringify(r.data);
     } catch (e) {
@@ -879,7 +880,7 @@ async function handlePlayButtonClick(){
     if (bookingInFlight) return;
     bookingInFlight = true;
     try {
-      const r = await recordDepositOnce(matchIdBytes32Global, myAddress, FEE_WEI[selectedFee], txHash);
+      const r = await recordDepositOnce(matchIdBytes32Global, matchId, myAddress, FEE_WEI[selectedFee], txHash);
       if (r.ok) {
         depositBooked = true;
         paymentVerified = true;
@@ -1017,7 +1018,7 @@ async function cancelMatchmaking(showAlert = true) {
     // queued for refund. Fake/test payments are rejected here.
     if (!refundQueued && hasPaid) {
       try {
-        const r = await recordDepositOnce(matchIdBytes32Global, targetWallet, FEE_WEI[selectedFee] || null, null);
+        const r = await recordDepositOnce(matchIdBytes32Global, targetMatchId, targetWallet, FEE_WEI[selectedFee] || null, null);
         if (r.ok) {
           try {
             await supabaseClient.rpc('force_confirm_payment', { p_match_id: targetMatchId, p_is_p1: isP1 });

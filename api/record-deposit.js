@@ -5,9 +5,28 @@ const RPC_URL = process.env.WORLDCHAIN_RPC || "https://worldchain-mainnet.g.alch
 const CONTRACT_ADDRESS = "0x2f9D3bC7125d563434cbc601b15Add6Ba0F3F3Db";
 const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";
 
+const SB_URL = process.env.SUPABASE_URL || "https://efmkazyrxllcyvcwmewd.supabase.co";
+const SB_KEY =
+  process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  "sb_publishable_px6Myv6S29bTXRYmYLAkgQ_WDHDb7da";
+
 const ERC20_ABI = [
   "event Transfer(address indexed from, address indexed to, uint256 value)",
 ];
+
+// Look up when the match was created so the verified transfer must be
+// NEWER than the match. This kills the stale-payment hole: a player who
+// paid for an earlier match (within the scan window) must not be able to
+// start a new match without paying and have the old transfer verify it.
+async function fetchMatchCreatedAt(matchUuid) {
+  const url = `${SB_URL}/rest/v1/matches?select=created_at&id=eq.${encodeURIComponent(matchUuid)}`;
+  const res = await fetch(url, {
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+  });
+  if (!res.ok) return null;
+  const rows = await res.json().catch(() => null);
+  return Array.isArray(rows) && rows.length > 0 ? rows[0].created_at : null;
+}
 
 // The deployed escrow contract (TnvDuelArena) does NOT have a recordDeposit
 // function — booking on-chain would require the player to call joinMatch via
@@ -70,11 +89,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { matchIdBytes32, playerAddress, feeWei, txHash } = req.body;
+  const { matchIdBytes32, matchUuid, playerAddress, feeWei, txHash } = req.body;
 
-  if (!matchIdBytes32 || !playerAddress || !feeWei) {
+  if (!matchIdBytes32 || !matchUuid || !playerAddress || !feeWei) {
     return res.status(400).json({
-      error: "matchIdBytes32, playerAddress and feeWei are required",
+      error: "matchIdBytes32, matchUuid, playerAddress and feeWei are required",
     });
   }
 
@@ -144,6 +163,27 @@ export default async function handler(req, res) {
     if (!verified) {
       return res.status(400).json({
         error: "Could not verify matching WLD transfer in this transaction",
+      });
+    }
+
+    // ------------------------------------------------------------------
+    // 3. Anti-stale check: the transfer must have happened AFTER this
+    //    match was created. Otherwise a player who paid for an earlier
+    //    match could start a new match without paying and have the old
+    //    transfer verify it (then claim a refund they never deposited).
+    // ------------------------------------------------------------------
+    const createdAt = await fetchMatchCreatedAt(matchUuid);
+    if (!createdAt) {
+      return res.status(400).json({
+        error: "Could not load match to validate payment timing",
+      });
+    }
+    const createdMs = Date.parse(createdAt);
+    const block = await provider.getBlock(receipt.blockNumber);
+    const transferMs = Number(block.timestamp) * 1000;
+    if (Number.isNaN(createdMs) || transferMs < createdMs) {
+      return res.status(400).json({
+        error: "Payment does not match this match (transfer predates the match)",
       });
     }
 
