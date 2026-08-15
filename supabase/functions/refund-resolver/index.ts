@@ -219,6 +219,28 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ------------------------------------------------------------------
+  // Maintenance: expire stale matches that never got a payment and never
+  // found an opponent (e.g. the app was closed while the payment sheet
+  // was open, so cancelMatchmaking never ran). Only matches where
+  // NEITHER player paid are touched, so no money can ever be affected.
+  // ------------------------------------------------------------------
+  try {
+    const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { error: staleErr } = await supabase
+      .from("matches")
+      .update({ status: "cancelled" })
+      .in("status", ["waiting", "searching"])
+      .eq("p1_paid", false)
+      .eq("p2_paid", false)
+      .lt("created_at", cutoff);
+    if (staleErr) {
+      console.error("stale match cleanup error:", staleErr);
+    }
+  } catch (e) {
+    console.error("stale match cleanup exception:", e);
+  }
+
   return new Response(JSON.stringify({ processed: results.length, results }), {
     headers: { "Content-Type": "application/json" },
   });
