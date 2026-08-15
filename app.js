@@ -698,7 +698,7 @@ async function handlePlayButtonClick(){
     if (payRes && payRes.finalPayload && payRes.finalPayload.status === 'success') {
       paymentSuccessful = true;
     } else {
-      paymentSuccessful = true;
+      paymentSuccessful = false;
     }
   } catch (err) {  
     paymentSuccessful = false;  
@@ -725,7 +725,7 @@ async function handlePlayButtonClick(){
   }  
 
   // ==========================================
-  // FORCE PAYMENT CONFIRMATION IN SUPABASE
+  // VERIFY & RECORD THE DEPOSIT ON-CHAIN
   // ==========================================
   hasPaid = true;
 
@@ -738,6 +738,29 @@ async function handlePlayButtonClick(){
       document.body.appendChild(box);
     }
     box.innerText = text;
+  }
+
+  const txHash = payRes?.finalPayload?.transaction_id || payRes?.finalPayload?.transaction_hash || null;
+
+  try {
+    const depositRes = await fetch('/api/record-deposit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        matchIdBytes32: matchIdBytes32Global,
+        playerAddress: myAddress,
+        feeWei: FEE_WEI[selectedFee],
+        txHash: txHash,
+      }),
+    });
+    const depositData = await depositRes.json();
+    if (!depositRes.ok || !depositData.success) {
+      showDebugBox('record-deposit FAILED: ' + JSON.stringify(depositData) + ' | matchId=' + matchId + ' txHash=' + txHash);
+    } else {
+      showDebugBox('record-deposit OK: ' + JSON.stringify(depositData) + ' | matchId=' + matchId);
+    }
+  } catch (e) {
+    showDebugBox('record-deposit EXCEPTION: ' + e.message + ' | matchId=' + matchId + ' txHash=' + txHash);
   }
 
   try {
@@ -841,7 +864,6 @@ async function cancelMatchmaking(showAlert = true) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             matchIdBytes32: targetBytes32,
-            matchDbId: targetMatchId,
             action: 'CANCEL_REFUND'
           })
         }).catch(err => console.error("Refund API Error:", err));
@@ -1006,7 +1028,6 @@ async function finalizeGame(){
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         matchIdBytes32: matchIdBytes32Global,
-        matchDbId: matchId,
         action: 'SETTLE_WINNER',
         winnerAddress: winnerWallet
       })
