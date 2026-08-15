@@ -1,7 +1,6 @@
 import { ethers } from "ethers";
 
 const RPC_URL = process.env.WORLDCHAIN_RPC || "https://worldchain-mainnet.g.alchemy.com/public";
-const PRIVATE_KEY = process.env.ADMIN_PRIVATE_KEY;  0xfb95a3d2aa078753c71e95e481c5b257bc4b4abe29b9feab8ac03e575625233d
 
 const CONTRACT_ADDRESS = "0x2f9D3bC7125d563434cbc601b15Add6Ba0F3F3Db";
 const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";
