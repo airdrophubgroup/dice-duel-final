@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Dice Duel — Rules, Winner Logic & Security</title>
+<style>
+  :root{
+    --void:#0b0b14; --void-2:#111120; --iris:#6c5ce7; --photon:#29d9c2;
+    --bone:#f1eee6; --slate:#8b8ba3; --signal:#ff5f6d; --gold:#ffb300;
+    --border:rgba(241,238,230,0.08); --radius:18px;
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html{ scroll-behavior:smooth; }
+  body{
+    background:
+      radial-gradient(1200px 500px at 50% -5%, rgba(108,92,231,0.18), transparent 60%),
+      radial-gradient(900px 400px at 90% 20%, rgba(41,217,194,0.10), transparent 55%),
+      var(--void);
+    color:var(--bone);
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    overflow-x:hidden;
+    line-height:1.6;
+  }
+
+  /* ---- floating background particles ---- */
+  .particles{ position:fixed; inset:0; z-index:0; pointer-events:none; }
+  .particle{
+    position:absolute; border-radius:50%;
+    background:var(--photon); opacity:0;
+    animation:floatUp linear infinite;
+  }
+  @keyframes floatUp{
+    0%{ transform:translateY(105vh) scale(1); opacity:0; }
+    10%{ opacity:0.5; }
+    90%{ opacity:0.3; }
+    100%{ transform:translateY(-8vh) scale(0.4); opacity:0; }
+  }
+
+  /* ---- marquee ticker ---- */
+  .ticker{
+    position:sticky; top:0; z-index:50;
+    background:linear-gradient(90deg, rgba(41,217,194,0.12), rgba(108,92,231,0.12));
+    border-bottom:1px solid var(--border);
+    overflow:hidden; padding:10px 0; backdrop-filter:blur(8px);
+  }
+  .ticker-track{
+    display:flex; gap:48px; white-space:nowrap; width:max-content;
+    animation:marquee 28s linear infinite;
+  }
+  .ticker-track span{ font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:1.5px; color:var(--photon); }
+  .ticker-track span b{ color:var(--gold); font-weight:600; }
+  @keyframes marquee{ from{ transform:translateX(0); } to{ transform:translateX(-50%); } }
+
+  .wrap{ position:relative; z-index:1; max-width:980px; margin:0 auto; padding:24px 20px 80px; }
+
+  /* ---- hero ---- */
+  .hero{ text-align:center; padding:70px 10px 50px; }
+  .dice-row{ display:flex; justify-content:center; gap:18px; margin-bottom:22px; }
+  .die{
+    width:58px; height:58px; border-radius:14px;
+    background:linear-gradient(145deg, var(--void-2), #171728);
+    border:1px solid rgba(41,217,194,0.35);
+    display:flex; align-items:center; justify-content:center;
+    font-size:30px; box-shadow:0 0 22px rgba(41,217,194,0.25);
+    animation:dieFloat 3.5s ease-in-out infinite;
+  }
+  .die:nth-child(2){ animation-delay:0.5s; }
+  .die:nth-child(3){ animation-delay:1s; }
+  .die:nth-child(4){ animation-delay:1.5s; }
+  @keyframes dieFloat{
+    0%,100%{ transform:translateY(0) rotate(0deg); }
+    50%{ transform:translateY(-14px) rotate(8deg); }
+  }
+  .hero h1{
+    font-family:'Space Grotesk',sans-serif; font-size:clamp(38px,8vw,64px);
+    background:linear-gradient(90deg, var(--photon), var(--iris), var(--gold));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 0 40px rgba(41,217,194,0.15);
+    margin-bottom:10px;
+  }
+  .hero p{ color:var(--slate); font-size:16px; max-width:620px; margin:0 auto; }
+  .hero .badge{
+    display:inline-block; margin-top:18px; padding:8px 18px; border-radius:999px;
+    border:1px solid var(--photon); color:var(--photon); font-size:12px;
+    letter-spacing:1px; font-family:'JetBrains Mono',monospace;
+    box-shadow:0 0 18px rgba(41,217,194,0.2);
+  }
+
+  /* ---- sections ---- */
+  section{ margin-top:64px; }
+  .sec-title{
+    font-family:'Space Grotesk',sans-serif; font-size:26px; margin-bottom:6px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .sec-title .num{
+    font-size:14px; color:var(--void); background:var(--photon); border-radius:8px;
+    padding:3px 9px; font-family:'JetBrains Mono',monospace; font-weight:700;
+  }
+  .sec-sub{ color:var(--slate); font-size:14px; margin-bottom:26px; }
+
+  /* ---- reveal on scroll ---- */
+  .reveal{ opacity:0; transform:translateY(34px); transition:opacity .7s ease, transform .7s ease; }
+  .reveal.in{ opacity:1; transform:translateY(0); }
+
+  /* ---- cards / grid ---- */
+  .grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:16px; }
+  .card{
+    background:linear-gradient(160deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+    border:1px solid var(--border); border-radius:var(--radius);
+    padding:22px; transition:transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+  }
+  .card:hover{ transform:translateY(-4px); border-color:rgba(41,217,194,0.35); box-shadow:0 10px 30px rgba(0,0,0,0.35); }
+  .card .icon{ font-size:26px; margin-bottom:10px; display:block; }
+  .card h3{ font-size:15px; font-family:'Space Grotesk',sans-serif; margin-bottom:6px; color:var(--photon); }
+  .card p{ font-size:13px; color:var(--slate); }
+
+  /* ---- steps (timeline) ---- */
+  .steps{ display:flex; flex-direction:column; gap:0; position:relative; padding-left:34px; }
+  .steps::before{
+    content:''; position:absolute; left:10px; top:6px; bottom:6px; width:2px;
+    background:linear-gradient(180deg, var(--photon), var(--iris), var(--gold));
+  }
+  .step{ position:relative; padding-bottom:26px; }
+  .step::before{
+    content:''; position:absolute; left:-30px; top:4px; width:14px; height:14px; border-radius:50%;
+    background:var(--void); border:2px solid var(--photon); box-shadow:0 0 12px rgba(41,217,194,0.5);
+  }
+  .step h4{ font-size:15px; font-family:'Space Grotesk',sans-serif; color:var(--bone); }
+  .step p{ font-size:13px; color:var(--slate); margin-top:3px; }
+  .step code{
+    font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--gold);
+    background:rgba(255,179,0,0.08); padding:1px 6px; border-radius:5px;
+  }
+
+  /* ---- payout table ---- */
+  .table-wrap{
+    border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;
+    background:rgba(255,255,255,0.02);
+  }
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  thead th{
+    font-family:'Space Grotesk',sans-serif; font-size:12px; letter-spacing:1px;
+    color:var(--slate); padding:13px 14px; text-align:left;
+    border-bottom:1px solid var(--border); background:rgba(255,255,255,0.03);
+  }
+  tbody td{ padding:11px 14px; border-bottom:1px solid rgba(241,238,230,0.05); color:var(--bone); }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody tr:hover{ background:rgba(41,217,194,0.05); }
+  .wld{ color:var(--photon); font-family:'JetBrains Mono',monospace; font-weight:600; }
+  .cut{ color:var(--gold); font-family:'JetBrains Mono',monospace; font-size:12px; }
+
+  /* ---- security features ---- */
+  .sec-list{ display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; }
+  .sec-item{
+    display:flex; gap:14px; align-items:flex-start;
+    background:rgba(255,255,255,0.025); border:1px solid var(--border);
+    border-radius:14px; padding:18px; transition:border-color .25s ease, background .25s ease;
+  }
+  .sec-item:hover{ border-color:rgba(41,217,194,0.4); background:rgba(41,217,194,0.04); }
+  .sec-item .shield{
+    flex-shrink:0; width:38px; height:38px; border-radius:10px;
+    background:linear-gradient(145deg, rgba(41,217,194,0.15), rgba(108,92,231,0.15));
+    border:1px solid rgba(41,217,194,0.3);
+    display:flex; align-items:center; justify-content:center; font-size:18px;
+  }
+  .sec-item h4{ font-size:14px; font-family:'Space Grotesk',sans-serif; color:var(--bone); margin-bottom:3px; }
+  .sec-item p{ font-size:12.5px; color:var(--slate); }
+
+  /* ---- footnote / footer ---- */
+  .note{
+    margin-top:26px; padding:16px 18px; border-radius:14px;
+    border:1px dashed rgba(255,179,0,0.35); background:rgba(255,179,0,0.05);
+    font-size:13px; color:var(--gold);
+  }
+  footer{
+    margin-top:80px; text-align:center; color:var(--slate); font-size:12px;
+    border-top:1px solid var(--border); padding-top:24px;
+  }
+  footer b{ color:var(--photon); }
+</style>
+</head>
+<body>
+
+<div class="particles" id="particles"></div>
+
+<div class="ticker">
+  <div class="ticker-track" id="ticker">
+    <span>🎲 DICE DUEL — PLAY • EARN • WIN</span><span>🔒 100% ON-CHAIN VERIFIED PAYMENTS</span><span>⚡ INSTANT MATCHMAKING</span><span>🛡️ SERVER-VALIDATED ROLLS — NO CHEATS</span><span>💸 AUTO-REFUND WITHIN 60 SECONDS</span>
+    <span>🎲 DICE DUEL — PLAY • EARN • WIN</span><span>🔒 100% ON-CHAIN VERIFIED PAYMENTS</span><span>⚡ INSTANT MATCHMAKING</span><span>🛡️ SERVER-VALIDATED ROLLS — NO CHEATS</span><span>💸 AUTO-REFUND WITHIN 60 SECONDS</span>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- ================= HERO ================= -->
+  <div class="hero">
+    <div class="dice-row">
+      <div class="die">⚀</div><div class="die">⚄</div><div class="die">⚂</div><div class="die">⚅</div>
+    </div>
+    <h1>DICE DUEL</h1>
+    <p>The ultimate real-time PvP dice battle inside the <b style="color:var(--bone)">World App</b>. Pay a WLD entry fee, get matched 1v1, roll for glory — and the winner takes the pot.</p>
+    <div class="badge">🔒 Worldchain • WLD Entry • 100% Secure</div>
+  </div>
+
+  <!-- ================= HOW TO PLAY / RULES ================= -->
+  <section>
+    <div class="sec-title reveal"><span class="num">01</span> How to Play</div>
+    <div class="sec-sub reveal">Simple rules. Serious stakes.</div>
+    <div class="grid">
+      <div class="card reveal"><span class="icon">💰</span><h3>1. Pick Your Stake</h3><p>Choose an entry fee from <b style="color:var(--photon)">0.1 WLD</b> up to <b style="color:var(--photon)">50 WLD</b>. Higher stake = bigger pot.</p></div>
+      <div class="card reveal"><span class="icon">🔍</span><h3>2. Get Matched</h3><p>You're paired with a real player at the <b>same fee tier</b>. Matchmaking only pairs you with fresh, active matches — ghost/abandoned matches are never joined.</p></div>
+      <div class="card reveal"><span class="icon">🎲</span><h3>3. Roll 15 Times</h3><p>Each player gets <b style="color:var(--photon)">15 rolls</b> in a <b style="color:var(--photon)">60-second</b> round. One roll every <b>2 seconds</b> — the die never lies (server-validated).</p></div>
+      <div class="card reveal"><span class="icon">🏆</span><h3>4. Highest Score Wins</h3><p>When the timer hits zero, the higher total score takes the pot. Winner payout is paid instantly, automatically.</p></div>
+    </div>
+  </section>
+
+  <!-- ================= WINNER LOGIC ================= -->
+  <section>
+    <div class="sec-title reveal"><span class="num">02</span> Winner Logic &amp; Payouts</div>
+    <div class="sec-sub reveal">The pot is <b style="color:var(--photon)">2× the entry fee</b>. The winner receives the displayed payout; the platform cut stays with the house.</div>
+    <div class="table-wrap reveal">
+      <table>
+        <thead><tr><th>Entry Fee</th><th>Winner Payout</th><th>Platform Cut</th></tr></thead>
+        <tbody>
+          <tr><td>0.1 WLD</td><td class="wld">0.17 WLD</td><td class="cut">15%</td></tr>
+          <tr><td>0.2 WLD</td><td class="wld">0.34 WLD</td><td class="cut">15%</td></tr>
+          <tr><td>0.5 WLD</td><td class="wld">0.80 WLD</td><td class="cut">20%</td></tr>
+          <tr><td>1 WLD</td><td class="wld">1.60 WLD</td><td class="cut">20%</td></tr>
+          <tr><td>2 WLD</td><td class="wld">3.20 WLD</td><td class="cut">20%</td></tr>
+          <tr><td>5 WLD</td><td class="wld">8.80 WLD</td><td class="cut">12%</td></tr>
+          <tr><td>10 WLD</td><td class="wld">17.80 WLD</td><td class="cut">11%</td></tr>
+          <tr><td>20 WLD</td><td class="wld">36.00 WLD</td><td class="cut">10%</td></tr>
+          <tr><td>30 WLD</td><td class="wld">54.00 WLD</td><td class="cut">10%</td></tr>
+          <tr><td>40 WLD</td><td class="wld">72.00 WLD</td><td class="cut">10%</td></tr>
+          <tr><td>50 WLD</td><td class="wld">90.00 WLD</td><td class="cut">10%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note reveal">🎁 <b>TNV Rewards</b> — every match earns TNV points: winners get the full tier reward, losers get a consolation reward (⅓). TNV can be redeemed via withdrawal requests (min 5,000 TNV).</div>
+  </section>
+
+  <!-- ================= SECURITY ================= -->
+  <section>
+    <div class="sec-title reveal"><span class="num">03</span> Security Features</div>
+    <div class="sec-sub reveal">Built to be cheat-proof and drain-proof. The server never trusts the client.</div>
+    <div class="sec-list">
+      <div class="sec-item reveal"><div class="shield">🔗</div><div><h4>On-Chain Payment Verification</h4><p>MiniKit's "success" is never trusted alone. Every payment is verified on-chain via the actual WLD transfer — and the transfer must postdate the match (no reused/stale payments).</p></div></div>
+      <div class="sec-item reveal"><div class="shield">🎲</div><div><h4>Server-Validated Dice Rolls</h4><p>Rolls are validated server-side (1–6, 15-turn cap, participant-only). Hacking the client can't change your score — the database is the source of truth.</p></div></div>
+      <div class="sec-item reveal"><div class="shield">🛡️</div><div><h4>Participant &amp; Payment Checks</h4><p>Refunds and payouts are only issued to a <b>paid participant</b> of that exact match — verified server-side. Forged requests are rejected.</p></div></div>
+      <div class="sec-item reveal"><div class="shield">🔒</div><div><h4>RLS-Protected Database</h4><p>Row Level Security blocks direct writes with the public key. Every state change goes through validated SECURITY DEFINER RPCs — nobody can edit scores, balances or match state directly.</p></div></div>
+      <div class="sec-item reveal"><div class="shield">💸</div><div><h4>Automatic Refund System</h4><p>Cancel or time out (no opponent in 60s)? A refund is queued and executed by a cron-driven resolver within <b style="color:var(--photon)">one minute</b>. Real payments always come back.</p></div></div>
+      <div class="sec-item reveal"><div class="shield">🚫</div><div><h4>No Double Payouts</h4><p>Settlement is claimed atomically (one-time flag) — a duplicate settle call can never pay the pot twice.</p></div></div>
+      <div class="sec-item reveal"><div class="shield">👻</div><div><h4>Ghost Match Cleanup</h4><p>Abandoned matches (app closed mid-flow) are auto-cancelled and auto-refunded. No ghost waiting matches, no joining dead games.</p></div></div>
+      <div class="sec-item reveal"><div class="shield">🧾</div><div><h4>Admin-Gated Operations</h4><p>Withdrawals are approved only by the admin wallet (server-verified). Blocking users and approving payouts can't be spoofed from the client.</p></div></div>
+    </div>
+  </section>
+
+  <!-- ================= PAYMENT & REFUND FLOW ================= -->
+  <section>
+    <div class="sec-title reveal"><span class="num">04</span> Payment &amp; Refund Flow</div>
+    <div class="sec-sub reveal">What happens behind the scenes, step by step.</div>
+    <div class="steps">
+      <div class="step reveal"><h4>🎫 You join the arena</h4><p>A match is created with your chosen fee tier — status <code>waiting</code>.</p></div>
+      <div class="step reveal"><h4>💳 You pay the entry fee</h4><p>WLD is sent via World App to the escrow contract. The payment is <b style="color:var(--photon)">verified on-chain</b> before anything else happens.</p></div>
+      <div class="step reveal"><h4>🤝 Opponent joins</h4><p>When a second player at the same fee pays, the match is <code>matched</code> and both flags flip to paid.</p></div>
+      <div class="step reveal"><h4>🎲 Battle begins</h4><p>15 rolls each, 60-second round. Scores are recorded server-side on every roll.</p></div>
+      <div class="step reveal"><h4>🏆 Winner settled</h4><p>The higher score wins. The winner's payout is sent instantly from the escrow — validated and one-time only.</p></div>
+      <div class="step reveal"><h4>↩️ Refund (if no opponent)</h4><p>Cancel anytime, or if no opponent arrives in 60s, your WLD is automatically refunded within a minute via the refund resolver.</p></div>
+    </div>
+  </section>
+
+  <!-- ================= TECH ================= -->
+  <section>
+    <div class="sec-title reveal"><span class="num">05</span> Built On</div>
+    <div class="sec-sub reveal">A battle-tested stack for real-money games.</div>
+    <div class="grid">
+      <div class="card reveal"><span class="icon">🌍</span><h3>Worldchain + MiniKit</h3><p>Runs inside the official World App with native wallet auth and payments.</p></div>
+      <div class="card reveal"><span class="icon">🗄️</span><h3>Supabase</h3><p>PostgreSQL ledger of record with RLS, validated RPCs, and a cron refund resolver.</p></div>
+      <div class="card reveal"><span class="icon">⚡</span><h3>Vercel</h3><p>Edge API functions for payment verification, refunds, and winner payouts.</p></div>
+      <div class="card reveal"><span class="icon">🔐</span><h3>Escrow Contract</h3><p>Owner-operated WLD escrow — all payouts and refunds are contract-secured.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <p><b>DICE DUEL</b> — play fair, win real. World App only.</p>
+    <p style="margin-top:6px; font-size:11px;">© 2026 Dice Duel • Built for the Worldcoin ecosystem</p>
+  </footer>
+</div>
+
+<script>
+  // ---- particles ----
+  const pc = document.getElementById('particles');
+  for (let i = 0; i < 26; i++) {
+    const s = document.createElement('span');
+    s.className = 'particle';
+    const size = 3 + Math.random() * 5;
+    s.style.cssText = `left:${Math.random()*100}%; width:${size}px; height:${size}px; ` +
+      `background:${['#29d9c2','#6c5ce7','#ffb300'][Math.floor(Math.random()*3)]}; ` +
+      `animation-duration:${9 + Math.random()*12}s; animation-delay:${Math.random()*10}s;`;
+    pc.appendChild(s);
+  }
+
+  // ---- reveal on scroll ----
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('in'); });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+  // ---- ticker duplicate for seamless loop ----
+  const track = document.getElementById('ticker');
+  track.innerHTML += track.innerHTML;
+</script>
+</body>
+</html>
