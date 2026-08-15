@@ -787,12 +787,18 @@ async function handlePlayButtonClick(){
   let payRes;  
 
   try {  
-    payRes = await MiniKit.commandsAsync.pay({  
-      reference: paymentReference,  
-      to: DICE_DUEL_CONTRACT,  
-      tokens: [{ symbol: Tokens.WLD, token_amount: tokenToDecimals(selectedFee, Tokens.WLD).toString() }],  
-      description: `Dice Duel entry fee: ${selectedFee} WLD`,  
-    });  
+    // Timeout guard: in some environments MiniKit's pay() never resolves.
+    // The on-chain fallback below still recovers the payment, so a hang
+    // here must not leave the player stuck.
+    payRes = await Promise.race([
+      MiniKit.commandsAsync.pay({  
+        reference: paymentReference,  
+        to: DICE_DUEL_CONTRACT,  
+        tokens: [{ symbol: Tokens.WLD, token_amount: tokenToDecimals(selectedFee, Tokens.WLD).toString() }],  
+        description: `Dice Duel entry fee: ${selectedFee} WLD`,  
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('payment_response_timeout')), 120000)),
+    ]);
     
     if (payRes && payRes.finalPayload && payRes.finalPayload.status === 'success') {
       paymentSuccessful = true;
@@ -804,11 +810,27 @@ async function handlePlayButtonClick(){
   }  
 
   if (!paymentSuccessful) {  
-    showNeonToast('⚠️ Payment was cancelled or failed. No WLD was deducted.', 'warning');
+    // MiniKit reported cancelled/failed (or timed out) — BUT the payment
+    // can still have executed on-chain (confirmed real cases). Verify
+    // before giving up: recordDepositOnce scans recent WLD transfers and
+    // returns ok only if a real payment of the exact fee arrived. If it
+    // did, treat the payment as done so the player is never left with
+    // stuck money and can still get an automatic refund on cancel.
+    let recoveredPayment = false;
+    try {
+      const r = await recordDepositOnce(matchIdBytes32Global, myAddress, FEE_WEI[selectedFee], null);
+      if (r.ok) recoveredPayment = true;
+    } catch (e) { /* on-chain check failed — keep the failure state */ }
 
-    try { await supabaseClient.rpc('secure_leave_waiting_match', { p_match_id: matchId, p_wallet: myAddress }); } catch(e) {}  
-    resetToHome();  
-    return;  
+    if (recoveredPayment) {
+      paymentSuccessful = true;
+      showNeonToast('✅ Payment confirmed on-chain', 'success');
+    } else {
+      showNeonToast('⚠️ Payment was cancelled or failed. No WLD was deducted.', 'warning');
+      try { await supabaseClient.rpc('secure_leave_waiting_match', { p_match_id: matchId, p_wallet: myAddress }); } catch(e) {}  
+      resetToHome();  
+      return;  
+    }
   }  
 
   // ==========================================
