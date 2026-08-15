@@ -841,6 +841,7 @@ async function cancelMatchmaking(showAlert = true) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             matchIdBytes32: targetBytes32,
+            matchDbId: targetMatchId,
             action: 'CANCEL_REFUND'
           })
         }).catch(err => console.error("Refund API Error:", err));
@@ -1005,6 +1006,7 @@ async function finalizeGame(){
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         matchIdBytes32: matchIdBytes32Global,
+        matchDbId: matchId,
         action: 'SETTLE_WINNER',
         winnerAddress: winnerWallet
       })
