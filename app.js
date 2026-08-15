@@ -902,6 +902,18 @@ async function handlePlayButtonClick(){
     console.warn('force_confirm_payment exception:', e);
   }
 
+  // If the player cancelled while the payment was still completing, the
+  // match is already cancelled — queue the refund immediately so the
+  // payment that just arrived is not left stuck.
+  try {
+    const { data: chk } = await supabaseClient.from('matches').select('status').eq('id', matchId).single();
+    if (chk && chk.status === 'cancelled') {
+      await supabaseClient.rpc('queue_refund_request', {
+        p_match_id: matchId, p_wallet: myAddress.toLowerCase().trim()
+      });
+    }
+  } catch(e) { /* non-fatal */ }
+
   if (depositBooked) {
     showNeonToast('✨ Payment confirmed! Waiting for opponent...', 'success');
   } else {
@@ -967,56 +979,34 @@ async function cancelMatchmaking(showAlert = true) {
   // with the refund below. (resetToHome() re-applies this flag.)
   matchmakingActive = false;
 
-  // If the search ends or the player leaves before the game starts, any
-  // deposit that WAS actually paid must be refunded automatically.
-  // IMPORTANT: the refund is ONLY queued when the payment was VERIFIED
-  // on-chain (record-deposit succeeded). MiniKit reporting "success" is
-  // not proof of payment — in test environments it reports success
-  // without real WLD moving, and such players must NOT get a refund row.
   const targetMatchId = matchId;
   const targetWallet = myAddress ? myAddress.toLowerCase().trim() : '';
-  const feeToRefund = selectedFee;
-  const paid = hasPaid;
-  const verified = paymentVerified;
-  const targetBytes32 = matchIdBytes32Global;
 
-  function queueRefund() {
-    // Queue the refund BEFORE leaving the match. The cron job runs every
-    // minute and completes the on-chain refund (owner emergency transfer)
-    // even if the app is closed by then. This is the ONLY refund path —
-    // queue_refund_request validates that the wallet is a paid participant,
-    // and the resolver's per-row claim makes double refunds impossible.
+  // ALWAYS attempt the refund on cancel. queue_refund_request is the
+  // source of truth: it only queues a refund for a PAID participant of
+  // this match (server-side), so a fake/test payment is rejected there
+  // and a real payment is never missed due to client-side flag races
+  // (hasPaid/paymentVerified). The cron resolver completes the refund
+  // within a minute even if the app is closed by then.
+  let refundQueued = false;
+  if (targetMatchId && targetWallet) {
     try {
-      supabaseClient.rpc('queue_refund_request', {
+      const { data, error } = await supabaseClient.rpc('queue_refund_request', {
         p_match_id: targetMatchId, p_wallet: targetWallet
-      }).catch(e => console.error("queue_refund_request error:", e));
+      });
+      refundQueued = !error && !!data && data.success === true;
+      if (error) console.error('queue_refund_request error:', error);
     } catch (e) {
-      console.error("queue_refund_request error:", e);
+      console.error('queue_refund_request exception:', e);
     }
   }
 
-  if (targetMatchId && targetWallet && paid) {
-    if (verified) {
-      queueRefund();
-      if (showAlert) {
-        showNeonToast(`Search cancelled. Your ${feeToRefund} WLD refund is being processed automatically (within a minute).`, 'success');
-      }
-    } else {
-      // MiniKit reported success but the payment was never verified
-      // on-chain. Do one final verification in the background; only if
-      // the payment turns out to be real do we queue the refund.
-      showNeonToast("⚠️ Verifying payment... If it went through, your refund will be processed automatically.", 'warning');
-      recordDepositOnce(targetBytes32, targetWallet, FEE_WEI[feeToRefund] || null, null)
-        .then((r) => { if (r.ok) queueRefund(); })
-        .catch(() => {});
-      if (showAlert) {
-        showNeonToast('Search cancelled. If your payment went through, the refund will be processed automatically.', 'info');
-      }
-    }
-  } else {
+  if (refundQueued) {
     if (showAlert) {
-      showNeonToast('Search cancelled.', 'info');
+      showNeonToast(`Search cancelled. Your ${selectedFee} WLD refund is being processed automatically (within a minute).`, 'success');
     }
+  } else if (showAlert) {
+    showNeonToast('Search cancelled.', 'info');
   }
 
   try {
