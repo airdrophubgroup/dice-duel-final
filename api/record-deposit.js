@@ -47,12 +47,26 @@ export default async function handler(req, res) {
     //    tell the contract to book a deposit. We never trust the client
     //    (or even MiniKit's finalPayload status alone) for this — we
     //    re-check the transaction receipt ourselves.
+    //
+    //    The transaction may not be mined/indexed yet right after
+    //    MiniKit reports payment success, so we retry for a while
+    //    instead of failing on the first miss.
     // ------------------------------------------------------------------
-    const receipt = await provider.getTransactionReceipt(txHash);
+    let receipt = null;
+    const maxAttempts = 10;
+    const delayMs = 2000;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      receipt = await provider.getTransactionReceipt(txHash);
+      if (receipt && receipt.status === 1) break;
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
 
     if (!receipt || receipt.status !== 1) {
       return res.status(400).json({
-        error: "Transaction not found or not confirmed on-chain",
+        error: "Transaction not found or not confirmed on-chain after retries",
       });
     }
 
