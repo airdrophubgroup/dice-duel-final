@@ -738,10 +738,13 @@ async function handlePlayButtonClick(){
       box.style.cssText = 'position:fixed; bottom:10px; left:10px; right:10px; z-index:999999; background:#000; color:#0f0; font-family:monospace; font-size:11px; padding:12px; border:2px solid #0f0; border-radius:8px; max-height:40vh; overflow:auto; word-break:break-all; white-space:pre-wrap;';
       document.body.appendChild(box);
     }
-    box.innerText = text;
+    box.innerText = (box.innerText ? box.innerText + '\n\n---\n\n' : '') + text;
   }
 
   const txHash = payRes?.finalPayload?.transaction_id || payRes?.finalPayload?.transaction_hash || null;
+
+  // TEMP DEBUG — show the raw MiniKit response so we can find the real field name for the tx hash.
+  showDebugBox('RAW payRes.finalPayload: ' + JSON.stringify(payRes?.finalPayload) + ' | computed txHash=' + txHash);
 
   try {
     const depositRes = await fetch('/api/record-deposit', {
