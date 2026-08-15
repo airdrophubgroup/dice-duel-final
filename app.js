@@ -981,32 +981,17 @@ async function cancelMatchmaking(showAlert = true) {
   const targetBytes32 = matchIdBytes32Global;
 
   function queueRefund() {
-    // 1) Queue the refund FIRST (before leaving the match). The cron job
-    //    runs every minute and completes the on-chain refund even if the
-    //    app is closed by then.
+    // Queue the refund BEFORE leaving the match. The cron job runs every
+    // minute and completes the on-chain refund (owner emergency transfer)
+    // even if the app is closed by then. This is the ONLY refund path —
+    // queue_refund_request validates that the wallet is a paid participant,
+    // and the resolver's per-row claim makes double refunds impossible.
     try {
       supabaseClient.rpc('queue_refund_request', {
         p_match_id: targetMatchId, p_wallet: targetWallet
       }).catch(e => console.error("queue_refund_request error:", e));
     } catch (e) {
       console.error("queue_refund_request error:", e);
-    }
-
-    // 2) Also attempt the refund immediately (belt & suspenders). The
-    //    API cancels the waiting match on-chain right away when the
-    //    deposit was booked; if it was never booked, it tries the
-    //    contract's emergency refund as a fallback.
-    if (targetBytes32) {
-      fetch('/api/refund-match', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'REFUND',
-          matchIdBytes32: targetBytes32,
-          playerAddress: targetWallet,
-          feeWei: FEE_WEI[feeToRefund] || null,
-        }),
-      }).catch(err => console.error("Refund API Error:", err));
     }
   }
 
@@ -1186,15 +1171,19 @@ async function finalizeGame(){
   // Only the winner's device triggers the on-chain payout, so it fires
   // exactly once (sessionStorage prevents a duplicate on this device).
   // The payout is an owner emergency transfer of the displayed winnings.
-  if (isWin && matchIdBytes32Global && winnerWallet) {
+  if (isWin && matchId && winnerWallet) {
+    // Only the winner's device triggers the payout, so it fires exactly
+    // once (sessionStorage prevents a duplicate on this device, and the
+    // API's mark_match_settled guard makes double payouts impossible).
+    // The API validates the winner against the Supabase match row and
+    // pays the displayed winnings via an owner emergency transfer.
     fetch('/api/refund-match', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        matchIdBytes32: matchIdBytes32Global,
+        matchUuid: matchId,
         action: 'SETTLE_WINNER',
-        winnerAddress: winnerWallet,
-        feeWei: FEE_WEI[matchFee] || null
+        winnerAddress: winnerWallet
       })
     }).catch(err => console.error("Settle API Error:", err));
   }

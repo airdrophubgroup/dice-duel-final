@@ -99,7 +99,7 @@ Deno.serve(async (req) => {
       // FK value directly, or the on-chain lookup will always miss.
       const { data: matchRow, error: matchErr } = await supabase
         .from("matches")
-        .select("match_id, fee")
+        .select("match_id, fee, status, p1_address, p2_address, p1_paid, p2_paid")
         .eq("id", match_id)
         .single();
 
@@ -161,6 +161,29 @@ Deno.serve(async (req) => {
         // entry fee with the owner-only emergency transfer. Only
         // attempted while the match is None — never for an already
         // settled/cancelled match.
+        //
+        // SECURITY (defense in depth — the queue RPC already validates
+        // this): only pay a wallet that is a PAID participant of the
+        // match, so a forged queue row can never drain someone else's
+        // deposit.
+        const w = String(wallet_address).toLowerCase();
+        const p1 = String(matchRow.p1_address || "").toLowerCase();
+        const p2 = String(matchRow.p2_address || "").toLowerCase();
+        const isPaidP1 = w === p1 && matchRow.p1_paid === true;
+        const isPaidP2 = w === p2 && matchRow.p2_paid === true;
+        if (!isPaidP1 && !isPaidP2) {
+          await supabase
+            .from("refund_queue")
+            .update({
+              status: "failed",
+              error: "wallet is not a paid participant of this match",
+              processed_at: new Date().toISOString(),
+            })
+            .eq("id", id);
+          results.push({ id, status: "failed" });
+          continue;
+        }
+
         const feeWei = ethers.parseUnits(String(matchRow.fee), 18);
         try {
           const tx = await contract.emergencyTokenTransfer(
