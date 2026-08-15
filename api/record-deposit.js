@@ -16,11 +16,47 @@ const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";
 
 const ABI = [
   "function recordDeposit(bytes32 matchId, address player, uint256 fee) external",
+  "function matches(bytes32) view returns (address p1, address p2, uint256 fee, uint8 status, uint256 createdAt)",
 ];
 
 const ERC20_ABI = [
   "event Transfer(address indexed from, address indexed to, uint256 value)",
 ];
+
+const MatchStatus = { None: 0, Waiting: 1, Active: 2, Settled: 3, Cancelled: 4 };
+
+// Scan recent on-chain WLD transfers for a payment of exactly `feeWei`
+// from `playerAddress` to the escrow contract. Used as a fallback when
+// the client-reported tx hash cannot be resolved on-chain — MiniKit's
+// transaction_id is not always the on-chain hash, and the payment must
+// never be missed just because the client couldn't report the hash.
+async function findPaymentTxHash(provider, playerAddress, feeWei) {
+  const latest = await provider.getBlockNumber();
+  const fromBlock = Math.max(0, latest - 200); // ~7 minutes on World Chain
+  const iface = new ethers.Interface(ERC20_ABI);
+  const transferTopic = iface.getEvent("Transfer").topicHash;
+
+  const logs = await provider.getLogs({
+    address: WLD_TOKEN_CONTRACT,
+    topics: [
+      transferTopic,
+      ethers.zeroPadValue(playerAddress.toLowerCase(), 32),
+      ethers.zeroPadValue(CONTRACT_ADDRESS.toLowerCase(), 32),
+    ],
+    fromBlock,
+    toBlock: latest,
+  });
+
+  // Logs come back oldest → newest; iterate backwards to prefer the most
+  // recent identical payment (the one the user just made).
+  for (let i = logs.length - 1; i >= 0; i--) {
+    const parsed = iface.parseLog(logs[i]);
+    if (parsed && parsed.args.value.toString() === feeWei.toString()) {
+      return logs[i].transactionHash;
+    }
+  }
+  return null;
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -29,9 +65,9 @@ export default async function handler(req, res) {
 
   const { matchIdBytes32, playerAddress, feeWei, txHash } = req.body;
 
-  if (!matchIdBytes32 || !playerAddress || !feeWei || !txHash) {
+  if (!matchIdBytes32 || !playerAddress || !feeWei) {
     return res.status(400).json({
-      error: "matchIdBytes32, playerAddress, feeWei, and txHash are all required",
+      error: "matchIdBytes32, playerAddress and feeWei are required",
     });
   }
 
@@ -45,28 +81,38 @@ export default async function handler(req, res) {
     // ------------------------------------------------------------------
     // 1. Verify the payment actually happened on-chain before we ever
     //    tell the contract to book a deposit. We never trust the client
-    //    (or even MiniKit's finalPayload status alone) for this — we
-    //    re-check the transaction receipt ourselves.
+    //    (or even MiniKit's finalPayload status alone) for this.
     //
-    //    The transaction may not be mined/indexed yet right after
-    //    MiniKit reports payment success, so we retry for a while
-    //    instead of failing on the first miss.
+    //    Path A — the reported txHash resolves to a confirmed receipt.
+    //    Path B — scan recent Transfer logs for player → contract at
+    //             exactly `feeWei` (covers the case where MiniKit's
+    //             transaction_id is not the on-chain tx hash).
     // ------------------------------------------------------------------
     let receipt = null;
-    const maxAttempts = 10;
-    const delayMs = 2000;
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      receipt = await provider.getTransactionReceipt(txHash);
-      if (receipt && receipt.status === 1) break;
-      if (attempt < maxAttempts) {
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
+    if (txHash) {
+      const maxAttempts = 8;
+      const delayMs = 1500;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        receipt = await provider.getTransactionReceipt(txHash);
+        if (receipt && receipt.status === 1) break;
+        if (attempt < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+      }
+    }
+
+    if (!receipt || receipt.status !== 1) {
+      const foundHash = await findPaymentTxHash(provider, playerAddress, feeWei);
+      if (foundHash) {
+        receipt = await provider.getTransactionReceipt(foundHash);
       }
     }
 
     if (!receipt || receipt.status !== 1) {
       return res.status(400).json({
-        error: "Transaction not found or not confirmed on-chain after retries",
+        error:
+          "Could not find the WLD payment on-chain. If you completed the payment, it will be refunded automatically.",
       });
     }
 
@@ -98,19 +144,31 @@ export default async function handler(req, res) {
     }
 
     // ------------------------------------------------------------------
-    // 2. Payment confirmed — now book the deposit on-chain (moves the
-    //    match into Waiting/Active state). This does NOT move any more
-    //    tokens; the WLD already arrived in step 1's transaction.
+    // 2. Book the deposit on-chain. Idempotent: if the match is already
+    //    booked (e.g. an earlier request succeeded but its response was
+    //    lost), treat it as success instead of reverting.
     // ------------------------------------------------------------------
     const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
     const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, wallet);
 
-    const tx = await contract.recordDeposit(matchIdBytes32, playerAddress, feeWei);
-    const depositReceipt = await tx.wait();
+    const onChainMatch = await contract.matches(matchIdBytes32);
+    const alreadyBooked =
+      Number(onChainMatch.status) !== MatchStatus.None &&
+      onChainMatch.p1.toLowerCase() === playerAddress.toLowerCase();
+
+    if (!alreadyBooked) {
+      const tx = await contract.recordDeposit(matchIdBytes32, playerAddress, feeWei);
+      const depositReceipt = await tx.wait();
+      return res.status(200).json({
+        success: true,
+        txHash: depositReceipt.hash,
+      });
+    }
 
     return res.status(200).json({
       success: true,
-      txHash: depositReceipt.hash,
+      txHash: null,
+      alreadyBooked: true,
     });
   } catch (error) {
     console.error("record-deposit error:", error);

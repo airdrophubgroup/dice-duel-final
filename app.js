@@ -1,3 +1,6 @@
+// NOTE: keep minikit-js pinned to 1.x here — package.json's 2.x removed
+// MiniKit.commandsAsync (the API this app uses). Do not bump this CDN
+// version without migrating every command call to the v2 API.
 import { MiniKit, Tokens, tokenToDecimals } from "https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@1.9.6/+esm";  
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";  
 
@@ -25,6 +28,24 @@ async function matchIdToBytes32(uuidStr) {
   return '0x' + hashArr.map(b => b.toString(16).padStart(2, '0')).join('');  
 }  
 
+// Ask the backend to verify the payment on-chain (and book the deposit).
+// Returns { ok: true } only when the WLD transfer was actually found on
+// World Chain — MiniKit's "success" status alone is NOT proof of payment.
+async function recordDepositOnce(matchIdB32, playerAddr, feeWei, txHash) {
+  const depositRes = await fetch('/api/record-deposit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      matchIdBytes32: matchIdB32,
+      playerAddress: playerAddr,
+      feeWei: feeWei,
+      txHash: txHash || null,
+    }),
+  });
+  const depositData = await depositRes.json().catch(() => ({}));
+  return { ok: depositRes.ok && !!depositData.success, data: depositData };
+}
+
 const supabaseClient = createClient(SB_URL, SB_KEY);  
 
 let myAddress = "", myUsername = "", matchId = null, matchIdBytes32Global = null, isP1, myScore = 0, oppScore = 0;  
@@ -34,6 +55,7 @@ let realWorldIdUser = false;
 let currentTnvBalance = 0;  
 let currentWldBalance = 100;  
 let hasPaid = false; 
+let paymentVerified = false; // true ONLY after record-deposit verified the payment on-chain
 
 let myTurnsLeft = 15;  
 let isTimingLocked = false;  
@@ -596,6 +618,28 @@ function showAuthBanner(msg){
   el.style.display = 'block';  
 }  
 
+function showPaymentToast(message, type = 'warning') {  
+  const id = type === 'success' ? 'neon-payment-success' : 'neon-payment-warning';  
+  const border = type === 'success' ? '#29d9c2' : '#ff3366';  
+  const color = type === 'success' ? '#29d9c2' : '#ff3366';  
+  const bg = type === 'success' ? 'rgba(5,15,10,0.95)' : 'rgba(15,5,10,0.95)';  
+  const shadow = type === 'success' ? 'rgba(41,217,194,0.6)' : 'rgba(255,51,102,0.6)';  
+  let el = document.getElementById(id);  
+  if (!el) {  
+    el = document.createElement('div');  
+    el.id = id;  
+    el.style.cssText = `position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:${bg}; border:2px solid ${border}; color:${color}; padding:14px 20px; border-radius:12px; font-family:"Space Grotesk", sans-serif; font-size:13px; font-weight:700; text-align:center; box-shadow:0 0 20px ${shadow}; backdrop-filter:blur(8px); transition:opacity 0.3s ease; max-width:90vw;`;  
+    document.body.appendChild(el);  
+  }  
+  el.innerHTML = message;  
+  el.style.opacity = '1';  
+  clearTimeout(el._toastTimer);  
+  el._toastTimer = setTimeout(() => {  
+    el.style.opacity = '0';  
+    setTimeout(() => el.remove(), 300);  
+  }, 5000);  
+}  
+
 async function performWalletAuth(silent = false){  
   if (!checkWorldAppEnvironment()) return false;  
   if (!MiniKit.isInstalled()) return false;  
@@ -706,19 +750,7 @@ async function handlePlayButtonClick(){
   }  
 
   if (!paymentSuccessful) {  
-    let existingWarning = document.getElementById('neon-payment-warning');  
-    if (!existingWarning) {  
-      existingWarning = document.createElement('div');  
-      existingWarning.id = 'neon-payment-warning';  
-      existingWarning.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:rgba(15,5,10,0.95); border:2px solid #ff3366; color:#ff3366; padding:14px 20px; border-radius:12px; font-family:"Space Grotesk", sans-serif; font-size:13px; font-weight:700; text-align:center; box-shadow:0 0 20px rgba(255,51,102,0.6); backdrop-filter:blur(8px); transition:opacity 0.3s ease;';  
-      document.body.appendChild(existingWarning);  
-    }  
-    existingWarning.innerHTML = '⚠️ Payment was cancelled or failed.';  
-    existingWarning.style.opacity = '1';  
-    setTimeout(() => {  
-      existingWarning.style.opacity = '0';  
-      setTimeout(() => { existingWarning.remove(); }, 300);  
-    }, 4000);  
+    showPaymentToast('⚠️ Payment was cancelled or failed. No WLD was deducted.', 'warning');
 
     try { await supabaseClient.rpc('secure_leave_waiting_match', { p_match_id: matchId, p_wallet: myAddress }); } catch(e) {}  
     resetToHome();  
@@ -730,70 +762,73 @@ async function handlePlayButtonClick(){
   // ==========================================
   hasPaid = true;
 
-  function showDebugBox(text) {
-    let box = document.getElementById('debug-box-force-confirm');
-    if (!box) {
-      box = document.createElement('div');
-      box.id = 'debug-box-force-confirm';
-      box.style.cssText = 'position:fixed; bottom:10px; left:10px; right:10px; z-index:999999; background:#000; color:#0f0; font-family:monospace; font-size:11px; padding:12px; border:2px solid #0f0; border-radius:8px; max-height:40vh; overflow:auto; word-break:break-all; white-space:pre-wrap;';
-      document.body.appendChild(box);
-    }
-    box.innerText = (box.innerText ? box.innerText + '\n\n---\n\n' : '') + text;
-  }
-
   const txHash = payRes?.finalPayload?.transaction_id || payRes?.finalPayload?.transaction_hash || null;
 
-  // TEMP DEBUG — show the raw MiniKit response so we can find the real field name for the tx hash.
-  showDebugBox('RAW payRes.finalPayload: ' + JSON.stringify(payRes?.finalPayload) + ' | computed txHash=' + txHash);
-
-  try {
-    const depositRes = await fetch('/api/record-deposit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        matchIdBytes32: matchIdBytes32Global,
-        playerAddress: myAddress,
-        feeWei: FEE_WEI[selectedFee],
-        txHash: txHash,
-      }),
-    });
-    const depositData = await depositRes.json();
-    if (!depositRes.ok || !depositData.success) {
-      showDebugBox('record-deposit FAILED: ' + JSON.stringify(depositData) + ' | matchId=' + matchId + ' txHash=' + txHash);
-    } else {
-      showDebugBox('record-deposit OK: ' + JSON.stringify(depositData) + ' | matchId=' + matchId);
+  // ------------------------------------------------------------------
+  // BOOK THE DEPOSIT ON-CHAIN
+  //
+  // MiniKit's transaction_id is not always the on-chain tx hash and the
+  // RPC can be flaky, so we retry here AND in the background below.
+  // /api/record-deposit verifies the real payment on-chain (scanning
+  // recent WLD transfers if needed) and only then books the deposit, so
+  // a transient failure here never means the player's money is lost.
+  // ------------------------------------------------------------------
+  let depositBooked = false;
+  let lastDepositError = '';
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const r = await recordDepositOnce(matchIdBytes32Global, myAddress, FEE_WEI[selectedFee], txHash);
+      if (r.ok) { depositBooked = true; paymentVerified = true; break; }
+      lastDepositError = JSON.stringify(r.data);
+    } catch (e) {
+      lastDepositError = e.message || String(e);
     }
-  } catch (e) {
-    showDebugBox('record-deposit EXCEPTION: ' + e.message + ' | matchId=' + matchId + ' txHash=' + txHash);
+    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 1500));
   }
 
+  // Background retry while the player searches — a transient failure
+  // self-heals instead of leaving the deposit unbooked. The loop stops
+  // itself once booked or once the search ends; if the search is
+  // cancelled or times out, cancelMatchmaking() queues the automatic
+  // refund so WLD is never stuck.
+  let bookingInFlight = false;
+  const bookingRetryTimer = setInterval(async () => {
+    if (!matchmakingActive || gameActive || depositBooked) {
+      clearInterval(bookingRetryTimer);
+      return;
+    }
+    if (bookingInFlight) return;
+    bookingInFlight = true;
+    try {
+      const r = await recordDepositOnce(matchIdBytes32Global, myAddress, FEE_WEI[selectedFee], txHash);
+      if (r.ok) {
+        depositBooked = true;
+        paymentVerified = true;
+        clearInterval(bookingRetryTimer);
+        showPaymentToast('✅ Deposit confirmed on-chain', 'success');
+      }
+    } catch (e) { /* keep retrying */ }
+    finally { bookingInFlight = false; }
+  }, 5000);
+
+  // Mark the payment as done in the DB so matchmaking can proceed — the
+  // game may start even if the on-chain booking is still settling.
   try {
     const { data: fcpData, error: fcpErr } = await supabaseClient.rpc('force_confirm_payment', {
       p_match_id: matchId,
       p_is_p1: isP1
     });
-    if (fcpErr) {
-      showDebugBox('FAILED: ' + JSON.stringify(fcpErr) + ' | matchId=' + matchId + ' isP1=' + isP1);
-    } else {
-      showDebugBox('OK: ' + JSON.stringify(fcpData) + ' | matchId=' + matchId + ' isP1=' + isP1);
-    }
+    if (fcpErr) console.warn('force_confirm_payment error:', fcpErr);
   } catch(e) {
-    showDebugBox('EXCEPTION: ' + e.message + ' | matchId=' + matchId + ' isP1=' + isP1);
+    console.warn('force_confirm_payment exception:', e);
   }
 
-  let existingSuccess = document.getElementById('neon-payment-success');  
-  if (!existingSuccess) {  
-    existingSuccess = document.createElement('div');  
-    existingSuccess.id = 'neon-payment-success';  
-    existingSuccess.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:rgba(5,15,10,0.95); border:2px solid #29d9c2; color:#29d9c2; padding:14px 20px; border-radius:12px; font-family:"Space Grotesk", sans-serif; font-size:13px; font-weight:700; text-align:center; box-shadow:0 0 20px rgba(41,217,194,0.6); backdrop-filter:blur(8px); transition:opacity 0.3s ease;';  
-    document.body.appendChild(existingSuccess);  
-  }  
-  existingSuccess.innerHTML = '✨ Payment confirmed! Waiting for opponent...';  
-  existingSuccess.style.opacity = '1';  
-  setTimeout(() => {  
-    existingSuccess.style.opacity = '0';  
-    setTimeout(() => { existingSuccess.remove(); }, 300);  
-  }, 3000);  
+  if (depositBooked) {
+    showPaymentToast('✨ Payment confirmed! Waiting for opponent...', 'success');
+  } else {
+    console.warn('record-deposit not booked yet:', lastDepositError);
+    showPaymentToast("⚠️ Payment received — booking deposit. If the match doesn't start, your WLD is refunded automatically.", 'warning');
+  }
 
   $('wait-status').innerText = `SEARCHING... (Cancel anytime)`;  
 
@@ -849,51 +884,87 @@ function setupChannel() {
 
 async function cancelMatchmaking(showAlert = true) {  
   if (!matchmakingActive || gameActive) return;  
-  
+  // Stop the search immediately so background booking retries don't race
+  // with the refund below. (resetToHome() re-applies this flag.)
+  matchmakingActive = false;
+
+  // If the search ends or the player leaves before the game starts, any
+  // deposit that WAS actually paid must be refunded automatically.
+  // IMPORTANT: the refund is ONLY queued when the payment was VERIFIED
+  // on-chain (record-deposit succeeded). MiniKit reporting "success" is
+  // not proof of payment — in test environments it reports success
+  // without real WLD moving, and such players must NOT get a refund row.
   const targetMatchId = matchId;
   const targetWallet = myAddress ? myAddress.toLowerCase().trim() : '';
   const feeToRefund = selectedFee;
   const paid = hasPaid;
+  const verified = paymentVerified;
   const targetBytes32 = matchIdBytes32Global;
 
-  // TEMP DEBUG — remove after diagnosing why queue_refund_request isn't firing.
-  alert(`DEBUG cancel:\nhasPaid=${paid}\nmatchIdBytes32Global=${targetBytes32}\ntargetMatchId=${targetMatchId}\ntargetWallet=${targetWallet}`);
+  function queueRefund() {
+    // 1) Queue the refund FIRST (before leaving the match). The cron job
+    //    runs every minute and completes the on-chain refund even if the
+    //    app is closed by then.
+    try {
+      supabaseClient.rpc('queue_refund_request', {
+        p_match_id: targetMatchId, p_wallet: targetWallet
+      }).catch(e => console.error("queue_refund_request error:", e));
+    } catch (e) {
+      console.error("queue_refund_request error:", e);
+    }
 
-  if (targetMatchId && targetWallet) {  
-    try {  
-      await supabaseClient.rpc('secure_leave_waiting_match', {  
-        p_match_id: targetMatchId, p_wallet: targetWallet  
-      });  
+    // 2) Also attempt the refund immediately (belt & suspenders). The
+    //    API cancels the waiting match on-chain right away when the
+    //    deposit was booked; if it was never booked, it tries the
+    //    contract's emergency refund as a fallback.
+    if (targetBytes32) {
+      fetch('/api/refund-match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'REFUND',
+          matchIdBytes32: targetBytes32,
+          playerAddress: targetWallet,
+          feeWei: FEE_WEI[feeToRefund] || null,
+        }),
+      }).catch(err => console.error("Refund API Error:", err));
+    }
+  }
 
-      if (paid && targetBytes32) {
-        // Write to the refund_queue instead of firing a direct fetch —
-        // this Supabase RPC is fast and much more likely to complete
-        // before World App backgrounds/closes than a full on-chain
-        // fetch() call would be. The Edge Function + cron job (already
-        // running every minute) picks this up and completes the actual
-        // on-chain refund independently, even if the app is closed by
-        // the time it runs.
-        try {
-          await supabaseClient.rpc('queue_refund_request', {
-            p_match_id: targetMatchId, p_wallet: targetWallet
-          });
-        } catch (e) {}
-
-        if (showAlert) {  
-          alert(`Search cancelled. Your ${feeToRefund} WLD refund is being processed automatically.`);  
-        }  
-      } else {
-        if (showAlert) {
-          alert('Search cancelled.');
-        }
+  if (targetMatchId && targetWallet && paid) {
+    if (verified) {
+      queueRefund();
+      if (showAlert) {
+        alert(`Search cancelled. Your ${feeToRefund} WLD refund is being processed automatically (within a minute).`);
       }
-    } catch(e) {
-      console.error("Cancel error:", e);
-    }  
-  }  
+    } else {
+      // MiniKit reported success but the payment was never verified
+      // on-chain. Do one final verification in the background; only if
+      // the payment turns out to be real do we queue the refund.
+      showPaymentToast("⚠️ Verifying payment... If it went through, your refund will be processed automatically.", 'warning');
+      recordDepositOnce(targetBytes32, targetWallet, FEE_WEI[feeToRefund] || null, null)
+        .then((r) => { if (r.ok) queueRefund(); })
+        .catch(() => {});
+      if (showAlert) {
+        alert('Search cancelled. If your payment went through, the refund will be processed automatically.');
+      }
+    }
+  } else {
+    if (showAlert) {
+      alert('Search cancelled.');
+    }
+  }
+
+  try {
+    await supabaseClient.rpc('secure_leave_waiting_match', {
+      p_match_id: targetMatchId, p_wallet: targetWallet
+    });
+  } catch(e) {
+    console.error("Leave match error:", e);
+  }
 
   resetToHome();  
-}  
+}    
 
 async function checkBothReady(){  
   if (!matchmakingActive || gameActive) return;  
@@ -1096,6 +1167,7 @@ function resetToHome(){
   matchmakingActive = false;  
   gameActive = false;  
   hasPaid = false;
+  paymentVerified = false;
   matchId = null;
   matchIdBytes32Global = null;
 }  
