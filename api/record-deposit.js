@@ -32,27 +32,38 @@ const MatchStatus = { None: 0, Waiting: 1, Active: 2, Settled: 3, Cancelled: 4 }
 // never be missed just because the client couldn't report the hash.
 async function findPaymentTxHash(provider, playerAddress, feeWei) {
   const latest = await provider.getBlockNumber();
-  const fromBlock = Math.max(0, latest - 200); // ~7 minutes on World Chain
   const iface = new ethers.Interface(ERC20_ABI);
   const transferTopic = iface.getEvent("Transfer").topicHash;
+  const fromTopic = ethers.zeroPadValue(playerAddress.toLowerCase(), 32);
+  const toTopic = ethers.zeroPadValue(CONTRACT_ADDRESS.toLowerCase(), 32);
 
-  const logs = await provider.getLogs({
-    address: WLD_TOKEN_CONTRACT,
-    topics: [
-      transferTopic,
-      ethers.zeroPadValue(playerAddress.toLowerCase(), 32),
-      ethers.zeroPadValue(CONTRACT_ADDRESS.toLowerCase(), 32),
-    ],
-    fromBlock,
-    toBlock: latest,
-  });
+  // The public World Chain RPC caps eth_getLogs at ~100 blocks per call,
+  // so walk backwards in 100-block chunks (3 chunks ≈ 10 minutes).
+  const CHUNK = 90;
+  const CHUNKS = 3;
+  for (let c = 0; c < CHUNKS; c++) {
+    const toBlock = latest - c * 100;
+    const fromBlock = Math.max(0, toBlock - CHUNK);
+    let logs = [];
+    try {
+      logs = await provider.getLogs({
+        address: WLD_TOKEN_CONTRACT,
+        topics: [transferTopic, fromTopic, toTopic],
+        fromBlock,
+        toBlock,
+      });
+    } catch (e) {
+      // skip a failed chunk and keep looking in older blocks
+      continue;
+    }
 
-  // Logs come back oldest → newest; iterate backwards to prefer the most
-  // recent identical payment (the one the user just made).
-  for (let i = logs.length - 1; i >= 0; i--) {
-    const parsed = iface.parseLog(logs[i]);
-    if (parsed && parsed.args.value.toString() === feeWei.toString()) {
-      return logs[i].transactionHash;
+    // Logs come back oldest → newest; iterate backwards to prefer the
+    // most recent identical payment (the one the user just made).
+    for (let i = logs.length - 1; i >= 0; i--) {
+      const parsed = iface.parseLog(logs[i]);
+      if (parsed && parsed.args.value.toString() === feeWei.toString()) {
+        return logs[i].transactionHash;
+      }
     }
   }
   return null;
