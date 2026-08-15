@@ -10,13 +10,30 @@ const PRIVATE_KEY =
   process.env.RESOLVER_PRIVATE_KEY;
 
 const ABI = [
-  "function settleMatch(bytes32 matchId, address winner) external",
-  "function cancelWaitingMatch(bytes32 matchId) external",
   "function emergencyTokenTransfer(address token, address user, uint256 amount) external",
-  "function matches(bytes32) view returns (address p1, address p2, uint256 fee, uint8 status, uint256 createdAt)",
 ];
 
-const MatchStatus = { None: 0, Waiting: 1, Active: 2, Settled: 3, Cancelled: 4 };
+// The deployed escrow contract (TnvDuelArena) has no operator-side
+// "pay the winner" path that works for unbooked matches: settleMatch needs
+// an on-chain Active match (only reachable via joinMatch/Permit2, which this
+// app deliberately does not use), and cancelWaitingMatch can only be called
+// by the p1 player after a 5-minute wait. Every payout/refund therefore goes
+// through the owner-only emergencyTokenTransfer — the same path the refund
+// resolver cron already uses successfully.
+
+// Winner payout in WLD per entry fee — mirrors app.js calculatePayout()
+// exactly, so what the game displays is what the winner receives. The house
+// cut (pot minus payout) stays in the contract as operator profit.
+const EXACT_PAYOUTS = {
+  0.1: 0.17, 0.2: 0.34, 0.5: 0.8, 1: 1.6, 2: 3.2,
+  5: 8.8, 10: 17.8, 20: 36.0, 30: 54.0, 40: 72.0, 50: 90.0,
+};
+
+function payoutWeiForFee(feeWei) {
+  const fee = Number(ethers.formatUnits(feeWei, 18));
+  const payout = EXACT_PAYOUTS[fee] ?? Number((fee * 1.6).toFixed(2));
+  return ethers.parseUnits(String(payout), 18);
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -34,6 +51,9 @@ export default async function handler(req, res) {
   if (action === "SETTLE_WINNER" && !winnerAddress) {
     return res.status(400).json({ error: "winnerAddress is required for SETTLE_WINNER" });
   }
+  if (!feeWei) {
+    return res.status(400).json({ error: "feeWei is required" });
+  }
   if (!PRIVATE_KEY) {
     return res.status(500).json({ error: "Operator private key is not configured" });
   }
@@ -44,45 +64,26 @@ export default async function handler(req, res) {
     const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, wallet);
 
     if (action === "REFUND") {
-      const onChainMatch = await contract.matches(matchIdBytes32);
-      const status = Number(onChainMatch.status);
-
-      // Normal case: deposit was booked, match is waiting, player is p1.
-      // cancelWaitingMatch refunds the player's WLD.
-      if (status === MatchStatus.Waiting && onChainMatch.p1.toLowerCase() === playerAddress.toLowerCase()) {
-        const tx = await contract.cancelWaitingMatch(matchIdBytes32);
-        const receipt = await tx.wait();
-        return res.status(200).json({ success: true, txHash: receipt.hash, refunded: true });
-      }
-
-      // The deposit was never booked on-chain (e.g. record-deposit failed
-      // earlier). The WLD is sitting unallocated in the contract — attempt
-      // a best-effort refund via the contract's emergency token transfer.
-      // This only succeeds if the operator key is the contract owner.
-      if (status === MatchStatus.None && feeWei) {
-        try {
-          const tx = await contract.emergencyTokenTransfer(WLD_TOKEN_CONTRACT, playerAddress, feeWei);
-          const receipt = await tx.wait();
-          return res.status(200).json({ success: true, txHash: receipt.hash, refunded: true, emergency: true });
-        } catch (e) {
-          return res.status(500).json({
-            success: false,
-            error:
-              "Match was never booked on-chain and the automatic emergency refund failed (operator is not the contract owner). Please contact support.",
-          });
-        }
-      }
-
-      return res.status(400).json({
-        success: false,
-        error: `Match not refundable on-chain (status=${status}). If you paid, contact support — an emergency refund is available.`,
-      });
+      // Player paid WLD into the escrow but the match never started (no
+      // opponent, cancelled, or timed out). Send the exact entry fee back
+      // via the owner emergency transfer.
+      const tx = await contract.emergencyTokenTransfer(WLD_TOKEN_CONTRACT, playerAddress, feeWei);
+      const receipt = await tx.wait();
+      return res.status(200).json({ success: true, txHash: receipt.hash, refunded: true });
     }
 
-    // Default: SETTLE_WINNER — pay the match pot out to the winner.
-    const tx = await contract.settleMatch(matchIdBytes32, winnerAddress);
+    // SETTLE_WINNER — pay the winner the displayed payout (pot minus house
+    // cut). Only the winner's device triggers this (see app.js), and the
+    // app's sessionStorage guard prevents a duplicate on the same device.
+    const payoutWei = payoutWeiForFee(feeWei);
+    const tx = await contract.emergencyTokenTransfer(WLD_TOKEN_CONTRACT, winnerAddress, payoutWei);
     const receipt = await tx.wait();
-    return res.status(200).json({ success: true, txHash: receipt.hash });
+    return res.status(200).json({
+      success: true,
+      txHash: receipt.hash,
+      action: "SETTLE_WINNER",
+      payoutWld: ethers.formatUnits(payoutWei, 18),
+    });
   } catch (error) {
     console.error("refund-match error:", error);
     return res.status(500).json({ success: false, error: error.message || "Internal server error" });

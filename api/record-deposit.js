@@ -2,28 +2,24 @@ import { ethers } from "ethers";
 
 const RPC_URL = process.env.WORLDCHAIN_RPC || "https://worldchain-mainnet.g.alchemy.com/public";
 
-// Use whichever operator key env var is already set in Vercel — recommend
-// standardizing on one name (e.g. OPERATOR_PRIVATE_KEY) across all /api
-// files eventually, but this fallback chain keeps things working with
-// whatever is currently configured.
-const PRIVATE_KEY =
-  process.env.OPERATOR_PRIVATE_KEY ||
-  process.env.ADMIN_PRIVATE_KEY ||
-  process.env.RESOLVER_PRIVATE_KEY;
-
 const CONTRACT_ADDRESS = "0x2f9D3bC7125d563434cbc601b15Add6Ba0F3F3Db";
 const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";
-
-const ABI = [
-  "function recordDeposit(bytes32 matchId, address player, uint256 fee) external",
-  "function matches(bytes32) view returns (address p1, address p2, uint256 fee, uint8 status, uint256 createdAt)",
-];
 
 const ERC20_ABI = [
   "event Transfer(address indexed from, address indexed to, uint256 value)",
 ];
 
-const MatchStatus = { None: 0, Waiting: 1, Active: 2, Settled: 3, Cancelled: 4 };
+// The deployed escrow contract (TnvDuelArena) does NOT have a recordDeposit
+// function — booking on-chain would require the player to call joinMatch via
+// Permit2, which this app intentionally does not use (it conflicts with the
+// 1-minute auto-refund requirement, since the contract enforces a 5-minute
+// wait for p1 cancel). The escrow contract is therefore used purely as the
+// WLD holding wallet: Supabase (p1_paid / p2_paid) is the match ledger and
+// all payouts/refunds are owner-operated emergency transfers.
+//
+// This endpoint's ONLY job is to verify the player's WLD payment actually
+// arrived on-chain — never trust MiniKit's status alone. It scans recent
+// WLD transfers from the player to the escrow contract at the exact fee.
 
 // Scan recent on-chain WLD transfers for a payment of exactly `feeWei`
 // from `playerAddress` to the escrow contract. Used as a fallback when
@@ -82,17 +78,12 @@ export default async function handler(req, res) {
     });
   }
 
-  if (!PRIVATE_KEY) {
-    return res.status(500).json({ error: "Operator private key is not configured in Vercel" });
-  }
-
   try {
     const provider = new ethers.JsonRpcProvider(RPC_URL);
 
     // ------------------------------------------------------------------
-    // 1. Verify the payment actually happened on-chain before we ever
-    //    tell the contract to book a deposit. We never trust the client
-    //    (or even MiniKit's finalPayload status alone) for this.
+    // 1. Verify the payment actually happened on-chain. We never trust
+    //    the client (or even MiniKit's finalPayload status alone).
     //
     //    Path A — the reported txHash resolves to a confirmed receipt.
     //    Path B — scan recent Transfer logs for player → contract at
@@ -127,6 +118,8 @@ export default async function handler(req, res) {
       });
     }
 
+    // 2. Confirm the receipt contains the exact Transfer (player → escrow
+    //    contract, value = feeWei) before declaring the payment verified.
     const iface = new ethers.Interface(ERC20_ABI);
     let verified = false;
 
@@ -154,32 +147,12 @@ export default async function handler(req, res) {
       });
     }
 
-    // ------------------------------------------------------------------
-    // 2. Book the deposit on-chain. Idempotent: if the match is already
-    //    booked (e.g. an earlier request succeeded but its response was
-    //    lost), treat it as success instead of reverting.
-    // ------------------------------------------------------------------
-    const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, wallet);
-
-    const onChainMatch = await contract.matches(matchIdBytes32);
-    const alreadyBooked =
-      Number(onChainMatch.status) !== MatchStatus.None &&
-      onChainMatch.p1.toLowerCase() === playerAddress.toLowerCase();
-
-    if (!alreadyBooked) {
-      const tx = await contract.recordDeposit(matchIdBytes32, playerAddress, feeWei);
-      const depositReceipt = await tx.wait();
-      return res.status(200).json({
-        success: true,
-        txHash: depositReceipt.hash,
-      });
-    }
-
+    // Verified — the app then marks p1_paid / p2_paid in Supabase (the
+    // ledger of record). No on-chain booking happens here.
     return res.status(200).json({
       success: true,
-      txHash: null,
-      alreadyBooked: true,
+      verified: true,
+      txHash: receipt.hash,
     });
   } catch (error) {
     console.error("record-deposit error:", error);

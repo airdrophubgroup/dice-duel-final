@@ -28,9 +28,12 @@ async function matchIdToBytes32(uuidStr) {
   return '0x' + hashArr.map(b => b.toString(16).padStart(2, '0')).join('');  
 }  
 
-// Ask the backend to verify the payment on-chain (and book the deposit).
+// Ask the backend to verify the payment on-chain.
 // Returns { ok: true } only when the WLD transfer was actually found on
 // World Chain — MiniKit's "success" status alone is NOT proof of payment.
+// (The escrow contract has no recordDeposit function, so the deposit is NOT
+// booked on-chain: Supabase p1_paid/p2_paid is the ledger and refunds go
+// through owner emergency transfers.)
 async function recordDepositOnce(matchIdB32, playerAddr, feeWei, txHash) {
   const depositRes = await fetch('/api/record-deposit', {
     method: 'POST',
@@ -841,12 +844,12 @@ async function handlePlayButtonClick(){
   const txHash = payRes?.finalPayload?.transaction_id || payRes?.finalPayload?.transaction_hash || null;
 
   // ------------------------------------------------------------------
-  // BOOK THE DEPOSIT ON-CHAIN
+  // VERIFY THE PAYMENT ON-CHAIN
   //
   // MiniKit's transaction_id is not always the on-chain tx hash and the
   // RPC can be flaky, so we retry here AND in the background below.
   // /api/record-deposit verifies the real payment on-chain (scanning
-  // recent WLD transfers if needed) and only then books the deposit, so
+  // recent WLD transfers if needed) and only then returns success, so
   // a transient failure here never means the player's money is lost.
   // ------------------------------------------------------------------
   let depositBooked = false;
@@ -1180,14 +1183,18 @@ async function finalizeGame(){
 
   const exactChipEarn = calculatePayout(matchFee);   
 
-  if (matchIdBytes32Global && winnerWallet) {
+  // Only the winner's device triggers the on-chain payout, so it fires
+  // exactly once (sessionStorage prevents a duplicate on this device).
+  // The payout is an owner emergency transfer of the displayed winnings.
+  if (isWin && matchIdBytes32Global && winnerWallet) {
     fetch('/api/refund-match', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         matchIdBytes32: matchIdBytes32Global,
         action: 'SETTLE_WINNER',
-        winnerAddress: winnerWallet
+        winnerAddress: winnerWallet,
+        feeWei: FEE_WEI[matchFee] || null
       })
     }).catch(err => console.error("Settle API Error:", err));
   }
