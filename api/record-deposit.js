@@ -53,12 +53,13 @@ async function findPaymentTxHash(provider, playerAddress, feeWei) {
   const toTopic = ethers.zeroPadValue(CONTRACT_ADDRESS.toLowerCase(), 32);
 
   // The public World Chain RPC caps eth_getLogs at ~100 blocks per call,
-  // so walk backwards in 100-block chunks (3 chunks ≈ 10 minutes).
-  const CHUNK = 90;
+  // so walk backwards in CONTIGUOUS chunks (no gaps — a missed chunk
+  // would silently miss the payment). 3 chunks ≈ 10 minutes.
+  const CHUNK = 99;
   const CHUNKS = 3;
   for (let c = 0; c < CHUNKS; c++) {
-    const toBlock = latest - c * 100;
-    const fromBlock = Math.max(0, toBlock - CHUNK);
+    const toBlock = latest - c * CHUNK;
+    const fromBlock = Math.max(0, toBlock - (CHUNK - 1));
     let logs = [];
     try {
       logs = await provider.getLogs({
