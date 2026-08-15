@@ -686,9 +686,10 @@ async function handlePlayButtonClick(){
 
   const paymentReference = 'ref_' + randomAlphaNumeric(16);  
   let paymentSuccessful = false;  
+  let payRes;  
 
   try {  
-    const payRes = await MiniKit.commandsAsync.pay({  
+    payRes = await MiniKit.commandsAsync.pay({  
       reference: paymentReference,  
       to: DICE_DUEL_CONTRACT,  
       tokens: [{ symbol: Tokens.WLD, token_amount: tokenToDecimals(selectedFee, Tokens.WLD).toString() }],  
