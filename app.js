@@ -28,14 +28,15 @@ async function matchIdToBytes32(uuidStr) {
   return '0x' + hashArr.map(b => b.toString(16).padStart(2, '0')).join('');  
 }  
 
-// Ask the backend to verify the payment on-chain.
-// Returns { ok: true } only when the WLD transfer was actually found on
-// World Chain — MiniKit's "success" status alone is NOT proof of payment.
-// (The escrow contract has no recordDeposit function, so the deposit is NOT
-// booked on-chain: Supabase p1_paid/p2_paid is the ledger and refunds go
-// through owner emergency transfers.)
+// Ask the verify-payment edge function to verify the payment on-chain
+// AND record it (mark p1_paid/p2_paid) — the ONLY path that can mark a
+// player paid. Returns { ok: true } only when the WLD transfer was
+// actually found on World Chain — MiniKit's "success" status alone is
+// NOT proof of payment. (The escrow contract has no recordDeposit
+// function, so the deposit is NOT booked on-chain: Supabase is the
+// ledger and refunds go through owner emergency transfers.)
 async function recordDepositOnce(matchIdB32, matchUuid, playerAddr, feeWei, txHash) {
-  const depositRes = await fetch('/api/record-deposit', {
+  const depositRes = await fetch('https://efmkazyrxllcyvcwmewd.supabase.co/functions/v1/verify-payment', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -885,11 +886,8 @@ async function handlePlayButtonClick(){
         depositBooked = true;
         paymentVerified = true;
         clearInterval(bookingRetryTimer);
-        // Delayed verification — make sure the DB paid-flag catches up so
-        // matchmaking and refunds both work.
-        try {
-          await supabaseClient.rpc('force_confirm_payment', { p_match_id: matchId, p_is_p1: isP1 });
-        } catch(e) { /* non-fatal */ }
+        // recordDepositOnce marks the paid flag server-side; nothing more
+        // is needed here for matchmaking or refunds.
         showNeonToast('✅ Deposit confirmed on-chain', 'success');
       }
     } catch (e) { /* keep retrying */ }
@@ -903,15 +901,7 @@ async function handlePlayButtonClick(){
   // payments would queue refund rows. p1_paid/p2_paid are the gate for
   // both matchmaking and refunds.
   if (depositBooked || paymentVerified) {
-    try {
-      const { data: fcpData, error: fcpErr } = await supabaseClient.rpc('force_confirm_payment', {
-        p_match_id: matchId,
-        p_is_p1: isP1
-      });
-      if (fcpErr) console.warn('force_confirm_payment error:', fcpErr);
-    } catch(e) {
-      console.warn('force_confirm_payment exception:', e);
-    }
+    // recordDepositOnce already marked the paid flag server-side.
 
     // If the player cancelled while the payment was still completing, the
     // match is already cancelled — queue the refund immediately so the
@@ -1020,9 +1010,8 @@ async function cancelMatchmaking(showAlert = true) {
       try {
         const r = await recordDepositOnce(matchIdBytes32Global, targetMatchId, targetWallet, FEE_WEI[selectedFee] || null, null);
         if (r.ok) {
-          try {
-            await supabaseClient.rpc('force_confirm_payment', { p_match_id: targetMatchId, p_is_p1: isP1 });
-          } catch(e) { /* non-fatal */ }
+          // recordDepositOnce marks the paid flag server-side, so the
+          // refund can now be queued.
           const { data: d2 } = await supabaseClient.rpc('queue_refund_request', {
             p_match_id: targetMatchId, p_wallet: targetWallet
           }).catch(() => ({}));
@@ -1183,36 +1172,58 @@ async function finalizeGame(){
 
   const myFinal = isP1 ? finalRow.p1_score : finalRow.p2_score;  
   const opFinal = isP1 ? finalRow.p2_score : finalRow.p1_score;  
+  const isTie = myFinal === opFinal;  
   const isWin = myFinal > opFinal;  
   const oppAddress = isP1 ? finalRow.p2_address : finalRow.p1_address;
   const winnerWallet = isWin ? myAddress : oppAddress;
 
   const exactChipEarn = calculatePayout(matchFee);   
 
+  // TIE: equal scores — nobody wins. Both players get their entry fee
+  // back (queue_refund_request only allows completed-tie matches, so a
+  // non-tie completed match can never be refunded this way). Each
+  // player's device queues its own refund.
+  if (isTie && matchId && myAddress) {
+    supabaseClient.rpc('queue_refund_request', {
+      p_match_id: matchId, p_wallet: myAddress.toLowerCase().trim()
+    }).catch(() => {});
+  }
+
   // Only the winner's device triggers the on-chain payout, so it fires
-  // exactly once (sessionStorage prevents a duplicate on this device).
-  // The payout is an owner emergency transfer of the displayed winnings.
+  // exactly once per device, with retries for transient failures (the
+  // API's mark_match_settled guard makes double payouts impossible).
+  // The API validates the winner against the Supabase match row and
+  // pays the displayed winnings via an owner emergency transfer.
   if (isWin && matchId && winnerWallet) {
-    // Only the winner's device triggers the payout, so it fires exactly
-    // once (sessionStorage prevents a duplicate on this device, and the
-    // API's mark_match_settled guard makes double payouts impossible).
-    // The API validates the winner against the Supabase match row and
-    // pays the displayed winnings via an owner emergency transfer.
-    fetch('/api/refund-match', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        matchUuid: matchId,
-        action: 'SETTLE_WINNER',
-        winnerAddress: winnerWallet
-      })
-    }).catch(err => console.error("Settle API Error:", err));
+    (async () => {
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        try {
+          const resp = await fetch('/api/refund-match', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              matchUuid: matchId,
+              action: 'SETTLE_WINNER',
+              winnerAddress: winnerWallet
+            })
+          });
+          if (resp.ok) break;
+          const body = await resp.json().catch(() => ({}));
+          if (body && body.alreadySettled) break;
+        } catch (err) {
+          console.error("Settle API Error:", err);
+        }
+        await new Promise(r => setTimeout(r, 2500));
+      }
+    })();
   }
 
   if (myAddress && !sessionStorage.getItem(`settled_${matchId}_${myAddress}`)) {  
       sessionStorage.setItem(`settled_${matchId}_${myAddress}`, "true");  
       try {  
-          if (isWin) {  
+          if (isTie) {  
+              await logMatchHistory(myAddress, 'DRAW', 0, `Tie match (${matchFee} WLD duel, refunded)`);  
+          } else if (isWin) {  
               await logMatchHistory(myAddress, 'VICTORY', exactChipEarn, `Won match (${matchFee} WLD duel)`);  
           } else {  
               await logMatchHistory(myAddress, 'DEFEAT', -matchFee, `Lost match (${matchFee} WLD duel)`);  
@@ -1233,7 +1244,12 @@ async function finalizeGame(){
     } catch(e) {}  
   }  
 
-  if (isWin){  
+  if (isTie){  
+    $('result-icon').innerText = '🤝';  
+    $('result-title').innerText = 'TIE!';  
+    $('result-msg').innerText = `Equal scores — your ${matchFee} WLD is being refunded automatically`;  
+    $('result-card').className = 'result-card result-tie';  
+  } else if (isWin){  
     $('result-icon').innerText = '🏆';  
     $('result-title').innerText = 'VICTORY!';  
     $('result-msg').innerText = `+${exactChipEarn} WLD & +${earnedTnv} TNV`;  

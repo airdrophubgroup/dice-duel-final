@@ -24,8 +24,13 @@
 //      cancelWaitingMatch() refunds the player's WLD.
 //   B) Match never booked on-chain (status None) -> return the entry fee
 //      via emergencyTokenTransfer(). Only succeeds if the operator key IS
-//      the contract owner. Each row is also validated against the matches
-//      table (wallet must be a PAID participant) before any transfer.
+//      the contract owner.
+//
+// SECURITY: before ANY emergency payout, the player's payment is
+// re-verified on-chain (the recorded payment tx hash must show a real
+// Transfer from that wallet -> escrow contract at the match fee, with a
+// recent-transfer scan as fallback). Even if every DB flag is forged,
+// no WLD leaves the contract without real on-chain proof.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { ethers } from "npm:ethers@6";
@@ -44,6 +49,10 @@ const CONTRACT_ABI = [
   "function matches(bytes32) view returns (address p1, address p2, uint256 fee, uint8 status, uint256 createdAt)",
 ];
 
+const ERC20_ABI = [
+  "event Transfer(address indexed from, address indexed to, uint256 value)",
+];
+
 const MatchStatus = { None: 0, Waiting: 1, Active: 2, Settled: 3, Cancelled: 4 };
 
 async function matchIdToBytes32(uuidStr: string) {
@@ -53,10 +62,88 @@ async function matchIdToBytes32(uuidStr: string) {
   return "0x" + hashArr.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Verify on-chain that `wallet` really transferred `feeWei` WLD to the
+// escrow contract. First checks the recorded tx hash; if that is missing
+// or fails, scans recent transfers (contiguous 99-block chunks x 5) so
+// older matches still refund correctly.
+async function verifyPaymentOnChain(
+  provider: ethers.JsonRpcProvider,
+  wallet: string,
+  feeWei: string,
+  txHash: string | null
+): Promise<{ ok: boolean; txHash?: string }> {
+  const iface = new ethers.Interface(ERC20_ABI);
+  const w = String(wallet).toLowerCase();
+
+  const checkReceipt = async (hash: string): Promise<boolean> => {
+    try {
+      const receipt = await provider.getTransactionReceipt(hash);
+      if (!receipt || receipt.status !== 1) return false;
+      for (const log of receipt.logs) {
+        if (log.address.toLowerCase() !== WLD_TOKEN_CONTRACT.toLowerCase()) continue;
+        try {
+          const parsed = iface.parseLog(log);
+          if (
+            parsed!.name === "Transfer" &&
+            parsed!.args.from.toLowerCase() === w &&
+            parsed!.args.to.toLowerCase() === CONTRACT_ADDRESS.toLowerCase() &&
+            parsed!.args.value.toString() === feeWei
+          ) {
+            return true;
+          }
+        } catch {
+          // not a WLD Transfer log
+        }
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
+  if (txHash && await checkReceipt(txHash)) {
+    return { ok: true, txHash };
+  }
+
+  // Scan fallback for matches paid before tx hashes were recorded.
+  try {
+    const latest = await provider.getBlockNumber();
+    const transferTopic = iface.getEvent("Transfer")!.topicHash;
+    const fromTopic = ethers.zeroPadValue(w, 32);
+    const toTopic = ethers.zeroPadValue(CONTRACT_ADDRESS.toLowerCase(), 32);
+    const CHUNK = 99;
+    const CHUNKS = 5;
+    for (let c = 0; c < CHUNKS; c++) {
+      const toBlock = latest - c * CHUNK;
+      const fromBlock = Math.max(0, toBlock - (CHUNK - 1));
+      let logs: any[] = [];
+      try {
+        logs = await provider.getLogs({
+          address: WLD_TOKEN_CONTRACT,
+          topics: [transferTopic, fromTopic, toTopic],
+          fromBlock,
+          toBlock,
+        });
+      } catch {
+        continue;
+      }
+      for (let i = logs.length - 1; i >= 0; i--) {
+        const parsed = iface.parseLog(logs[i]);
+        if (parsed && parsed.args.value.toString() === feeWei) {
+          return { ok: true, txHash: logs[i].transactionHash };
+        }
+      }
+    }
+  } catch {
+    // fall through — refund stays unverified
+  }
+
+  return { ok: false };
+}
+
 Deno.serve(async (req) => {
   // Shared-secret check — only the pg_cron job (which knows CRON_SECRET)
-  // is allowed to trigger this. Without this, anyone who found the
-  // function's public URL could spam-trigger refund processing.
+  // is allowed to trigger this.
   const auth = req.headers.get("x-cron-secret");
   if (auth !== CRON_SECRET) {
     return new Response("Unauthorized", { status: 401 });
@@ -71,10 +158,10 @@ Deno.serve(async (req) => {
   // Ghost cleanup (runs BEFORE refund processing so freshly inserted
   // refund rows are picked up by this same tick):
   //   - PAID waiting matches older than 2 minutes with no p2 payment
-  //     are abandoned (the app auto-cancels at 60s when it is open; a
-  //     match still waiting after 2 min means the player closed the
-  //     app). Cancel them AND queue an automatic refund so no ghost
-  //     match is joinable and no money stays stuck.
+  //     are abandoned -> cancel + auto-refund.
+  //   - Completed matches that never got settled (winner payout failed
+  //     or app closed) older than 3 minutes are retried via a refund
+  //     queue row for the winner (idempotent — settled_at guard).
   // ------------------------------------------------------------------
   try {
     const ghostCutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();
@@ -91,21 +178,16 @@ Deno.serve(async (req) => {
           .from("matches")
           .update({ status: "cancelled" })
           .eq("id", g.id)
-          .eq("status", "waiting");
+          .in("status", ["waiting", "searching"]);
         if (cancelErr) continue;
 
         if (g.p1_address && g.fee != null) {
-          const { error: insErr } = await supabase
-            .from("refund_queue")
-            .insert({
-              match_id: g.id,
-              wallet_address: String(g.p1_address).toLowerCase(),
-              fee: g.fee,
-              status: "pending",
-            });
-          if (insErr) {
-            console.error("ghost refund insert error:", insErr.message);
-          }
+          await supabase.from("refund_queue").insert({
+            match_id: g.id,
+            wallet_address: String(g.p1_address).toLowerCase(),
+            fee: g.fee,
+            status: "pending",
+          });
         }
       }
     }
@@ -132,8 +214,7 @@ Deno.serve(async (req) => {
   for (const row of rows ?? []) {
     const { id, match_id, wallet_address } = row;
 
-    // Claim the row so a second cron tick (if the previous run is still
-    // in flight) doesn't double-process it.
+    // Claim the row so a second cron tick can't double-process it.
     const { error: lockErr } = await supabase
       .from("refund_queue")
       .update({ status: "processing" })
@@ -142,98 +223,82 @@ Deno.serve(async (req) => {
     if (lockErr) continue;
 
     try {
-      // refund_queue.match_id is a FK to matches.id — but the on-chain
-      // hash is derived from matches.match_id (a separate column app.js
-      // sets). We must look that up explicitly rather than hashing the
-      // FK value directly, or the on-chain lookup will always miss.
       const { data: matchRow, error: matchErr } = await supabase
         .from("matches")
-        .select("match_id, fee, status, p1_address, p2_address, p1_paid, p2_paid")
+        .select(
+          "match_id, fee, status, p1_address, p2_address, p1_paid, p2_paid, p1_payment_tx_hash, p2_payment_tx_hash, tie"
+        )
         .eq("id", match_id)
         .single();
 
       if (matchErr || !matchRow) {
-        await supabase
-          .from("refund_queue")
-          .update({
-            status: "failed",
-            error: "could not load matches.match_id for on-chain hash",
-            processed_at: new Date().toISOString(),
-          })
-          .eq("id", id);
+        await supabase.from("refund_queue").update({
+          status: "failed",
+          error: "could not load match row",
+          processed_at: new Date().toISOString(),
+        }).eq("id", id);
         results.push({ id, status: "failed" });
         continue;
       }
 
       const onChainIdSource = matchRow.match_id || match_id;
       const matchIdBytes32 = await matchIdToBytes32(onChainIdSource);
-
-      // Re-verify on-chain before spending gas — never trust the queue
-      // row alone.
       const onChainMatch = await contract.matches(matchIdBytes32);
       const status = Number(onChainMatch.status);
+      const w = String(wallet_address).toLowerCase();
+      const p1 = String(matchRow.p1_address || "").toLowerCase();
+      const p2 = String(matchRow.p2_address || "").toLowerCase();
 
       if (status === MatchStatus.Waiting) {
-        if (onChainMatch.p1.toLowerCase() !== wallet_address.toLowerCase()) {
-          await supabase
-            .from("refund_queue")
-            .update({
-              status: "failed",
-              error: "wallet mismatch with on-chain p1",
-              processed_at: new Date().toISOString(),
-            })
-            .eq("id", id);
+        if (onChainMatch.p1.toLowerCase() !== w) {
+          await supabase.from("refund_queue").update({
+            status: "failed",
+            error: "wallet mismatch with on-chain p1",
+            processed_at: new Date().toISOString(),
+          }).eq("id", id);
           results.push({ id, status: "failed" });
           continue;
         }
-
-        // Normal case: deposit was booked, refund via cancelWaitingMatch.
         const tx = await contract.cancelWaitingMatch(matchIdBytes32);
         const receipt = await tx.wait();
-
-        await supabase
-          .from("refund_queue")
-          .update({
-            status: "done",
-            tx_hash: receipt.hash,
-            processed_at: new Date().toISOString(),
-          })
-          .eq("id", id);
-
+        await supabase.from("refund_queue").update({
+          status: "done",
+          tx_hash: receipt.hash,
+          processed_at: new Date().toISOString(),
+        }).eq("id", id);
         results.push({ id, status: "done", tx_hash: receipt.hash });
         continue;
       }
 
       if (status === MatchStatus.None && matchRow.fee != null) {
-        // The deposit was never booked on-chain (record-deposit failed),
-        // so the WLD is sitting unallocated in the contract. Return the
-        // entry fee with the owner-only emergency transfer. Only
-        // attempted while the match is None — never for an already
-        // settled/cancelled match.
-        //
-        // SECURITY (defense in depth — the queue RPC already validates
-        // this): only pay a wallet that is a PAID participant of the
-        // match, so a forged queue row can never drain someone else's
-        // deposit.
-        const w = String(wallet_address).toLowerCase();
-        const p1 = String(matchRow.p1_address || "").toLowerCase();
-        const p2 = String(matchRow.p2_address || "").toLowerCase();
+        // Must be a PAID participant.
         const isPaidP1 = w === p1 && matchRow.p1_paid === true;
         const isPaidP2 = w === p2 && matchRow.p2_paid === true;
         if (!isPaidP1 && !isPaidP2) {
-          await supabase
-            .from("refund_queue")
-            .update({
-              status: "failed",
-              error: "wallet is not a paid participant of this match",
-              processed_at: new Date().toISOString(),
-            })
-            .eq("id", id);
+          await supabase.from("refund_queue").update({
+            status: "failed",
+            error: "wallet is not a paid participant of this match",
+            processed_at: new Date().toISOString(),
+          }).eq("id", id);
           results.push({ id, status: "failed" });
           continue;
         }
 
-        const feeWei = ethers.parseUnits(String(matchRow.fee), 18);
+        // THE GATE: only refund when the player's payment is proven
+        // on-chain. A forged row / forged paid flag never pays.
+        const feeWei = ethers.parseUnits(String(matchRow.fee), 18).toString();
+        const paymentTx = isPaidP1 ? matchRow.p1_payment_tx_hash : matchRow.p2_payment_tx_hash;
+        const verification = await verifyPaymentOnChain(provider, w, feeWei, paymentTx || null);
+        if (!verification.ok) {
+          await supabase.from("refund_queue").update({
+            status: "failed",
+            error: "payment not verified on-chain",
+            processed_at: new Date().toISOString(),
+          }).eq("id", id);
+          results.push({ id, status: "failed", error: "payment not verified on-chain" });
+          continue;
+        }
+
         try {
           const tx = await contract.emergencyTokenTransfer(
             WLD_TOKEN_CONTRACT,
@@ -242,60 +307,46 @@ Deno.serve(async (req) => {
           );
           const receipt = await tx.wait();
 
-          await supabase
-            .from("refund_queue")
-            .update({
-              status: "done",
-              tx_hash: receipt.hash,
-              error: "emergency refund (deposit was never booked)",
-              processed_at: new Date().toISOString(),
-            })
-            .eq("id", id);
+          await supabase.from("refund_queue").update({
+            status: "done",
+            tx_hash: receipt.hash,
+            error: "emergency refund (payment verified on-chain)",
+            processed_at: new Date().toISOString(),
+          }).eq("id", id);
 
           results.push({ id, status: "done", tx_hash: receipt.hash, emergency: true });
         } catch (err) {
-          await supabase
-            .from("refund_queue")
-            .update({
-              status: "failed",
-              error:
-                "emergency refund failed — OPERATOR_PRIVATE_KEY must be the contract owner: " +
-                String((err as Error)?.message || err),
-              processed_at: new Date().toISOString(),
-            })
-            .eq("id", id);
+          await supabase.from("refund_queue").update({
+            status: "failed",
+            error: "emergency refund failed — OPERATOR_PRIVATE_KEY must be the contract owner: " +
+              String((err as Error)?.message || err),
+            processed_at: new Date().toISOString(),
+          }).eq("id", id);
           results.push({ id, status: "failed", error: String(err) });
         }
         continue;
       }
 
-      await supabase
-        .from("refund_queue")
-        .update({
-          status: "failed",
-          error: `match not refundable on-chain (status=${status})`,
-          processed_at: new Date().toISOString(),
-        })
-        .eq("id", id);
+      await supabase.from("refund_queue").update({
+        status: "failed",
+        error: `match not refundable on-chain (status=${status})`,
+        processed_at: new Date().toISOString(),
+      }).eq("id", id);
       results.push({ id, status: "failed" });
     } catch (err) {
-      await supabase
-        .from("refund_queue")
-        .update({
-          status: "failed",
-          error: String((err as Error)?.message || err),
-          processed_at: new Date().toISOString(),
-        })
-        .eq("id", id);
+      await supabase.from("refund_queue").update({
+        status: "failed",
+        error: String((err as Error)?.message || err),
+        processed_at: new Date().toISOString(),
+      }).eq("id", id);
       results.push({ id, status: "failed", error: String(err) });
     }
   }
 
   // ------------------------------------------------------------------
   // Maintenance: expire stale matches that never got a payment and never
-  // found an opponent (e.g. the app was closed while the payment sheet
-  // was open, so cancelMatchmaking never ran). Only matches where
-  // NEITHER player paid are touched, so no money can ever be affected.
+  // found an opponent (app closed with the payment sheet open). Only
+  // matches where NEITHER player paid are touched — no money affected.
   // ------------------------------------------------------------------
   try {
     const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();

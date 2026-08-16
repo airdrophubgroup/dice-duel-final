@@ -18,6 +18,10 @@ const ABI = [
   "function emergencyTokenTransfer(address token, address user, uint256 amount) external",
 ];
 
+const ERC20_ABI = [
+  "event Transfer(address indexed from, address indexed to, uint256 value)",
+];
+
 // The deployed escrow contract (TnvDuelArena) has no operator-side
 // "pay the winner" path that works for unbooked matches: settleMatch needs
 // an on-chain Active match (only reachable via joinMatch/Permit2, which this
@@ -47,13 +51,80 @@ function payoutWeiForFee(feeWei) {
 }
 
 async function fetchMatchRow(matchUuid) {
-  const url = `${SB_URL}/rest/v1/matches?select=id,status,fee,p1_address,p2_address,p1_paid,p2_paid,settled_at&id=eq.${encodeURIComponent(matchUuid)}`;
+  const url = `${SB_URL}/rest/v1/matches?select=id,status,fee,p1_address,p2_address,p1_paid,p2_paid,settled_at,p1_payment_tx_hash,p2_payment_tx_hash&id=eq.${encodeURIComponent(matchUuid)}`;
   const res = await fetch(url, {
     headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
   });
   if (!res.ok) return null;
   const rows = await res.json().catch(() => null);
   return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+}
+
+// Verify on-chain that `wallet` really transferred `feeWei` WLD to the
+// escrow contract (the recorded payment tx hash, with a recent-transfer
+// scan as fallback). Nobody is paid without real on-chain proof.
+async function verifyPaymentOnChain(provider, wallet, feeWei, txHash) {
+  const iface = new ethers.Interface(ERC20_ABI);
+  const w = String(wallet).toLowerCase();
+
+  const checkReceipt = async (hash) => {
+    try {
+      const receipt = await provider.getTransactionReceipt(hash);
+      if (!receipt || receipt.status !== 1) return false;
+      for (const log of receipt.logs) {
+        if (log.address.toLowerCase() !== WLD_TOKEN_CONTRACT.toLowerCase()) continue;
+        try {
+          const parsed = iface.parseLog(log);
+          if (
+            parsed.name === "Transfer" &&
+            parsed.args.from.toLowerCase() === w &&
+            parsed.args.to.toLowerCase() === CONTRACT_ADDRESS.toLowerCase() &&
+            parsed.args.value.toString() === feeWei.toString()
+          ) {
+            return true;
+          }
+        } catch (e) { /* not a Transfer log */ }
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  if (txHash && (await checkReceipt(txHash))) return true;
+
+  // Scan fallback (contiguous 99-block chunks x 5) for matches paid
+  // before tx hashes were recorded.
+  try {
+    const latest = await provider.getBlockNumber();
+    const transferTopic = iface.getEvent("Transfer").topicHash;
+    const fromTopic = ethers.zeroPadValue(w, 32);
+    const toTopic = ethers.zeroPadValue(CONTRACT_ADDRESS.toLowerCase(), 32);
+    const CHUNK = 99;
+    const CHUNKS = 5;
+    for (let c = 0; c < CHUNKS; c++) {
+      const toBlock = latest - c * CHUNK;
+      const fromBlock = Math.max(0, toBlock - (CHUNK - 1));
+      let logs = [];
+      try {
+        logs = await provider.getLogs({
+          address: WLD_TOKEN_CONTRACT,
+          topics: [transferTopic, fromTopic, toTopic],
+          fromBlock,
+          toBlock,
+        });
+      } catch (e) {
+        continue;
+      }
+      for (let i = logs.length - 1; i >= 0; i--) {
+        const parsed = iface.parseLog(logs[i]);
+        if (parsed && parsed.args.value.toString() === feeWei.toString()) {
+          return true;
+        }
+      }
+    }
+  } catch (e) { /* fall through */ }
+  return false;
 }
 
 async function callRpc(name, body) {
@@ -104,7 +175,7 @@ export default async function handler(req, res) {
 
     if (action === "REFUND") {
       // Only an un-started match can be refunded, and only by a
-      // participant who actually paid.
+      // participant who actually paid (verified on-chain).
       if (!["waiting", "searching"].includes(row.status)) {
         return res.status(400).json({ success: false, error: `Match not refundable in status ${row.status}` });
       }
@@ -112,6 +183,12 @@ export default async function handler(req, res) {
       const isP2 = winner === p2 && row.p2_paid === true;
       if (!isP1 && !isP2) {
         return res.status(400).json({ success: false, error: "Wallet is not a paid participant of this match" });
+      }
+
+      const payerTx = isP1 ? row.p1_payment_tx_hash : row.p2_payment_tx_hash;
+      const verified = await verifyPaymentOnChain(provider, winner, feeWei, payerTx || null);
+      if (!verified) {
+        return res.status(400).json({ success: false, error: "Payment not verified on-chain — refund rejected" });
       }
 
       const tx = await contract.emergencyTokenTransfer(WLD_TOKEN_CONTRACT, winner, feeWei);
@@ -128,6 +205,14 @@ export default async function handler(req, res) {
     }
     if (row.p1_paid !== true || row.p2_paid !== true) {
       return res.status(400).json({ success: false, error: "Both players must have paid before settling" });
+    }
+
+    // Both players' payments must be proven on-chain before the winner
+    // is paid — forged paid flags can never drain the escrow.
+    const p1Verified = await verifyPaymentOnChain(provider, p1, feeWei, row.p1_payment_tx_hash || null);
+    const p2Verified = await verifyPaymentOnChain(provider, p2, feeWei, row.p2_payment_tx_hash || null);
+    if (!p1Verified || !p2Verified) {
+      return res.status(400).json({ success: false, error: "Player payments not verified on-chain — settlement rejected" });
     }
 
     // Idempotency: mark_match_settled returns true only for the FIRST
