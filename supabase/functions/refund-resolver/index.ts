@@ -155,44 +155,144 @@ Deno.serve(async (req) => {
   const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, operatorWallet);
 
   // ------------------------------------------------------------------
-  // Ghost cleanup (runs BEFORE refund processing so freshly inserted
-  // refund rows are picked up by this same tick):
-  //   - PAID waiting matches older than 2 minutes with no p2 payment
-  //     are abandoned -> cancel + auto-refund.
-  //   - Completed matches that never got settled (winner payout failed
-  //     or app closed) older than 3 minutes are retried via a refund
-  //     queue row for the winner (idempotent — settled_at guard).
+  // Ghost / stuck-match cleanup (runs BEFORE refund processing so
+  // freshly inserted refund rows are picked up this same tick):
+  //   - PAID waiting matches older than 2 min with no opponent payment
+  //     -> cancel + auto-refund p1.
+  //   - 'matched' matches older than 2 min (opponent joined but the
+  //     match never started — e.g. one device died) -> cancel + refund
+  //     EVERY paid participant.
+  //   - 'playing' matches older than 10 min (both devices died mid-game;
+  //     no legit game runs longer than ~2 min) -> cancel + refund EVERY
+  //     paid participant.
+  //   - Completed matches never settled (the winner's device closed
+  //     before the payout, or the settle call failed) older than 3 min
+  //     -> queue a refund row for the WINNER carrying the payout amount
+  //     (idempotent via settled_at + pending/processing/done guards).
+  //   - Completed matches whose TNV was never credited (a device closed
+  //     before secure_credit_tnv ran) -> credited server-side via the
+  //     same secure_credit_tnv function the app uses.
   // ------------------------------------------------------------------
   try {
-    const ghostCutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-    const { data: ghosts, error: ghostErr } = await supabase
+    const twoMin = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    const tenMin = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const threeMin = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+
+    const queueRefund = async (matchId, wallet, fee) => {
+      if (!wallet || fee == null) return;
+      await supabase.from("refund_queue").insert({
+        match_id: matchId,
+        wallet_address: String(wallet).toLowerCase(),
+        fee,
+        status: "pending",
+      });
+    };
+
+    // PAID waiting matches with no opponent payment -> refund p1.
+    const { data: ghosts } = await supabase
       .from("matches")
       .select("id, fee, p1_address")
       .in("status", ["waiting", "searching"])
       .eq("p1_paid", true)
       .eq("p2_paid", false)
-      .lt("created_at", ghostCutoff);
-    if (!ghostErr && ghosts) {
-      for (const g of ghosts) {
-        const { error: cancelErr } = await supabase
-          .from("matches")
-          .update({ status: "cancelled" })
-          .eq("id", g.id)
-          .in("status", ["waiting", "searching"]);
-        if (cancelErr) continue;
+      .lt("created_at", twoMin);
+    for (const g of ghosts ?? []) {
+      await supabase.from("matches").update({ status: "cancelled" })
+        .eq("id", g.id)
+        .in("status", ["waiting", "searching"]);
+      await queueRefund(g.id, g.p1_address, g.fee);
+    }
 
-        if (g.p1_address && g.fee != null) {
-          await supabase.from("refund_queue").insert({
-            match_id: g.id,
-            wallet_address: String(g.p1_address).toLowerCase(),
-            fee: g.fee,
-            status: "pending",
-          });
+    // 'matched' matches that never started -> refund every paid participant.
+    const { data: matchedGhosts } = await supabase
+      .from("matches")
+      .select("id, fee, p1_address, p2_address, p1_paid, p2_paid")
+      .eq("status", "matched")
+      .lt("created_at", twoMin);
+    for (const g of matchedGhosts ?? []) {
+      const { error: cancelErr } = await supabase.from("matches")
+        .update({ status: "cancelled" })
+        .eq("id", g.id)
+        .eq("status", "matched");
+      if (cancelErr) continue;
+      if (g.p1_paid && g.p1_address) await queueRefund(g.id, g.p1_address, g.fee);
+      if (g.p2_paid && g.p2_address) await queueRefund(g.id, g.p2_address, g.fee);
+    }
+
+    // 'playing' matches that never completed -> refund every paid participant.
+    const { data: playingGhosts } = await supabase
+      .from("matches")
+      .select("id, fee, p1_address, p2_address, p1_paid, p2_paid")
+      .eq("status", "playing")
+      .lt("created_at", tenMin);
+    for (const g of playingGhosts ?? []) {
+      const { error: cancelErr } = await supabase.from("matches")
+        .update({ status: "cancelled" })
+        .eq("id", g.id)
+        .eq("status", "playing");
+      if (cancelErr) continue;
+      if (g.p1_paid && g.p1_address) await queueRefund(g.id, g.p1_address, g.fee);
+      if (g.p2_paid && g.p2_address) await queueRefund(g.id, g.p2_address, g.fee);
+    }
+
+    // Completed but never settled -> queue the WINNER's payout.
+    const { data: unsettled } = await supabase
+      .from("matches")
+      .select("id, fee, payout_amount, winner_address, tie")
+      .eq("status", "completed")
+      .is("settled_at", null)
+      .lt("created_at", threeMin);
+    for (const m of unsettled ?? []) {
+      if (!m.winner_address || m.winner_address === "tie" || m.tie) continue;
+      const w = String(m.winner_address).toLowerCase();
+      const { data: existing } = await supabase
+        .from("refund_queue")
+        .select("id")
+        .eq("match_id", m.id)
+        .eq("wallet_address", w)
+        .in("status", ["pending", "processing", "done"]);
+      if (existing && existing.length > 0) continue;
+      const payout = m.payout_amount ?? (m.fee != null ? Number((Number(m.fee) * 1.6).toFixed(2)) : null);
+      if (payout == null || Number(payout) <= 0) continue;
+      await supabase.from("refund_queue").insert({
+        match_id: m.id,
+        wallet_address: w,
+        fee: payout,
+        status: "pending",
+        error: "winner payout (resolver retry)",
+      });
+    }
+
+    // Completed matches whose TNV was never credited -> credit via the
+    // same secure_credit_tnv function (participant/paid/completed and
+    // one-time checks all apply server-side).
+    const TNV_BASE: Record<number, number> = {
+      0.1: 5, 0.2: 10, 0.5: 15, 1: 25, 2: 50, 5: 125, 10: 250, 20: 500,
+      30: 750, 40: 1000, 50: 1250,
+    };
+    const { data: tnvPending } = await supabase
+      .from("matches")
+      .select("id, fee, p1_address, p2_address, p1_paid, p2_paid, p1_score, p2_score, tie, p1_tnv_credited, p2_tnv_credited")
+      .eq("status", "completed")
+      .eq("tie", false)
+      .or("p1_tnv_credited.is.false,p2_tnv_credited.is.false");
+    for (const m of tnvPending ?? []) {
+      const base = TNV_BASE[Number(m.fee)] ?? 15;
+      const participants = [
+        { addr: m.p1_address, paid: m.p1_paid, credited: m.p1_tnv_credited, score: m.p1_score, opp: m.p2_score },
+        { addr: m.p2_address, paid: m.p2_paid, credited: m.p2_tnv_credited, score: m.p2_score, opp: m.p1_score },
+      ];
+      for (const p of participants) {
+        if (!p.addr || !p.paid || p.credited) continue;
+        try {
+          await supabase.rpc("secure_credit_tnv", { p_match_id: m.id, p_wallet: p.addr });
+        } catch (e) {
+          console.error("resolver TNV credit failed:", e);
         }
       }
     }
   } catch (e) {
-    console.error("paid ghost cleanup exception:", e);
+    console.error("ghost/stuck cleanup exception:", e);
   }
 
   const { data: rows, error } = await supabase
@@ -284,11 +384,13 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // THE GATE: only refund when the player's payment is proven
-        // on-chain. A forged row / forged paid flag never pays.
-        const feeWei = ethers.parseUnits(String(matchRow.fee), 18).toString();
+        // THE GATE: only refund/pay when the player's payment is proven
+        // on-chain. Verification is ALWAYS against the match ENTRY fee —
+        // the amount the player actually transferred — so a forged row /
+        // forged paid flag never pays.
+        const paidFeeWei = ethers.parseUnits(String(matchRow.fee), 18).toString();
         const paymentTx = isPaidP1 ? matchRow.p1_payment_tx_hash : matchRow.p2_payment_tx_hash;
-        const verification = await verifyPaymentOnChain(provider, w, feeWei, paymentTx || null);
+        const verification = await verifyPaymentOnChain(provider, w, paidFeeWei, paymentTx || null);
         if (!verification.ok) {
           await supabase.from("refund_queue").update({
             status: "failed",
@@ -299,11 +401,18 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Amount to send: the queue row's fee when set (winner payouts
+        // carry the payout amount), otherwise the entry fee (refunds).
+        const transferWei =
+          row.fee != null && Number(row.fee) > 0
+            ? ethers.parseUnits(String(row.fee), 18)
+            : ethers.parseUnits(String(matchRow.fee), 18);
+
         try {
           const tx = await contract.emergencyTokenTransfer(
             WLD_TOKEN_CONTRACT,
             wallet_address,
-            feeWei
+            transferWei
           );
           const receipt = await tx.wait();
 
@@ -313,6 +422,16 @@ Deno.serve(async (req) => {
             error: "emergency refund (payment verified on-chain)",
             processed_at: new Date().toISOString(),
           }).eq("id", id);
+
+          // Mark the match settled when a completed match is paid out
+          // (winner payout or tie refund) so the winner sweep never
+          // queues a second payout for the same match.
+          if (matchRow.status === "completed") {
+            await supabase.from("matches")
+              .update({ settled_at: new Date().toISOString() })
+              .eq("id", match_id)
+              .is("settled_at", null);
+          }
 
           results.push({ id, status: "done", tx_hash: receipt.hash, emergency: true });
         } catch (err) {

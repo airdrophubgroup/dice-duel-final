@@ -180,6 +180,11 @@ function showLiveBetNotification(username, fee) {
     document.body.appendChild(existingContainer);  
   }  
 
+  // Only show the LATEST live bet alert — with many players searching
+  // simultaneously the fan-out is large, and keeping just one ticker
+  // bounds the DOM instead of stacking dozens of nodes.
+  existingContainer.innerHTML = '';  
+
   const ticker = document.createElement('div');  
   ticker.style.cssText = 'background:rgba(17,17,32,0.92); border:1px solid rgba(41,217,194,0.4); backdrop-filter:blur(8px); color:#f1eee6; padding:8px 12px; border-radius:12px; font-size:11.5px; font-family:"Space Grotesk", sans-serif; box-shadow:0 8px 24px rgba(0,0,0,0.5); opacity:0; transition:all 0.3s ease; text-align:center;';  
   ticker.innerHTML = `🔥 <span style="color:var(--photon); font-weight:700;">${escapeHtml(username || 'A player')}</span> started a <span style="color:var(--gold); font-weight:700;">${escapeHtml(fee)}</span> WLD duel!`;  
@@ -1074,8 +1079,15 @@ async function startSyncCountdown(){
   clearInterval(mTimer);  
   if (pollTimer) clearInterval(pollTimer);  
 
-  if (isP1 && matchId) {  
-    await supabaseClient.rpc('secure_start_match', { p_match_id: matchId, p_wallet: myAddress });  
+  // BOTH players call secure_start_match (server-side it is idempotent
+  // and requires BOTH players paid). This guarantees the match flips to
+  // 'playing' even if the other player's device dies or its RPC fails —
+  // otherwise the match would sit in 'matched' forever with both
+  // players' WLD locked.  
+  if (matchId && myAddress) {  
+    try {  
+      await supabaseClient.rpc('secure_start_match', { p_match_id: matchId, p_wallet: myAddress });  
+    } catch (e) { /* non-fatal — the other player's call covers it */ }  
   }  
 
   $('wait-status').style.color = 'var(--photon)';  
@@ -1122,24 +1134,42 @@ async function rollDice(){
   $('turn-indicator').innerText = `⏳ Please wait 2s... (${myTurnsLeft} turns left)`;  
 
   const roll = Math.floor(Math.random() * 6) + 1;  
-  myScore += roll;  
-  $('my-score').innerText = myScore;  
 
-  const faceRotations = { 1: {x:0, y:0}, 2: {x:0, y:180}, 3: {x:0, y:-90}, 4: {x:0, y:90}, 5: {x:-90, y:0}, 6: {x:90, y:0} };  
-  const rot = faceRotations[roll];  
-  $('dice-cube').style.transform = `rotateX(${rot.x + 720}deg) rotateY(${rot.y + 720}deg)`;  
-
-  channel.send({ type: 'broadcast', event: 'score_update', payload: { sender: myAddress, score: myScore } });  
-  
+  // Ask the SERVER first: the roll only counts when secure_roll_dice
+  // accepts it (1-6, 1s min gap, match playing, not over). The score /
+  // UI / opponent broadcast are updated ONLY on server acceptance, so
+  // the displayed score always matches the authoritative DB score — a
+  // rejected roll never creates a phantom score the opponent can see.
   const { data: rpcRes, error: rpcErr } = await supabaseClient.rpc('secure_roll_dice', {  
     p_match_id: matchId, p_wallet: myAddress, p_roll: roll  
   });  
 
   if (rpcErr || (rpcRes && !rpcRes.success)) {  
-    console.warn("Roll rejected");  
-  } else if (rpcRes && rpcRes.taps_left !== undefined) {  
+    // Server rejected — give the turn back, keep the score unchanged.
+    myTurnsLeft++;  
+    $('turn-indicator').innerText = `Roll rejected — tap again (${myTurnsLeft} turns left)`;  
+    setTimeout(() => {  
+      isTimingLocked = false;  
+      if (myTurnsLeft > 0 && gameActive && $('game-timer').innerText !== '0s') {  
+        $('turn-indicator').innerText = `tap the die to roll (${myTurnsLeft} turns left)`;  
+      }  
+    }, 1000);  
+    return;  
+  }  
+
+  // Accepted — now update the score, the die animation and the opponent.
+  myScore += roll;  
+  $('my-score').innerText = myScore;  
+
+  if (rpcRes && rpcRes.taps_left !== undefined) {  
     myTurnsLeft = rpcRes.taps_left;  
   }  
+
+  const faceRotations = { 1: {x:0, y:0}, 2: {x:0, y:180}, 3: {x:0, y:-90}, 4: {x:0, y:90}, 5: {x:-90, y:0}, 6: {x:90, y:0} };  
+  const rot = faceRotations[roll];  
+  $('dice-cube').style.transform = `rotateX(${rot.x + 720}deg) rotateY(${rot.y + 720}deg)`;  
+
+  if (channel) channel.send({ type: 'broadcast', event: 'score_update', payload: { sender: myAddress, score: myScore } });  
 
   setTimeout(() => {  
     isTimingLocked = false;  
@@ -1284,6 +1314,7 @@ async function finalizeGame(){
 function resetToHome(){  
   clearInterval(mTimer);  
   if (pollTimer) clearInterval(pollTimer);  
+  if (gameTimerInterval) clearInterval(gameTimerInterval);  
   if (channel) channel.unsubscribe();  
   $('waiting-overlay').style.display = 'none';  
   $('start-btn').disabled = false;  
