@@ -1516,6 +1516,7 @@ window.openSupportBot = function() {
   botStep = 1;
   botAddBtn('✅ Yes, I paid', () => botHandleYes());
   botAddBtn('❌ No', () => botHandleNo(), 'danger');
+  botAddBtn('❓ How to find my Tx Hash', () => { botClearBtns(); botStep = 3; botShowTxInput(); });
 };
 
 window.closeSupportBot = function() {
@@ -1699,7 +1700,35 @@ function botHandleNo() {
   botAddBtn('👍 Got it', () => closeSupportBot());
 }
 
+// Step-by-step guide shown before the tx-hash input so users who
+// don't know where to find their transaction hash can follow along:
+// copy wallet address -> open worldscan.org -> find the payment tx
+// at the match time -> copy the hash -> paste it below.
+function botShowTxInstructions() {
+  const addr = myAddress || '';
+  botAddHtmlMsg('bot', '<div style="font-family:\'JetBrains Mono\',monospace; font-weight:700; font-size:10px; letter-spacing:1px; color:var(--gold); margin-bottom:6px;">📖 HOW TO FIND YOUR TX HASH</div>' +
+    '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(41,217,194,0.25); border-radius:8px; background:rgba(41,217,194,0.06); font-size:10.5px; line-height:1.55;">' +
+    '<b style="color:var(--photon);">Step 1</b> — Copy your World Chain wallet address 👇<br/>' +
+    (addr ? `<button onclick="navigator.clipboard.writeText('${addr}'); this.textContent='✅ Copied!';" style="margin-top:5px; background:rgba(41,217,194,0.15); border:1px solid rgba(41,217,194,0.5); color:var(--photon); font-size:10px; padding:5px 10px; border-radius:6px; cursor:pointer;">📋 Copy my address</button>` : '') +
+    '</div>' +
+    '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(255,179,0,0.25); border-radius:8px; background:rgba(255,179,0,0.05); font-size:10.5px; line-height:1.55;">' +
+    '<b style="color:var(--gold);">Step 2</b> — Open the official World Chain explorer:<br/>' +
+    '<a href="https://worldscan.org/" target="_blank" rel="noopener" style="color:var(--photon); font-weight:700; font-size:11px;">🌐 worldscan.org</a> ' +
+    '<span style="color:var(--slate);">(or search \'Worldscan\' on Google)</span>' +
+    '</div>' +
+    '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(41,217,194,0.25); border-radius:8px; background:rgba(41,217,194,0.06); font-size:10.5px; line-height:1.55;">' +
+    '<b style="color:var(--photon);">Step 3</b> — Paste your wallet address in the search bar at the top and press Enter. You\'ll see your transaction list.' +
+    '</div>' +
+    '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(41,217,194,0.25); border-radius:8px; background:rgba(41,217,194,0.06); font-size:10.5px; line-height:1.55;">' +
+    '<b style="color:var(--photon);">Step 4</b> — Look for the <b style="color:var(--photon);">WLD payment</b> you sent at the exact time you played the match. Open that transaction.' +
+    '</div>' +
+    '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(41,217,194,0.25); border-radius:8px; background:rgba(41,217,194,0.06); font-size:10.5px; line-height:1.55;">' +
+    '<b style="color:var(--photon);">Step 5</b> — Copy the <b style="color:var(--gold);">Transaction Hash</b> (starts with <span style="font-family:\'JetBrains Mono\',monospace; color:var(--photon);">0x...</span>, 66 characters) and paste it in the box below 👇' +
+    '</div>');
+}
+
 function botShowTxInput() {
+  botShowTxInstructions();
   $('bot-input-area').style.display = 'block';
   $('bot-tx-input').value = '';
   $('bot-tx-input').focus();
