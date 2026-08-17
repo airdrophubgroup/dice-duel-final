@@ -14,6 +14,9 @@
 <body>
 
 <div id="app">
+  <div class="bg-aurora" aria-hidden="true"><span class="orb o1"></span><span class="orb o2"></span><span class="orb o3"></span></div>
+  <div class="bg-grid" aria-hidden="true"></div>
+
   <div class="support-container">
     <button class="support-btn-main" onclick="toggleSupportDropdown(event)">💬 Support ▼</button>
     <div id="support-dropdown" class="support-dropdown">
@@ -30,7 +33,7 @@
 
   <header class="topbar">
     <h1 class="brand">TNV Duel Arena 🎲</h1>
-    <div class="user-card">Logged in as: <span id="display-username">Tap Play Now to Connect</span></div>
+    <div class="user-card" onclick="openSettingsModal()" title="Settings">Logged in as: <span id="display-username">Tap Play Now to Connect</span> <span class="gear">⚙️</span></div>
     
     <div style="font-family:'JetBrains Mono', monospace; font-size: 11px; color: var(--slate); margin-top: 6px;">
       Progress to Withdraw: <span id="progress-text" style="color: var(--photon); font-weight:600;">0 / 5,000 TNV</span>
@@ -55,6 +58,13 @@
 
     <div id="auth-banner"></div>
   </header>
+
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee-track">
+      <span>⚡ TNV DUEL ARENA</span><span>🎲 HIGHEST SCORE WINS THE POOL</span><span>💰 AUTO-REFUND WITHIN 60 SECONDS</span><span>🛡️ SERVER-VALIDATED ROLLS</span><span>🏆 WINNER GETS WLD + TNV</span><span>💎 TNV STAKING COMING SOON</span>
+      <span>⚡ TNV DUEL ARENA</span><span>🎲 HIGHEST SCORE WINS THE POOL</span><span>💰 AUTO-REFUND WITHIN 60 SECONDS</span><span>🛡️ SERVER-VALIDATED ROLLS</span><span>🏆 WINNER GETS WLD + TNV</span><span>💎 TNV STAKING COMING SOON</span>
+    </div>
+  </div>
 
   <main>
     <section id="setup-screen">
@@ -267,6 +277,28 @@
     </div>
   </div>
 
+  <div id="settings-modal" class="custom-modal">
+    <div class="modal-card" style="max-width:340px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="margin:0; color:var(--photon);">⚙️ SETTINGS</h3>
+        <button class="chat-close-btn" onclick="closeSettingsModal()">✕</button>
+      </div>
+      <div class="setting-row">
+        <span style="font-size:13px; font-weight:600;">🎵 Background Music</span>
+        <button id="music-toggle" class="music-toggle on" onclick="toggleMusic()">ON</button>
+      </div>
+      <div class="setting-row" style="flex-direction:column; align-items:stretch; gap:8px; margin-top:16px;">
+        <div style="display:flex; justify-content:space-between; font-size:11.5px; color:var(--slate);">
+          <span>Volume</span><span id="music-vol-label" style="color:var(--gold); font-family:'JetBrains Mono', monospace;">25%</span>
+        </div>
+        <input type="range" id="music-volume" class="vol-slider" min="0" max="100" value="25" oninput="setMusicVolume(this.value)" />
+      </div>
+      <div style="font-size:10.5px; color:var(--slate); margin-top:14px; text-align:left; line-height:1.5;">
+        Music plays softly in the background while you play. You can adjust the volume or turn it off here — your choice is saved.
+      </div>
+    </div>
+  </div>
+
   <div id="waiting-overlay">
     <div class="scanner" id="searchScanner">
       <div class="rules-card" style="display:none"></div>
@@ -289,6 +321,8 @@
     </div>
   </div>
 </div>
+
+<audio id="bg-music" src="assets/bg-music.mp3" loop preload="auto" style="display:none;"></audio>
 
 <script type="module" src="app.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
