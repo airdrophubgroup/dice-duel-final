@@ -145,6 +145,23 @@ function waitForMiniKitReady(timeoutMs = 5000) {
   });  
 }  
 
+// Pause all heavy CSS animations when the app is backgrounded (World App
+// keeps the WebView alive in the background). Prevents GPU/battery drain
+// and the "frozen on return" feel on low-end phones. See style.css
+// `html.page-hidden` rules.
+(function(){
+  try {
+    const setHidden = (hidden) => {
+      document.documentElement.classList.toggle('page-hidden', !!hidden);
+    };
+    document.addEventListener('visibilitychange', () => setHidden(document.visibilityState === 'hidden'));
+    // Also catch blur/focus (mini-app iframes / older WebViews may not fire
+    // visibilitychange reliably).
+    window.addEventListener('blur', () => setHidden(true), { passive: true });
+    window.addEventListener('focus', () => setHidden(false), { passive: true });
+  } catch (e) { /* non-fatal */ }
+})();
+
 window.addEventListener('DOMContentLoaded', async () => {  
   try { MiniKit.install(WORLD_APP_ID); } catch(e) {}  
 
@@ -266,6 +283,9 @@ function loadAndCleanChatHistory() {
     let history = JSON.parse(raw);  
     const now = Date.now();  
     history = history.filter(item => (now - item.timestamp) < CHAT_EXPIRY_MS);  
+    // Cap stored history so localStorage + initial render stay tiny on
+    // low-end phones even with 300+ users chatting (perf guard).
+    if (history.length > 100) history = history.slice(history.length - 100);  
     localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(history));  
 
     const container = $('chat-messages-container');  
@@ -283,8 +303,17 @@ function saveAndAppendChatMessage(sender, message, senderAddress, timestamp) {
     history.push({ sender, message, address: senderAddress, timestamp });  
     const now = Date.now();  
     history = history.filter(item => (now - item.timestamp) < CHAT_EXPIRY_MS);  
+    if (history.length > 100) history = history.slice(history.length - 100);  
     localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(history));  
     renderChatMessageUI(sender, message, senderAddress, timestamp);  
+    // Keep the live DOM capped too (trim oldest bubbles past 150) so the
+    // chat can never balloon into an unbounded DOM tree during a session.
+    try {
+      const container = $('chat-messages-container');
+      while (container && container.children.length > 150) {
+        container.removeChild(container.children[1]); // keep the header hint
+      }
+    } catch (e) {}
   } catch (e) {}  
 }  
 

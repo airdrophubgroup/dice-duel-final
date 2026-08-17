@@ -31,11 +31,12 @@ body{
 
 /* ---------- ANIMATED AURORA BACKGROUND ---------- */
 .bg-aurora{ position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
-/* blur filters + background-position animation force continuous repaints
-   in mobile WebViews (World App) and can make the whole mini-app janky.
-   The orbs keep a soft blur but smaller; the grid now animates via a
-   transform on an oversized pseudo-element (GPU-composited, zero repaint). */
-.bg-aurora .orb{ position: absolute; border-radius: 50%; filter: blur(40px); opacity: 0.3; will-change: transform; }
+/* NOTE (perf): NO filter:blur() on the orbs. blur(40px) on large animated
+   elements forces a full repaint every frame in mobile WebViews (World App)
+   and is the #1 cause of jank/hang on low-end phones. The radial gradients
+   already fade to transparent, so the orbs keep their soft look without
+   any blur cost. All orb motion is transform-only = GPU composited. */
+.bg-aurora .orb{ position: absolute; border-radius: 50%; opacity: 0.32; will-change: transform; transform: translateZ(0); }
 .bg-aurora .o1{ width: 340px; height: 340px; top: -90px; left: -110px; background: radial-gradient(circle, rgba(108,92,231,0.85), transparent 70%); animation: drift1 22s ease-in-out infinite alternate; }
 .bg-aurora .o2{ width: 300px; height: 300px; top: 28%; right: -130px; background: radial-gradient(circle, rgba(41,217,194,0.7), transparent 70%); animation: drift2 26s ease-in-out infinite alternate; }
 .bg-aurora .o3{ width: 260px; height: 260px; bottom: -70px; left: 18%; background: radial-gradient(circle, rgba(255,179,0,0.5), transparent 70%); animation: drift3 30s ease-in-out infinite alternate; }
@@ -367,6 +368,28 @@ main{ flex:1; display:flex; flex-direction:column; }
 @media (prefers-reduced-motion: reduce){
   .bg-aurora .orb, .bg-grid, h1.brand, .marquee-track, .btn-primary, .btn-primary::after,
   .fee-chip.active, .stats-box::before, .scene, .score.pop{ animation:none !important; }
+}
+
+/* ---------- PERF: PAUSE ALL CONTINUOUS MOTION WHEN APP IS BACKGROUNDED ----------
+   JS toggles .page-hidden on <html> via visibilitychange. In World App the
+   WebView keeps the page alive in the background, so without this the orbs /
+   grid / marquee / gradients keep burning GPU + battery and can make the app
+   feel frozen when the user returns. Pausing them costs nothing visually. */
+html.page-hidden .bg-aurora .o1,
+html.page-hidden .bg-aurora .o2,
+html.page-hidden .bg-aurora .o3,
+html.page-hidden .bg-grid::after,
+html.page-hidden .marquee-track,
+html.page-hidden h1.brand,
+html.page-hidden .btn-primary,
+html.page-hidden .btn-primary::after,
+html.page-hidden .fee-chip.active,
+html.page-hidden .stats-box::before,
+html.page-hidden .scanner .sweep,
+html.page-hidden .scanner .core,
+html.page-hidden .scanner .dot-1,
+html.page-hidden .scanner .dot-2{
+  animation-play-state: paused !important;
 }
 
 #waiting-overlay{
