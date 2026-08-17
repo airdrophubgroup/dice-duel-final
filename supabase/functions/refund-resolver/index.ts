@@ -40,8 +40,29 @@ const SB_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const OPERATOR_PRIVATE_KEY = Deno.env.get("OPERATOR_PRIVATE_KEY")!;
 const CONTRACT_ADDRESS = Deno.env.get("DICE_DUEL_CONTRACT")!;
 const CRON_SECRET = Deno.env.get("CRON_SECRET")!;
-const WORLDCHAIN_RPC = "https://worldchain-mainnet.g.alchemy.com/public";
+// Primary + fallback World Chain RPCs — the public Alchemy endpoint is
+// slow and rate-limited; dRPC and Uniblock are fast backups.
+const RPC_URLS = [
+  "https://worldchain.drpc.org",
+  "https://api.uniblock.dev/uni/v1/json-rpc?chainId=480",
+  "https://worldchain-mainnet.g.alchemy.com/public",
+];
 const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";
+
+// Pick the first RPC that answers eth_blockNumber so payouts/refunds
+// never stall on one flaky provider.
+async function getProvider() {
+  for (const url of RPC_URLS) {
+    try {
+      const p = new ethers.JsonRpcProvider(url, undefined, { staticNetwork: true });
+      await p.getBlockNumber();
+      return p;
+    } catch {
+      // try the next provider
+    }
+  }
+  return new ethers.JsonRpcProvider(RPC_URLS[0]);
+}
 
 const CONTRACT_ABI = [
   "function cancelWaitingMatch(bytes32 matchId) external",
@@ -141,6 +162,55 @@ async function verifyPaymentOnChain(
   return { ok: false };
 }
 
+// Scan for a transfer of exactly `feeWei` from `wallet` to the escrow
+// contract and return the matching tx hash + block time. Used by the
+// cancelled-match recovery: the player paid but verification failed
+// while the public RPC was down, so paid was never set and no refund
+// was queued. The block time is checked against the match creation so
+// an old payment can never refund a newer match.
+async function findPaymentWithTime(
+  provider: ethers.JsonRpcProvider,
+  wallet: string,
+  feeWei: string
+): Promise<{ txHash: string; blockTime: number } | null> {
+  const iface = new ethers.Interface(ERC20_ABI);
+  const w = String(wallet).toLowerCase();
+  try {
+    const latest = await provider.getBlockNumber();
+    const transferTopic = iface.getEvent("Transfer")!.topicHash;
+    const fromTopic = ethers.zeroPadValue(w, 32);
+    const toTopic = ethers.zeroPadValue(CONTRACT_ADDRESS.toLowerCase(), 32);
+    const CHUNK = 99;
+    const CHUNKS = 6;
+    for (let c = 0; c < CHUNKS; c++) {
+      const toBlock = latest - c * CHUNK;
+      const fromBlock = Math.max(0, toBlock - (CHUNK - 1));
+      let logs: any[] = [];
+      try {
+        logs = await provider.getLogs({
+          address: WLD_TOKEN_CONTRACT,
+          topics: [transferTopic, fromTopic, toTopic],
+          fromBlock,
+          toBlock,
+        });
+      } catch {
+        continue;
+      }
+      for (let i = logs.length - 1; i >= 0; i--) {
+        const parsed = iface.parseLog(logs[i]);
+        if (parsed && parsed.args.value.toString() === feeWei) {
+          const block = await provider.getBlock(logs[i].blockNumber);
+          const blockTime = Number(block?.timestamp ?? 0);
+          return { txHash: logs[i].transactionHash, blockTime };
+        }
+      }
+    }
+  } catch {
+    // scan failed — retry next tick
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   // Shared-secret check — only the pg_cron job (which knows CRON_SECRET)
   // is allowed to trigger this.
@@ -150,7 +220,7 @@ Deno.serve(async (req) => {
   }
 
   const supabase = createClient(SB_URL, SB_SERVICE_KEY);
-  const provider = new ethers.JsonRpcProvider(WORLDCHAIN_RPC);
+  const provider = await getProvider();
   const operatorWallet = new ethers.Wallet(OPERATOR_PRIVATE_KEY, provider);
   const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, operatorWallet);
 
@@ -293,6 +363,59 @@ Deno.serve(async (req) => {
     }
   } catch (e) {
     console.error("ghost/stuck cleanup exception:", e);
+  }
+
+  // ------------------------------------------------------------------
+  // CANCELLED-MATCH PAYMENT RECOVERY (safety net)
+  //
+  // If the public RPC was down while a player paid, the app's verify-
+  // payment call failed, paid was never set and NO refund row exists —
+  // the player's WLD would sit in the escrow forever. For every recent
+  // cancelled match where a participant is unpaid, scan on-chain for
+  // the exact fee transfer (must postdate the match, deduped by
+  // record_verified_payment). If found -> record + queue the refund.
+  // ------------------------------------------------------------------
+  try {
+    const twentyMin = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    const { data: cancelled } = await supabase
+      .from("matches")
+      .select("id, fee, created_at, p1_address, p2_address, p1_paid, p2_paid, p1_payment_tx_hash, p2_payment_tx_hash")
+      .eq("status", "cancelled")
+      .gt("created_at", twentyMin)
+      .limit(20);
+    for (const m of cancelled ?? []) {
+      const feeWei = m.fee != null ? ethers.parseUnits(String(m.fee), 18).toString() : null;
+      if (!feeWei) continue;
+      const createdMs = Date.parse(m.created_at);
+      const candidates = [
+        { addr: m.p1_address, paid: m.p1_paid, tx: m.p1_payment_tx_hash },
+        { addr: m.p2_address, paid: m.p2_paid, tx: m.p2_payment_tx_hash },
+      ];
+      for (const c of candidates) {
+        if (!c.addr || c.paid || c.tx) continue; // only unpaid, never-recorded players
+        const w = String(c.addr).toLowerCase();
+        const { data: already } = await supabase
+          .from("refund_queue")
+          .select("id")
+          .eq("match_id", m.id)
+          .eq("wallet_address", w)
+          .in("status", ["pending", "processing", "done"]);
+        if (already && already.length > 0) continue;
+        const found = await findPaymentWithTime(provider, w, feeWei);
+        if (!found) continue;
+        if (Number.isFinite(createdMs) && found.blockTime * 1000 < createdMs) continue; // stale payment
+        const { data: rec, error: recErr } = await supabase.rpc("record_verified_payment", {
+          p_match_id: m.id,
+          p_wallet: w,
+          p_tx_hash: found.txHash,
+        });
+        if (recErr || !rec || rec.success !== true) continue; // tx already used elsewhere -> skip
+        await supabase.rpc("queue_refund_request", { p_match_id: m.id, p_wallet: w });
+        console.log("resolver recovered unrecorded payment:", m.id, w, found.txHash);
+      }
+    }
+  } catch (e) {
+    console.error("cancelled-match recovery exception:", e);
   }
 
   const { data: rows, error } = await supabase

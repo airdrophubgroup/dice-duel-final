@@ -23,9 +23,31 @@ import { ethers } from "npm:ethers@6";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const RPC_URL = "https://worldchain-mainnet.g.alchemy.com/public";
+// Primary + fallback World Chain RPCs (the public Alchemy endpoint is
+// slow and rate-limited; dRPC and Uniblock are fast backups).
+const RPC_URLS = [
+  "https://worldchain.drpc.org",
+  "https://api.uniblock.dev/uni/v1/json-rpc?chainId=480",
+  "https://worldchain-mainnet.g.alchemy.com/public",
+];
 const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";
 const CONTRACT_ADDRESS = "0x2f9D3bC7125d563434cbc601b15Add6Ba0F3F3Db";
+
+// Pick the first RPC that answers eth_blockNumber. Verification must be
+// resilient: if one provider is down/rate-limited, the next takes over
+// instead of leaving the player's payment unrecorded.
+async function getProvider() {
+  for (const url of RPC_URLS) {
+    try {
+      const p = new ethers.JsonRpcProvider(url, undefined, { staticNetwork: true });
+      await p.getBlockNumber();
+      return p;
+    } catch {
+      // try the next provider
+    }
+  }
+  return new ethers.JsonRpcProvider(RPC_URLS[0]);
+}
 
 const ERC20_ABI = [
   "event Transfer(address indexed from, address indexed to, uint256 value)",
@@ -92,7 +114,7 @@ Deno.serve(async (req) => {
 
   try {
     const supabase = createClient(SB_URL, SB_SERVICE_KEY);
-    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const provider = await getProvider();
 
     // Load the match row first: participant, fee and created_at checks.
     const { data: matchRow, error: matchErr } = await supabase

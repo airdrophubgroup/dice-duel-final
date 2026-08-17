@@ -1,6 +1,29 @@
 import { ethers } from "ethers";
 
-const RPC_URL = process.env.WORLDCHAIN_RPC || "https://worldchain-mainnet.g.alchemy.com/public";
+// Primary + fallback World Chain RPCs (the public Alchemy endpoint is
+// slow and rate-limited; dRPC and Uniblock are fast backups). An env
+// override still wins when set.
+const RPC_URLS = process.env.WORLDCHAIN_RPC
+  ? [process.env.WORLDCHAIN_RPC]
+  : [
+      "https://worldchain.drpc.org",
+      "https://api.uniblock.dev/uni/v1/json-rpc?chainId=480",
+      "https://worldchain-mainnet.g.alchemy.com/public",
+    ];
+
+// Build a provider on the first RPC that answers eth_blockNumber.
+async function buildProvider() {
+  for (const url of RPC_URLS) {
+    try {
+      const p = new ethers.JsonRpcProvider(url);
+      await p.getBlockNumber();
+      return p;
+    } catch (e) {
+      // try the next provider
+    }
+  }
+  return new ethers.JsonRpcProvider(RPC_URLS[0]);
+}
 
 const CONTRACT_ADDRESS = "0x2f9D3bC7125d563434cbc601b15Add6Ba0F3F3Db";
 const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";
@@ -99,7 +122,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const provider = await buildProvider();
 
     // ------------------------------------------------------------------
     // 1. Verify the payment actually happened on-chain. We never trust

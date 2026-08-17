@@ -2,7 +2,28 @@ import { ethers } from "ethers";
 
 const CONTRACT_ADDRESS = "0x2f9D3bC7125d563434cbc601b15Add6Ba0F3F3Db";
 const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";
-const RPC_URL = process.env.WORLDCHAIN_RPC || "https://worldchain-mainnet.g.alchemy.com/public";
+// Primary + fallback World Chain RPCs — payouts must not stall on one
+// flaky provider. An env override still wins when set.
+const RPC_URLS = process.env.WORLDCHAIN_RPC
+  ? [process.env.WORLDCHAIN_RPC]
+  : [
+      "https://worldchain.drpc.org",
+      "https://api.uniblock.dev/uni/v1/json-rpc?chainId=480",
+      "https://worldchain-mainnet.g.alchemy.com/public",
+    ];
+
+async function buildProvider() {
+  for (const url of RPC_URLS) {
+    try {
+      const p = new ethers.JsonRpcProvider(url);
+      await p.getBlockNumber();
+      return p;
+    } catch (e) {
+      // try the next provider
+    }
+  }
+  return new ethers.JsonRpcProvider(RPC_URLS[0]);
+}
 
 const SB_URL = process.env.SUPABASE_URL || "https://efmkazyrxllcyvcwmewd.supabase.co";
 const SB_KEY =
@@ -169,7 +190,7 @@ export default async function handler(req, res) {
     const p2 = String(row.p2_address || "").toLowerCase();
     const feeWei = ethers.parseUnits(String(row.fee), 18);
 
-    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const provider = await buildProvider();
     const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
     const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, wallet);
 

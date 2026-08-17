@@ -11,7 +11,14 @@ const WORLD_APP_ID = "app_74bd2499a35b025efb62d99125df7883";
 const ADMIN_WALLET = "0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1";   
 const PAYMENT_RECV_WALLET = "0x8FB70CDFb545C7D9b842cBE37B9aba84059Bf14b";   
 const WLD_TOKEN_CONTRACT = "0x2cFc85d8E48F8EAB294be644d9E25C3030863003";  
-const WORLDCHAIN_RPC = "https://worldchain-mainnet.g.alchemy.com/public";  
+// Primary + fallback World Chain RPCs for the on-chain balance read —
+// the public Alchemy endpoint is slow/rate-limited, so we try dRPC and
+// Uniblock first and fall back in order.
+const WORLDCHAIN_RPCS = [
+  "https://worldchain.drpc.org",
+  "https://api.uniblock.dev/uni/v1/json-rpc?chainId=480",
+  "https://worldchain-mainnet.g.alchemy.com/public",
+];  
 const DICE_DUEL_CONTRACT = "0x2f9D3bC7125d563434cbc601b15Add6Ba0F3F3Db";  
 
 const FEE_WEI = {  
@@ -349,28 +356,34 @@ function getTnvRewardForFee(fee) {
 
 async function fetchRealWldBalance(walletAddress) {  
   if (!walletAddress) return 0;  
-  try {  
-    const paddedAddress = walletAddress.toLowerCase().replace('0x', '').padStart(64, '0');  
-    const response = await fetch(WORLDCHAIN_RPC, {  
-      method: 'POST',  
-      headers: { 'Content-Type': 'application/json' },  
-      body: JSON.stringify({  
-        jsonrpc: '2.0',  
-        method: 'eth_call',  
-        params: [{  
-          to: WLD_TOKEN_CONTRACT,  
-          data: '0x70a08231' + paddedAddress  
-        }, 'latest'],  
-        id: 1  
-      })  
-    });  
-    const result = await response.json();  
-    if (result.error) return null;  
-    if (result.result && result.result !== '0x') {  
-      const balanceWei = BigInt(result.result);  
-      return Number(balanceWei) / 1e18;  
-    }  
-  } catch (e) {}  
+  const paddedAddress = walletAddress.toLowerCase().replace('0x', '').padStart(64, '0');  
+  for (const rpcUrl of WORLDCHAIN_RPCS) {  
+    try {  
+      // Bound each provider so a hanging RPC never freezes the balance.
+      const response = await Promise.race([  
+        fetch(rpcUrl, {  
+          method: 'POST',  
+          headers: { 'Content-Type': 'application/json' },  
+          body: JSON.stringify({  
+            jsonrpc: '2.0',  
+            method: 'eth_call',  
+            params: [{  
+              to: WLD_TOKEN_CONTRACT,  
+              data: '0x70a08231' + paddedAddress  
+            }, 'latest'],  
+            id: 1  
+          })  
+        }),  
+        new Promise((_, reject) => setTimeout(() => reject(new Error('rpc_timeout')), 8000)),  
+      ]);  
+      const result = await response.json();  
+      if (result.error) continue;  
+      if (result.result && result.result !== '0x') {  
+        const balanceWei = BigInt(result.result);  
+        return Number(balanceWei) / 1e18;  
+      }  
+    } catch (e) { /* try the next provider */ }  
+  }  
   return null;  
 }  
 
@@ -400,6 +413,11 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
 
     if (realBalance !== null) {  
       currentWldBalance = realBalance;  
+      // Persist the real on-chain balance so user_rewards.wld_balance
+      // is never stale and the UI fallback shows the last-known-good
+      // value when every RPC is down. (Informational only — payouts are
+      // on-chain via MiniKit, never from this column.)
+      supabaseClient.rpc('secure_update_wld_balance', { p_wallet: cleanWallet, p_balance: realBalance }).catch(() => {});  
       if (!data) {  
         await supabaseClient.rpc('secure_ensure_user_row', { p_wallet: cleanWallet });  
       }  
