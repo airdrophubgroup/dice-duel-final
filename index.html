@@ -20,6 +20,7 @@
   <div class="support-container">
     <button class="support-btn-main" onclick="toggleSupportDropdown(event)">💬 Support ▼</button>
     <div id="support-dropdown" class="support-dropdown">
+      <div class="support-link" onclick="openSupportBot()" style="cursor:pointer;">💳 Payment Support</div>
       <a href="https://t.me/TNVTEAMWLD" target="_blank" class="support-link">Telegram</a>
       <div class="support-link">Discord <span class="coming-soon">Soon</span></div>
       <div class="support-link">Twitter <span class="coming-soon">Soon</span></div>
@@ -259,6 +260,32 @@
       <div class="modal-actions">
         <button class="btn btn-ghost" style="margin-top:0;" onclick="closeWithdrawModal()">CANCEL</button>
         <button class="btn btn-primary" style="padding:12px;" onclick="submitWithdrawRequest()">CONFIRM</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAYMENT SUPPORT BOT -->
+  <div id="support-bot-modal" class="custom-modal">
+    <div class="modal-card" style="max-width:380px; width:95%; height:70vh; display:flex; flex-direction:column; padding:0 !important; overflow:hidden;">
+      <div style="background:linear-gradient(135deg, rgba(41,217,194,0.15), rgba(108,92,231,0.15)); padding:14px 16px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:20px;">🤖</span>
+          <div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:13px; color:var(--photon);">Payment Support Bot</div>
+            <div style="font-size:9px; color:var(--slate);">Online • Auto-refund checker</div>
+          </div>
+        </div>
+        <button class="chat-close-btn" onclick="closeSupportBot()">✕</button>
+      </div>
+      <div id="bot-messages" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding:14px;">
+      </div>
+      <div id="bot-input-area" style="padding:10px 14px; border-top:1px solid var(--border); display:none;">
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="bot-tx-input" class="chat-input" placeholder="Paste your transaction hash (0x...)" style="flex:1; font-size:11px;" />
+          <button class="chat-send-btn" onclick="submitBotTxHash()" style="font-size:11px; padding:0 10px;">Send</button>
+        </div>
+      </div>
+      <div id="bot-btn-area" style="padding:10px 14px; border-top:1px solid var(--border); display:flex; flex-wrap:wrap; gap:6px;">
       </div>
     </div>
   </div>

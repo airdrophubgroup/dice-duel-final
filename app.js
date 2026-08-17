@@ -356,7 +356,28 @@ function getTnvRewardForFee(fee) {
 
 async function fetchRealWldBalance(walletAddress) {  
   if (!walletAddress) return 0;  
-  const paddedAddress = walletAddress.toLowerCase().replace('0x', '').padStart(64, '0');  
+  const clean = walletAddress.toLowerCase().trim();  
+
+  // Preferred path: ask our OWN edge function. The eth_call runs
+  // server-side so the World App WebView never hits CORS/403 issues
+  // that public RPCs impose on browser fetches. Falls through to the
+  // direct RPCs below if the function is unreachable.
+  try {
+    const fnRes = await Promise.race([
+      fetch('https://efmkazyrxllcyvcwmewd.supabase.co/functions/v1/get-balance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: clean })
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('fn_timeout')), 8000)),
+    ]);
+    const fnData = await fnRes.json().catch(() => ({}));
+    if (fnData && fnData.success === true && typeof fnData.balance === 'number') {
+      return fnData.balance;
+    }
+  } catch (e) { /* fall back to direct RPCs */ }
+
+  const paddedAddress = clean.replace('0x', '').padStart(64, '0');  
   for (const rpcUrl of WORLDCHAIN_RPCS) {  
     try {  
       // Bound each provider so a hanging RPC never freezes the balance.
@@ -650,14 +671,67 @@ window.submitWithdrawRequest = async function() {
   showNeonToast('Withdrawal requested!', 'success');  
   closeWithdrawModal();  
   fetchUserBalanceAndLeaderboard(myAddress);  
-};  
+};function setUserData(username, address){
+  myUsername = username;
+  myAddress = address ? address.toLowerCase() : address;
+  $('display-username').innerText = myUsername;
+  $('my-name-tag').innerText = myUsername;
+  fetchUserBalanceAndLeaderboard(myAddress);
+  // AUTO-REFUND SCAN: silently check for stuck payments on login
+  autoScanAndRefund(myAddress);
+}
 
-function setUserData(username, address){  
-  myUsername = username;  
-  myAddress = address ? address.toLowerCase() : address;  
-  $('display-username').innerText = myUsername;  
-  $('my-name-tag').innerText = myUsername;  
-  fetchUserBalanceAndLeaderboard(myAddress);  
+// Silently scan user's recent matches on login and auto-refund any
+// stuck payments. Runs once per session — no user action needed.
+async function autoScanAndRefund(wallet) {
+  if (!wallet) return;
+  const w = wallet.toLowerCase().trim();
+  try {
+    // Find any cancelled/waiting/matched/expired matches where this user paid
+    // but has no pending/completed refund
+    const { data: matches } = await supabaseClient
+      .from('matches')
+      .select('id, status, fee, p1_address, p2_address, p1_paid, p2_paid, created_at')
+      .or(`p1_address.eq.${w},p2_address.eq.${w}`)
+      .in('status', ['cancelled', 'waiting', 'matched', 'expired'])
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (!matches || matches.length === 0) return;
+
+    for (const m of matches) {
+      const isP1 = m.p1_address && m.p1_address.toLowerCase() === w;
+      const paid = isP1 ? m.p1_paid : m.p2_paid;
+      if (paid !== true) continue;
+
+      // Check if refund already exists
+      const { data: existingRefund } = await supabaseClient
+        .from('refund_queue')
+        .select('id, status')
+        .eq('match_id', m.id)
+        .eq('wallet_address', w)
+        .limit(1);
+
+      const hasRefund = existingRefund && existingRefund.length > 0 &&
+        ['completed', 'pending', 'processing'].includes(existingRefund[0]?.status);
+
+      if (!hasRefund) {
+        // Stuck payment found — auto-queue refund silently
+        try {
+          const { data: r } = await supabaseClient.rpc('queue_refund_request', {
+            p_match_id: m.id, p_wallet: w
+          });
+          if (r && (r.success === true)) {
+            console.log(`[auto-refund] Queued refund for match ${m.id} (${m.fee} WLD)`);
+          } else if (r && r.error === 'already_queued') {
+            console.log(`[auto-refund] Already queued for match ${m.id}`);
+          } else {
+            console.log(`[auto-refund] Failed for match ${m.id}:`, r);
+          }
+        } catch (e) { console.log('[auto-refund] Error:', e.message); }
+      }
+    }
+  } catch (e) { /* silent — never bother the user */ }
 }  
 
 function randomAlphaNumeric(len){  
@@ -1383,10 +1457,410 @@ function resetToHome(){
   paymentVerified = false;
   matchId = null;
   matchIdBytes32Global = null;
-}  
-
-document.querySelectorAll('.fee-chip').forEach(chip => {  
-  chip.addEventListener('click', () => selectFee(chip.dataset.fee, chip));  
-});  
-$('start-btn').addEventListener('click', handlePlayButtonClick);  
+}document.querySelectorAll('.fee-chip').forEach(chip => {
+  chip.addEventListener('click', () => selectFee(chip.dataset.fee, chip));
+});
+$('start-btn').addEventListener('click', handlePlayButtonClick);
 $('dice-scene').addEventListener('click', rollDice);
+
+// ==========================================
+// PAYMENT SUPPORT BOT
+// ==========================================
+let botStep = 0; // 0=idle, 1=asked-yes-no, 2=check-running, 3=asked-tx-hash
+
+window.openSupportBot = function() {
+  // Close the dropdown
+  const dd = $('support-dropdown');
+  if (dd) dd.classList.remove('show');
+  $('support-bot-modal').style.display = 'flex';
+  $('bot-messages').innerHTML = '';
+  $('bot-input-area').style.display = 'none';
+  $('bot-btn-area').innerHTML = '';
+  botStep = 0;
+
+  if (!myAddress) {
+    botAddMsg('bot', '👋 Hi! I\'m the Payment Support Bot.');
+    botAddMsg('bot', 'Please sign in first so I can check your account. Tap PLAY NOW to connect your wallet.');
+    botAddBtn('Got it', () => closeSupportBot());
+    return;
+  }
+
+  botAddMsg('bot', '👋 Hi! I\'m the Payment Support Bot.');
+  botAddMsg('bot', 'Did you make a payment for a match that didn\'t connect or didn\'t get a refund?');
+  botStep = 1;
+  botAddBtn('✅ Yes, I paid', () => botHandleYes());
+  botAddBtn('❌ No', () => botHandleNo(), 'danger');
+};
+
+window.closeSupportBot = function() {
+  $('support-bot-modal').style.display = 'none';
+  botStep = 0;
+};
+
+function botAddMsg(type, text) {
+  const div = document.createElement('div');
+  div.className = `bot-msg ${type}`;
+  div.textContent = text;
+  $('bot-messages').appendChild(div);
+  $('bot-messages').scrollTop = $('bot-messages').scrollHeight;
+}
+
+function botAddHtmlMsg(type, html) {
+  const div = document.createElement('div');
+  div.className = `bot-msg ${type}`;
+  div.innerHTML = html;
+  $('bot-messages').appendChild(div);
+  $('bot-messages').scrollTop = $('bot-messages').scrollHeight;
+}
+
+function botShowTyping() {
+  const div = document.createElement('div');
+  div.className = 'bot-typing';
+  div.id = 'bot-typing-indicator';
+  div.innerHTML = '<span></span><span></span><span></span>';
+  $('bot-messages').appendChild(div);
+  $('bot-messages').scrollTop = $('bot-messages').scrollHeight;
+}
+
+function botHideTyping() {
+  const el = $('bot-typing-indicator');
+  if (el) el.remove();
+}
+
+function botClearBtns() {
+  $('bot-btn-area').innerHTML = '';
+}
+
+function botAddBtn(text, onClick, extraClass) {
+  const btn = document.createElement('button');
+  btn.className = 'bot-btn' + (extraClass ? ' ' + extraClass : '');
+  btn.textContent = text;
+  btn.onclick = () => { botClearBtns(); onClick(); };
+  $('bot-btn-area').appendChild(btn);
+}
+
+async function botHandleYes() {
+  botAddMsg('user', 'Yes, I paid but didn\'t get a refund.');
+  botAddMsg('system', '🔍 Scanning your recent matches...');
+  botShowTyping();
+  botStep = 2;
+
+  try {
+    // Step 1: Find user's recent cancelled/waiting matches with payment
+    const wallet = myAddress.toLowerCase().trim();
+    const { data: matches, error } = await supabaseClient
+      .from('matches')
+      .select('id, match_id, status, fee, p1_address, p2_address, p1_paid, p2_paid, p1_payment_tx_hash, p2_payment_tx_hash, created_at')
+      .or(`p1_address.eq.${wallet},p2_address.eq.${wallet}`)
+      .in('status', ['cancelled', 'waiting', 'matched', 'expired'])
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    botHideTyping();
+
+    if (error || !matches || matches.length === 0) {
+      botAddMsg('bot', 'I checked your recent matches and didn\'t find any that need a refund.');
+      botAddMsg('bot', 'If you still think there\'s an issue, paste your transaction hash and I\'ll verify it on-chain.');
+      botStep = 3;
+      botShowTxInput();
+      return;
+    }
+
+    // Find matches where THIS user paid but match didn't complete
+    let refundableMatches = [];
+    for (const m of matches) {
+      const isP1 = m.p1_address && m.p1_address.toLowerCase() === wallet;
+      const paid = isP1 ? m.p1_paid : m.p2_paid;
+      if (paid === true) {
+        // Check if refund already exists
+        const { data: existingRefund } = await supabaseClient
+          .from('refund_queue')
+          .select('id, status')
+          .eq('match_id', m.id)
+          .eq('wallet_address', wallet)
+          .limit(1);
+
+        const hasRefund = existingRefund && existingRefund.length > 0 &&
+          (existingRefund[0].status === 'completed' || existingRefund[0].status === 'pending' || existingRefund[0].status === 'processing');
+
+        if (!hasRefund) {
+          refundableMatches.push({ ...m, isP1 });
+        }
+      }
+    }
+
+    if (refundableMatches.length === 0) {
+      // All paid matches already have refunds or are completed
+      const hasCompleted = matches.some(m => m.status === 'completed');
+      if (hasCompleted) {
+        botAddMsg('bot', '✅ All your paid matches have been completed or already refunded. You\'re all good!');
+      } else {
+        botAddMsg('bot', 'I checked your recent matches and they all already have pending refunds or no payment was found.');
+        botAddMsg('bot', 'If you still need help, paste your transaction hash below and I\'ll verify it directly on-chain.');
+        botStep = 3;
+        botShowTxInput();
+      }
+      return;
+    }
+
+    // Found refundable matches! Show details and auto-refund
+    botAddMsg('bot', `I found ${refundableMatches.length} match(es) where you paid but didn\'t receive a refund:`);
+
+    for (const m of refundableMatches) {
+      const fee = Number(m.fee);
+      botAddHtmlMsg('bot', `📋 <b>Match:</b> ${fee} WLD | Status: ${m.status} | Created: ${new Date(m.created_at).toLocaleString()}`);
+    }
+
+    botAddMsg('bot', '🔄 Processing your refund now...');
+    botShowTyping();
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const m of refundableMatches) {
+      try {
+        const { data: refundResult } = await supabaseClient.rpc('queue_refund_request', {
+          p_match_id: m.id,
+          p_wallet: wallet
+        });
+
+        if (refundResult && refundResult.success === true) {
+          successCount++;
+        } else if (refundResult && refundResult.error === 'already_queued') {
+          successCount++; // Already queued, not a failure
+        } else {
+          failCount++;
+          console.error('Bot refund failed for match', m.id, refundResult);
+        }
+      } catch (e) {
+        failCount++;
+        console.error('Bot refund exception:', e);
+      }
+    }
+
+    botHideTyping();
+
+    if (successCount > 0) {
+      botAddMsg('success', `✅ ${successCount} refund(s) queued successfully! Your WLD will be returned within ~1 minute.`);
+      botAddMsg('bot', '💡 The refund is processed automatically by our server. You don\'t need to do anything else.');
+      botAddMsg('system', '⏰ If you don\'t see the refund after 5 minutes, come back and paste your transaction hash below.');
+    }
+
+    if (failCount > 0) {
+      botAddMsg('bot', `⚠️ ${failCount} refund(s) couldn\'t be queued. Please paste your transaction hash below for manual verification.`);
+      botStep = 3;
+      botShowTxInput();
+    }
+
+    if (successCount > 0 && failCount === 0) {
+      botAddBtn('👍 Thanks!', () => closeSupportBot());
+      botAddBtn('📋 Check another', () => { botClearBtns(); botHandleYes(); });
+    }
+
+  } catch (e) {
+    botHideTyping();
+    botAddMsg('error', '❌ Error scanning matches. Please paste your transaction hash below.');
+    botStep = 3;
+    botShowTxInput();
+    console.error('Bot scan error:', e);
+  }
+}
+
+function botHandleNo() {
+  botAddMsg('user', 'No, I didn\'t pay.');
+  botAddMsg('bot', 'No problem! If you didn\'t make a payment, there\'s nothing to refund. Your funds are safe.');
+  botAddMsg('bot', 'Come back anytime if you need help! 🎲');
+  botAddBtn('👍 Got it', () => closeSupportBot());
+}
+
+function botShowTxInput() {
+  $('bot-input-area').style.display = 'block';
+  $('bot-tx-input').value = '';
+  $('bot-tx-input').focus();
+  botAddBtn('🔍 Verify Tx Hash', () => submitBotTxHash());
+  botAddBtn('↩️ Go back', () => {
+    botClearBtns();
+    $('bot-input-area').style.display = 'none';
+    botAddMsg('bot', 'Did you make a payment for a match?');
+    botStep = 1;
+    botAddBtn('✅ Yes, I paid', () => botHandleYes());
+    botAddBtn('❌ No', () => botHandleNo(), 'danger');
+  });
+}
+
+window.submitBotTxHash = async function() {
+  const txHash = ($('bot-tx-input')?.value || '').trim();
+  if (!txHash) {
+    botAddMsg('error', 'Please paste a transaction hash (starts with 0x).');
+    return;
+  }
+  if (!txHash.startsWith('0x') || txHash.length < 10) {
+    botAddMsg('error', 'Invalid transaction hash format. It should start with 0x.');
+    return;
+  }
+
+  $('bot-input-area').style.display = 'none';
+  $('bot-btn-area').innerHTML = '';
+  botAddMsg('user', `Tx: ${txHash.slice(0, 10)}...${txHash.slice(-8)}`);
+  botAddMsg('system', '🔗 Verifying on-chain...');
+  botShowTyping();
+
+  try {
+    // Use multi-RPC to verify the transaction
+    let txData = null;
+    for (const rpcUrl of WORLDCHAIN_RPCS) {
+      try {
+        const response = await Promise.race([
+          fetch(rpcUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              method: 'eth_getTransactionByHash',
+              params: [txHash],
+              id: 1
+            })
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000)),
+        ]);
+        const result = await response.json();
+        if (result.result && result.result.hash) {
+          txData = result.result;
+          break;
+        }
+      } catch (e) { /* try next RPC */ }
+    }
+
+    botHideTyping();
+
+    if (!txData) {
+      botAddMsg('error', '❌ Transaction not found on-chain. Please double-check the hash.');
+      botAddBtn('🔄 Try again', () => botShowTxInput());
+      botAddBtn('🏠 Go back', () => closeSupportBot());
+      return;
+    }
+
+    // Check if this is a WLD token transfer to our contract
+    const toAddr = (txData.to || '').toLowerCase();
+    const fromAddr = (txData.from || '').toLowerCase();
+    const userWallet = myAddress.toLowerCase().trim();
+    const isFromUser = fromAddr === userWallet;
+    const isToContract = toAddr === DICE_DUEL_CONTRACT.toLowerCase();
+
+    if (!isFromUser) {
+      botAddMsg('error', '❌ This transaction was not sent from your wallet. Please provide a transaction you sent.');
+      botAddBtn('🔄 Try again', () => botShowTxInput());
+      botAddBtn('🏠 Go back', () => closeSupportBot());
+      return;
+    }
+
+    if (!isToContract) {
+      botAddMsg('error', '❌ This transaction was not sent to our game contract. Please provide a Dice Duel payment transaction.');
+      botAddMsg('bot', `Expected contract: ${DICE_DUEL_CONTRACT.slice(0,10)}...${DICE_DUEL_CONTRACT.slice(-6)}`);
+      botAddBtn('🔄 Try again', () => botShowTxInput());
+      botAddBtn('🏠 Go back', () => closeSupportBot());
+      return;
+    }
+
+    // Get the receipt to check the token transfer details
+    let txReceipt = null;
+    for (const rpcUrl of WORLDCHAIN_RPCS) {
+      try {
+        const response = await Promise.race([
+          fetch(rpcUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              method: 'eth_getTransactionReceipt',
+              params: [txHash],
+              id: 1
+            })
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000)),
+        ]);
+        const result = await response.json();
+        if (result.result) {
+          txReceipt = result.result;
+          break;
+        }
+      } catch (e) { /* try next RPC */ }
+    }
+
+    const txSuccess = txReceipt ? txReceipt.status === '0x1' : false;
+    if (txReceipt && !txSuccess) {
+      botAddMsg('error', '❌ This transaction failed on-chain. No payment was made.');
+      botAddMsg('bot', 'You can try paying again — your funds were never deducted.');
+      botAddBtn('🏠 Go back', () => closeSupportBot());
+      return;
+    }
+
+    // Verify the input data contains our contract interaction
+    // The input should be a token transfer (0xa9059cbb for transfer)
+    const inputData = txData.input || '';
+    const isTokenTransfer = inputData.startsWith('0xa9059cbb');
+
+    botAddMsg('bot', '✅ Transaction verified on-chain!');
+    botAddHtmlMsg('bot', `📋 <b>From:</b> ${fromAddr.slice(0,10)}...<br><b>To:</b> ${toAddr.slice(0,10)}...<br><b>Status:</b> Confirmed ✅`);
+
+    // Now find the match this payment was for and queue refund
+    botAddMsg('system', '🔄 Looking up your match and processing refund...');
+    botShowTyping();
+
+    // Find recent match for this user
+    const { data: recentMatches } = await supabaseClient
+      .from('matches')
+      .select('id, status, fee, created_at')
+      .or(`p1_address.eq.${userWallet},p2_address.eq.${userWallet}`)
+      .in('status', ['cancelled', 'waiting', 'matched', 'expired'])
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    botHideTyping();
+
+    if (recentMatches && recentMatches.length > 0) {
+      // Try to queue refund for the most recent match
+      let refundQueued = false;
+      for (const m of recentMatches) {
+        // First try to record the payment on this match
+        try {
+          const matchIdB32 = await matchIdToBytes32(m.id);
+          await recordDepositOnce(matchIdB32, m.id, userWallet, FEE_WEI[Number(m.fee)] || null, txHash);
+        } catch(e) { /* non-fatal */ }
+
+        // Now queue refund
+        try {
+          const { data: refundResult } = await supabaseClient.rpc('queue_refund_request', {
+            p_match_id: m.id,
+            p_wallet: userWallet
+          });
+          if (refundResult && (refundResult.success === true || refundResult.error === 'already_queued')) {
+            refundQueued = true;
+            botAddMsg('success', `✅ Refund queued for ${m.fee} WLD match (${m.status})!`);
+            botAddMsg('bot', 'Your WLD will be returned within ~1 minute. Thank you for your patience! 🎲');
+            break;
+          }
+        } catch(e) { /* try next match */ }
+      }
+
+      if (!refundQueued) {
+        botAddMsg('bot', 'I found your match but couldn\'t queue the refund automatically. Our team has been notified.');
+        botAddMsg('system', '📧 Please contact @TNVTEAMWLD on Telegram with your transaction hash for manual processing.');
+        botAddBtn('💬 Open Telegram', () => window.open('https://t.me/TNVTEAMWLD', '_blank'));
+      }
+    } else {
+      botAddMsg('bot', 'Transaction verified but I couldn\'t find a matching game record. Our team will help.');
+      botAddMsg('system', '📧 Contact @TNVTEAMWLD on Telegram with this tx hash for manual processing.');
+      botAddBtn('💬 Open Telegram', () => window.open('https://t.me/TNVTEAMWLD', '_blank'));
+    }
+
+    botAddBtn('👍 Done', () => closeSupportBot());
+
+  } catch (e) {
+    botHideTyping();
+    botAddMsg('error', '❌ Error verifying transaction. Please try again or contact support.');
+    botAddBtn('🔄 Try again', () => botShowTxInput());
+    botAddBtn('💬 Contact Support', () => window.open('https://t.me/TNVTEAMWLD', '_blank'));
+    console.error('Bot tx verify error:', e);
+  }
+};
