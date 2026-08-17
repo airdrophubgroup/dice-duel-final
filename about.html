@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>Dice Duel — Rules, Winner Logic & Security</title>
+<title>Dice Duel — Rules, Winner Logic, Security &amp; Support</title>
 <style>
   :root{
     --void:#0b0b14; --void-2:#111120; --iris:#6c5ce7; --photon:#29d9c2;
@@ -79,12 +79,30 @@
     text-shadow:0 0 40px rgba(41,217,194,0.15);
     margin-bottom:10px;
   }
-  .hero p{ color:var(--slate); font-size:16px; max-width:620px; margin:0 auto; }
+  .hero p{ color:var(--slate); font-size:16px; max-width:640px; margin:0 auto; }
   .hero .badge{
     display:inline-block; margin-top:18px; padding:8px 18px; border-radius:999px;
     border:1px solid var(--photon); color:var(--photon); font-size:12px;
     letter-spacing:1px; font-family:'JetBrains Mono',monospace;
     box-shadow:0 0 18px rgba(41,217,194,0.2);
+  }
+
+  /* ---- floating chips row ---- */
+  .chip-row{ display:flex; justify-content:center; flex-wrap:wrap; gap:12px; margin-top:30px; }
+  .chip{
+    padding:9px 18px; border-radius:999px; font-size:12.5px;
+    font-family:'Space Grotesk',sans-serif; font-weight:600;
+    border:1px solid rgba(41,217,194,0.35); color:var(--bone);
+    background:rgba(17,17,32,0.75); box-shadow:0 0 16px rgba(41,217,194,0.12);
+    animation:chipFloat 4s ease-in-out infinite;
+  }
+  .chip:nth-child(2){ animation-delay:0.6s; border-color:rgba(255,179,0,0.35); box-shadow:0 0 16px rgba(255,179,0,0.12); }
+  .chip:nth-child(3){ animation-delay:1.2s; border-color:rgba(108,92,231,0.45); box-shadow:0 0 16px rgba(108,92,231,0.15); }
+  .chip:nth-child(4){ animation-delay:1.8s; }
+  .chip:nth-child(5){ animation-delay:2.4s; border-color:rgba(255,95,109,0.35); box-shadow:0 0 16px rgba(255,95,109,0.12); }
+  @keyframes chipFloat{
+    0%,100%{ transform:translateY(0); }
+    50%{ transform:translateY(-9px); }
   }
 
   /* ---- sections ---- */
@@ -148,7 +166,8 @@
   tbody tr:last-child td{ border-bottom:none; }
   tbody tr:hover{ background:rgba(41,217,194,0.05); }
   .wld{ color:var(--photon); font-family:'JetBrains Mono',monospace; font-weight:600; }
-  .cut{ color:var(--gold); font-family:'JetBrains Mono',monospace; font-size:12px; }
+  .tnv{ color:var(--gold); font-family:'JetBrains Mono',monospace; font-weight:600; }
+  .cut{ color:var(--slate); font-family:'JetBrains Mono',monospace; font-size:12px; }
 
   /* ---- security features ---- */
   .sec-list{ display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; }
@@ -167,11 +186,21 @@
   .sec-item h4{ font-size:14px; font-family:'Space Grotesk',sans-serif; color:var(--bone); margin-bottom:3px; }
   .sec-item p{ font-size:12.5px; color:var(--slate); }
 
+  /* ---- monitor table (severity) ---- */
+  .sev{ font-size:11px; font-family:'JetBrains Mono',monospace; padding:2px 9px; border-radius:999px; white-space:nowrap; }
+  .sev.crit{ color:#ff8a95; background:rgba(255,95,109,0.12); border:1px solid rgba(255,95,109,0.35); }
+  .sev.warn{ color:var(--gold); background:rgba(255,179,0,0.10); border:1px solid rgba(255,179,0,0.3); }
+
   /* ---- footnote / footer ---- */
   .note{
     margin-top:26px; padding:16px 18px; border-radius:14px;
     border:1px dashed rgba(255,179,0,0.35); background:rgba(255,179,0,0.05);
     font-size:13px; color:var(--gold);
+  }
+  .info{
+    margin-top:26px; padding:16px 18px; border-radius:14px;
+    border:1px dashed rgba(41,217,194,0.35); background:rgba(41,217,194,0.05);
+    font-size:13px; color:var(--photon);
   }
   footer{
     margin-top:80px; text-align:center; color:var(--slate); font-size:12px;
@@ -199,8 +228,15 @@
       <div class="die">⚀</div><div class="die">⚄</div><div class="die">⚂</div><div class="die">⚅</div>
     </div>
     <h1>DICE DUEL</h1>
-    <p>The ultimate real-time PvP dice battle inside the <b style="color:var(--bone)">World App</b>. Pay a WLD entry fee, get matched 1v1, roll for glory — and the winner takes the pot.</p>
+    <p>The ultimate real-time PvP dice battle inside the <b style="color:var(--bone)">World App</b>. Pay a WLD entry fee, get matched 1v1, roll for glory — and the winner takes the pot. Winner gets <b style="color:var(--photon)">WLD + TNV</b>, loser still earns <b style="color:var(--gold)">TNV consolation</b>.</p>
     <div class="badge">🔒 Worldchain • WLD Entry • 100% Secure</div>
+    <div class="chip-row">
+      <div class="chip">🎁 Gift Cards</div>
+      <div class="chip">📱 Electronics</div>
+      <div class="chip">🎮 Video Games</div>
+      <div class="chip">🧸 Toys</div>
+      <div class="chip">🛍️ Shopping</div>
+    </div>
   </div>
 
   <!-- ================= HOW TO PLAY / RULES ================= -->
@@ -208,77 +244,137 @@
     <div class="sec-title reveal"><span class="num">01</span> How to Play</div>
     <div class="sec-sub reveal">Simple rules. Serious stakes.</div>
     <div class="grid">
-      <div class="card reveal"><span class="icon">💰</span><h3>1. Pick Your Stake</h3><p>Choose an entry fee from <b style="color:var(--photon)">0.1 WLD</b> up to <b style="color:var(--photon)">50 WLD</b>. Higher stake = bigger pot.</p></div>
-      <div class="card reveal"><span class="icon">🔍</span><h3>2. Get Matched</h3><p>You're paired with a real player at the <b>same fee tier</b>. Matchmaking only pairs you with fresh, active matches — ghost/abandoned matches are never joined.</p></div>
-      <div class="card reveal"><span class="icon">🎲</span><h3>3. Roll 15 Times</h3><p>Each player gets <b style="color:var(--photon)">15 rolls</b> in a <b style="color:var(--photon)">60-second</b> round. One roll every <b>2 seconds</b> — the die never lies (server-validated).</p></div>
-      <div class="card reveal"><span class="icon">🏆</span><h3>4. Highest Score Wins</h3><p>When the timer hits zero, the higher total score takes the pot. Winner payout is paid instantly, automatically.</p></div>
+      <div class="card reveal"><span class="icon">💰</span><h3>1. Pick Your Stake</h3><p>Choose an entry fee from <b style="color:var(--photon)">0.1 WLD</b> up to <b style="color:var(--photon)">50 WLD</b> — 11 tiers. Higher stake = bigger pot.</p></div>
+      <div class="card reveal"><span class="icon">🔍</span><h3>2. Get Matched</h3><p>Paired 1v1 with a real player at the <b>same fee tier</b>. Payment must be verified on-chain first — ghost/abandoned matches are never joined.</p></div>
+      <div class="card reveal"><span class="icon">🎲</span><h3>3. Roll 15 Times</h3><p>Each player gets <b style="color:var(--photon)">15 rolls</b> in a <b style="color:var(--photon)">32-second</b> round (30s gameplay + 2s result). One roll every 2 seconds — the die never lies (server-validated).</p></div>
+      <div class="card reveal"><span class="icon">🏆</span><h3>4. Highest Score Wins</h3><p>When the timer hits zero, the higher total score takes the pot. Winner payout + TNV is paid instantly, automatically.</p></div>
     </div>
   </section>
 
   <!-- ================= WINNER LOGIC ================= -->
   <section>
     <div class="sec-title reveal"><span class="num">02</span> Winner Logic &amp; Payouts</div>
-    <div class="sec-sub reveal">The pot is <b style="color:var(--photon)">2× the entry fee</b>. The winner receives the displayed payout; the platform cut stays with the house.</div>
+    <div class="sec-sub reveal">The pot is <b style="color:var(--photon)">2× the entry fee</b>. Winner gets the exact displayed payout; the platform cut stays with the house. Every amount below is server-set and matches what the app shows.</div>
     <div class="table-wrap reveal">
       <table>
-        <thead><tr><th>Entry Fee</th><th>Winner Payout</th><th>Platform Cut</th></tr></thead>
+        <thead><tr><th>Entry Fee</th><th>Winner Payout</th><th>Winner TNV</th><th>Loser TNV</th></tr></thead>
         <tbody>
-          <tr><td>0.1 WLD</td><td class="wld">0.17 WLD</td><td class="cut">15%</td></tr>
-          <tr><td>0.2 WLD</td><td class="wld">0.34 WLD</td><td class="cut">15%</td></tr>
-          <tr><td>0.5 WLD</td><td class="wld">0.80 WLD</td><td class="cut">20%</td></tr>
-          <tr><td>1 WLD</td><td class="wld">1.60 WLD</td><td class="cut">20%</td></tr>
-          <tr><td>2 WLD</td><td class="wld">3.20 WLD</td><td class="cut">20%</td></tr>
-          <tr><td>5 WLD</td><td class="wld">8.80 WLD</td><td class="cut">12%</td></tr>
-          <tr><td>10 WLD</td><td class="wld">17.80 WLD</td><td class="cut">11%</td></tr>
-          <tr><td>20 WLD</td><td class="wld">36.00 WLD</td><td class="cut">10%</td></tr>
-          <tr><td>30 WLD</td><td class="wld">54.00 WLD</td><td class="cut">10%</td></tr>
-          <tr><td>40 WLD</td><td class="wld">72.00 WLD</td><td class="cut">10%</td></tr>
-          <tr><td>50 WLD</td><td class="wld">90.00 WLD</td><td class="cut">10%</td></tr>
+          <tr><td>0.1 WLD</td><td class="wld">0.17 WLD</td><td class="tnv">+5</td><td class="tnv">+1</td></tr>
+          <tr><td>0.2 WLD</td><td class="wld">0.34 WLD</td><td class="tnv">+10</td><td class="tnv">+3</td></tr>
+          <tr><td>0.5 WLD</td><td class="wld">0.80 WLD</td><td class="tnv">+15</td><td class="tnv">+5</td></tr>
+          <tr><td>1 WLD</td><td class="wld">1.60 WLD</td><td class="tnv">+25</td><td class="tnv">+8</td></tr>
+          <tr><td>2 WLD</td><td class="wld">3.20 WLD</td><td class="tnv">+50</td><td class="tnv">+16</td></tr>
+          <tr><td>5 WLD</td><td class="wld">8.80 WLD</td><td class="tnv">+125</td><td class="tnv">+41</td></tr>
+          <tr><td>10 WLD</td><td class="wld">17.80 WLD</td><td class="tnv">+250</td><td class="tnv">+83</td></tr>
+          <tr><td>20 WLD</td><td class="wld">36.00 WLD</td><td class="tnv">+500</td><td class="tnv">+166</td></tr>
+          <tr><td>30 WLD</td><td class="wld">54.00 WLD</td><td class="tnv">+750</td><td class="tnv">+250</td></tr>
+          <tr><td>40 WLD</td><td class="wld">72.00 WLD</td><td class="tnv">+1,000</td><td class="tnv">+333</td></tr>
+          <tr><td>50 WLD</td><td class="wld">90.00 WLD</td><td class="tnv">+1,250</td><td class="tnv">+416</td></tr>
         </tbody>
       </table>
     </div>
-    <div class="note reveal">🎁 <b>TNV Rewards</b> — every match earns TNV points: winners get the full tier reward, losers get a consolation reward (⅓). TNV can be redeemed via withdrawal requests (min 5,000 TNV).</div>
+    <div class="note reveal">🎁 <b>TNV Rewards</b> — every match earns TNV points: winners get the full tier reward, losers get a consolation reward (⅓). TNV can be redeemed via withdrawal requests (min 5,000 TNV) approved by the admin. Ties are void: equal scores mean both players get their entry back and nobody earns TNV.</div>
+  </section>
+
+  <!-- ================= SUPPORT ================= -->
+  <section>
+    <div class="sec-title reveal"><span class="num">03</span> Support — Bot &amp; Real Human Agent</div>
+    <div class="sec-sub reveal">If anything ever feels off, help is one tap away — automatic, then human.</div>
+    <div class="grid">
+      <div class="card reveal"><span class="icon">🤖</span><h3>Payment Support Bot</h3><p>Scans your matches, finds paid-but-unrefunded games and queues the refund automatically. It also teaches you step by step how to find your transaction hash (copy address → worldscan.org → copy hash → verify).</p></div>
+      <div class="card reveal"><span class="icon">🔍</span><h3>Tx-Hash Verification</h3><p>Paste any transaction hash — the bot checks it on-chain. Fake hashes, reused hashes and strangers' transactions are all detected and declined politely.</p></div>
+      <div class="card reveal"><span class="icon">🧾</span><h3>Already Refunded? Proof Included</h3><p>If your refund already went through, the bot shows your <b style="color:var(--photon)">refund hash with a copy button</b> and an explorer link — proof you can paste anywhere.</p></div>
+      <div class="card reveal"><span class="icon">🤝</span><h3>Agent airdrophubgroup</h3><p>Not satisfied? Talk to a <b>real human</b> from the team. The agent listens empathetically, verifies your account step by step (matches, payments, refunds, tickets), then creates a support ticket for you.</p></div>
+      <div class="card reveal"><span class="icon">💬</span><h3>Admin Replies With Real Username</h3><p>Your ticket lands in the admin panel. The admin's answer comes back in the bot with their <b style="color:var(--gold)">real Worldcoin username</b> — no anonymous replies.</p></div>
+    </div>
   </section>
 
   <!-- ================= SECURITY ================= -->
   <section>
-    <div class="sec-title reveal"><span class="num">03</span> Security Features</div>
+    <div class="sec-title reveal"><span class="num">04</span> Security Features</div>
     <div class="sec-sub reveal">Built to be cheat-proof and drain-proof. The server never trusts the client.</div>
     <div class="sec-list">
-      <div class="sec-item reveal"><div class="shield">🔗</div><div><h4>On-Chain Payment Verification</h4><p>MiniKit's "success" is never trusted alone. Every payment is verified on-chain via the actual WLD transfer — and the transfer must postdate the match (no reused/stale payments).</p></div></div>
-      <div class="sec-item reveal"><div class="shield">🎲</div><div><h4>Server-Validated Dice Rolls</h4><p>Rolls are validated server-side (1–6, 15-turn cap, participant-only). Hacking the client can't change your score — the database is the source of truth.</p></div></div>
+      <div class="sec-item reveal"><div class="shield">🔗</div><div><h4>On-Chain Payment Verification</h4><p>"Payment success" is never trusted alone. Every payment is verified against the real WLD transfer — and the transfer must postdate the match (no reused/stale payments).</p></div></div>
+      <div class="sec-item reveal"><div class="shield">🎲</div><div><h4>Server-Validated Dice Rolls</h4><p>Rolls are validated server-side (value 1–6, 15-turn cap, participant-only, turn-lock). Hacking the client can't change your score — the database is the source of truth.</p></div></div>
       <div class="sec-item reveal"><div class="shield">🛡️</div><div><h4>Participant &amp; Payment Checks</h4><p>Refunds and payouts are only issued to a <b>paid participant</b> of that exact match — verified server-side. Forged requests are rejected.</p></div></div>
-      <div class="sec-item reveal"><div class="shield">🔒</div><div><h4>RLS-Protected Database</h4><p>Row Level Security blocks direct writes with the public key. Every state change goes through validated SECURITY DEFINER RPCs — nobody can edit scores, balances or match state directly.</p></div></div>
-      <div class="sec-item reveal"><div class="shield">💸</div><div><h4>Automatic Refund System</h4><p>Cancel or time out (no opponent in 60s)? A refund is queued and executed by a cron-driven resolver within <b style="color:var(--photon)">one minute</b>. Real payments always come back.</p></div></div>
-      <div class="sec-item reveal"><div class="shield">🚫</div><div><h4>No Double Payouts</h4><p>Settlement is claimed atomically (one-time flag) — a duplicate settle call can never pay the pot twice.</p></div></div>
+      <div class="sec-item reveal"><div class="shield">🔒</div><div><h4>RLS-Protected Database</h4><p>Row Level Security blocks direct writes with the public key. Every state change goes through validated SECURITY DEFINER functions — nobody can edit scores, balances or match state directly.</p></div></div>
+      <div class="sec-item reveal"><div class="shield">💸</div><div><h4>Automatic Refund System</h4><p>Cancel, or no opponent in 60 seconds? A refund is queued and executed by a cron-driven resolver within <b style="color:var(--photon)">one minute</b>. Real payments always come back.</p></div></div>
+      <div class="sec-item reveal"><div class="shield">🚫</div><div><h4>No Double Payouts</h4><p>Settlement is claimed atomically (one-time flags) — duplicate settle calls can never pay the pot twice, and duplicate tx-hashes are globally rejected (1 payment = 1 match).</p></div></div>
       <div class="sec-item reveal"><div class="shield">👻</div><div><h4>Ghost Match Cleanup</h4><p>Abandoned matches (app closed mid-flow) are auto-cancelled and auto-refunded. No ghost waiting matches, no joining dead games.</p></div></div>
-      <div class="sec-item reveal"><div class="shield">🧾</div><div><h4>Admin-Gated Operations</h4><p>Withdrawals are approved only by the admin wallet (server-verified). Blocking users and approving payouts can't be spoofed from the client.</p></div></div>
+      <div class="sec-item reveal"><div class="shield">🧾</div><div><h4>Admin-Gated Operations</h4><p>Withdrawals and blocks are approved only by the verified admin wallet — every admin function rejects strangers.</p></div></div>
+      <div class="sec-item reveal"><div class="shield">⛔</div><div><h4>Anti-Drain Protection</h4><p>Unpaid strangers can't queue refunds. Cancelled-before-payment matches vanish entirely — no fake refunds, no wallet draining.</p></div></div>
+    </div>
+  </section>
+
+  <!-- ================= AUTO MONITOR ================= -->
+  <section>
+    <div class="sec-title reveal"><span class="num">05</span> Auto Security Monitor</div>
+    <div class="sec-sub reveal">Runs by itself every 5 minutes — bugs and security issues are found before anyone notices.</div>
+    <div class="table-wrap reveal">
+      <table>
+        <thead><tr><th>Check</th><th>What it watches</th><th>Severity</th></tr></thead>
+        <tbody>
+          <tr><td>⏳ Stuck refunds</td><td>Refunds pending longer than 5 minutes</td><td><span class="sev crit">🔴 Critical</span></td></tr>
+          <tr><td>❌ Failed refunds</td><td>Refund attempts that errored out</td><td><span class="sev crit">🔴 Critical</span></td></tr>
+          <tr><td>👻 Stale waiting matches</td><td>Ghost matches nobody ever joined</td><td><span class="sev warn">🟡 Warning</span></td></tr>
+          <tr><td>⏸️ Stuck games</td><td>Matches stuck mid-play for 3+ minutes</td><td><span class="sev warn">🟡 Warning</span></td></tr>
+          <tr><td>💸 Missing TNV credits</td><td>Completed matches that never credited TNV</td><td><span class="sev warn">🟡 Warning</span></td></tr>
+          <tr><td>🚫 Auto-clicker detections</td><td>Rapid-fire / bot-like roll patterns</td><td><span class="sev warn">🟡 Warning</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="info reveal">🛡️ Findings land in the <b>admin alert panel</b> — deduplicated so the same issue never floods the log. When everything is healthy the panel simply shows "✅ All systems healthy".</div>
+  </section>
+
+  <!-- ================= HISTORY ================= -->
+  <section>
+    <div class="sec-title reveal"><span class="num">06</span> Match History &amp; Admin Views</div>
+    <div class="sec-sub reveal">Clear records, private by design.</div>
+    <div class="grid">
+      <div class="card reveal"><span class="icon">📜</span><h3>Your Latest 10 Matches</h3><p>Every user sees their <b>latest 10 matches</b> — opponent username, result (WON/LOST/TIE/cancelled), amount, fee, scores and full timestamp.</p></div>
+      <div class="card reveal"><span class="icon">🗑️</span><h3>Auto-Prune</h3><p>Older matches are <b>automatically deleted from the server</b> — only completed ones; refund-pending matches are never touched. A notice explains this inside the history screen.</p></div>
+      <div class="card reveal"><span class="icon">💰</span><h3>Admin Revenue — Everything</h3><p>The admin sees <b>all collected fees</b> with a running total — no 10-match limit, no cut-off.</p></div>
+      <div class="card reveal"><span class="icon">💸</span><h3>Admin Withdrawal Queue</h3><p>Every withdrawal request with status badges (pending / approved / rejected), amounts, TNV balances and timestamps — all visible, latest first.</p></div>
+    </div>
+  </section>
+
+  <!-- ================= TNV ECOSYSTEM ================= -->
+  <section>
+    <div class="sec-title reveal"><span class="num">07</span> TNV Ecosystem <span class="sev warn" style="vertical-align:middle;">🔜 SOON</span></div>
+    <div class="sec-sub reveal">Your TNV points are just the beginning.</div>
+    <div class="grid">
+      <div class="card reveal"><span class="icon">🚀</span><h3>TNV Mainnet</h3><p>TNV is heading to its own mainnet — real utility, real value.</p></div>
+      <div class="card reveal"><span class="icon">🔄</span><h3>TNV Swap</h3><p>Swap TNV for other assets once markets open.</p></div>
+      <div class="card reveal"><span class="icon">🛍️</span><h3>TNV Store</h3><p>Redeem TNV for real products: <b style="color:var(--gold)">gift cards, electronics, video games, toys &amp; more</b>.</p></div>
+      <div class="card reveal"><span class="icon">🎮</span><h3>Tournaments</h3><p>Bigger stakes, bigger prizes — competitive seasons are coming.</p></div>
     </div>
   </section>
 
   <!-- ================= PAYMENT & REFUND FLOW ================= -->
   <section>
-    <div class="sec-title reveal"><span class="num">04</span> Payment &amp; Refund Flow</div>
+    <div class="sec-title reveal"><span class="num">08</span> Payment &amp; Refund Flow</div>
     <div class="sec-sub reveal">What happens behind the scenes, step by step.</div>
     <div class="steps">
       <div class="step reveal"><h4>🎫 You join the arena</h4><p>A match is created with your chosen fee tier — status <code>waiting</code>.</p></div>
-      <div class="step reveal"><h4>💳 You pay the entry fee</h4><p>WLD is sent via World App to the escrow contract. The payment is <b style="color:var(--photon)">verified on-chain</b> before anything else happens.</p></div>
-      <div class="step reveal"><h4>🤝 Opponent joins</h4><p>When a second player at the same fee pays, the match is <code>matched</code> and both flags flip to paid.</p></div>
-      <div class="step reveal"><h4>🎲 Battle begins</h4><p>15 rolls each, 60-second round. Scores are recorded server-side on every roll.</p></div>
-      <div class="step reveal"><h4>🏆 Winner settled</h4><p>The higher score wins. The winner's payout is sent instantly from the escrow — validated and one-time only.</p></div>
-      <div class="step reveal"><h4>↩️ Refund (if no opponent)</h4><p>Cancel anytime, or if no opponent arrives in 60s, your WLD is automatically refunded within a minute via the refund resolver.</p></div>
+      <div class="step reveal"><h4>💳 You pay the entry fee</h4><p>WLD is sent via World App to the escrow contract. The payment is <b style="color:var(--photon)">verified on-chain</b> — only a real, fresh payment flips your flag to paid.</p></div>
+      <div class="step reveal"><h4>🤝 Opponent joins</h4><p>When a second player at the same fee pays (both verified on-chain), the match connects and both flags are paid. One payment can never book two matches.</p></div>
+      <div class="step reveal"><h4>🎲 Battle begins</h4><p>15 rolls each, 32-second round. Scores are recorded server-side on every roll, in realtime on both screens.</p></div>
+      <div class="step reveal"><h4>🏆 Winner settled</h4><p>The higher score wins. The winner's exact payout + TNV is sent instantly from the escrow — validated and one-time only. Loser gets TNV consolation.</p></div>
+      <div class="step reveal"><h4>↩️ Refund (if no opponent)</h4><p>Cancel anytime, or if no opponent arrives in 60s, your WLD is automatically refunded within a minute via the refund resolver. Support bot can verify it with your tx-hash anytime.</p></div>
     </div>
   </section>
 
   <!-- ================= TECH ================= -->
   <section>
-    <div class="sec-title reveal"><span class="num">05</span> Built On</div>
+    <div class="sec-title reveal"><span class="num">09</span> Built On</div>
     <div class="sec-sub reveal">A battle-tested stack for real-money games.</div>
     <div class="grid">
       <div class="card reveal"><span class="icon">🌍</span><h3>Worldchain + MiniKit</h3><p>Runs inside the official World App with native wallet auth and payments.</p></div>
-      <div class="card reveal"><span class="icon">🗄️</span><h3>Supabase</h3><p>PostgreSQL ledger of record with RLS, validated RPCs, and a cron refund resolver.</p></div>
-      <div class="card reveal"><span class="icon">⚡</span><h3>Vercel</h3><p>Edge API functions for payment verification, refunds, and winner payouts.</p></div>
+      <div class="card reveal"><span class="icon">🗄️</span><h3>Supabase</h3><p>PostgreSQL ledger of record with RLS, validated functions, a cron refund resolver and a 5-minute auto-monitor.</p></div>
+      <div class="card reveal"><span class="icon">⚡</span><h3>Vercel</h3><p>Edge API functions for payment verification, refunds, balance checks and winner payouts.</p></div>
       <div class="card reveal"><span class="icon">🔐</span><h3>Escrow Contract</h3><p>Owner-operated WLD escrow — all payouts and refunds are contract-secured.</p></div>
+      <div class="card reveal"><span class="icon">💬</span><h3>Global Chat</h3><p>Realtime community chat with live presence and betting alerts — capped and trimmed so it never slows a phone down.</p></div>
+      <div class="card reveal"><span class="icon">🏅</span><h3>TNV Leaderboard</h3><p>Track your TNV balance and climb the leaderboard, then withdraw at the 5,000 TNV minimum.</p></div>
     </div>
   </section>
 
