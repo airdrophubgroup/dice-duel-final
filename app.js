@@ -96,68 +96,6 @@ const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 const $ = (id) => document.getElementById(id);  
 
-// ---------- BACKGROUND MUSIC ----------
-// Soft looping tune while playing. Starts on the first user gesture
-// (browsers block autoplay until then) and is fully user-controllable
-// from the settings modal (username click): on/off + volume, saved in
-// localStorage.
-let bgMusic = null;  
-let musicEnabled = true;  
-let musicVolume = 0.25;  
-const MUSIC_KEYS = { enabled: "tnv_music_enabled", volume: "tnv_music_volume" };  
-
-function initMusic() {  
-  bgMusic = $('bg-music');  
-  if (!bgMusic) return;  
-  try {  
-    musicEnabled = localStorage.getItem(MUSIC_KEYS.enabled) !== "0";  
-    const v = parseFloat(localStorage.getItem(MUSIC_KEYS.volume));  
-    if (!isNaN(v) && v >= 0 && v <= 1) musicVolume = v;  
-  } catch (e) {}  
-  bgMusic.volume = musicVolume;  
-  bgMusic.loop = true;  
-  const start = () => {  
-    if (musicEnabled && bgMusic) bgMusic.play().catch(() => {});  
-    document.removeEventListener('pointerdown', start);  
-  };  
-  document.addEventListener('pointerdown', start);  
-}  
-
-function openSettingsModal() {  
-  const t = $('music-toggle');  
-  if (t) { t.innerText = musicEnabled ? 'ON' : 'OFF'; t.classList.toggle('on', musicEnabled); }  
-  const v = $('music-volume');  
-  if (v) v.value = Math.round(musicVolume * 100);  
-  const l = $('music-vol-label');  
-  if (l) l.innerText = Math.round(musicVolume * 100) + '%';  
-  const m = $('settings-modal');  
-  if (m) m.style.display = 'flex';  
-}  
-
-function closeSettingsModal() {  
-  const m = $('settings-modal');  
-  if (m) m.style.display = 'none';  
-}  
-
-function toggleMusic() {  
-  musicEnabled = !musicEnabled;  
-  try { localStorage.setItem(MUSIC_KEYS.enabled, musicEnabled ? "1" : "0"); } catch (e) {}  
-  if (bgMusic) {  
-    if (musicEnabled) bgMusic.play().catch(() => {});  
-    else bgMusic.pause();  
-  }  
-  const t = $('music-toggle');  
-  if (t) { t.innerText = musicEnabled ? 'ON' : 'OFF'; t.classList.toggle('on', musicEnabled); }  
-}  
-
-function setMusicVolume(v) {  
-  musicVolume = Math.max(0, Math.min(1, Number(v) / 100));  
-  if (bgMusic) bgMusic.volume = musicVolume;  
-  try { localStorage.setItem(MUSIC_KEYS.volume, String(musicVolume)); } catch (e) {}  
-  const l = $('music-vol-label');  
-  if (l) l.innerText = Math.round(v) + '%';  
-}  
-
 function checkWorldAppEnvironment() {  
   let miniOk = false;  
   try { miniOk = typeof MiniKit !== 'undefined' && typeof MiniKit.isInstalled === 'function' && MiniKit.isInstalled(); } catch (e) {}  
@@ -229,7 +167,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   }  
 
   if (typeof initGlobalChat === 'function') initGlobalChat();  
-  initMusic();  
   fetchLeaderboard();  
 });  
 

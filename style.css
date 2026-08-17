@@ -124,10 +124,8 @@ h1.brand{
   filter: drop-shadow(0 0 16px rgba(108,92,231,0.4));
 }
 @keyframes hueShift{ to{ background-position: 300% 0; } }
-.user-card{ font-size: 12.5px; color: var(--slate); cursor: pointer; transition: color .2s; display:inline-block; padding: 4px 10px; border-radius: 10px; }
-.user-card:hover{ color: var(--bone); background: rgba(255,255,255,0.05); }
+.user-card{ font-size: 12.5px; color: var(--slate); display:inline-block; padding: 4px 10px; border-radius: 10px; }
 .user-card span{ color: var(--photon); font-weight:600; }
-.user-card .gear{ font-size: 11px; opacity: 0.7; }
 
 /* ---------- SCROLLING MARQUEE STRIP ---------- */
 .marquee{
@@ -316,23 +314,6 @@ main{ flex:1; display:flex; flex-direction:column; }
 }
 .modal-input:focus { border-color: var(--gold); }
 .modal-actions { display: flex; gap: 10px; margin-top: 10px; }
-
-/* ---------- SETTINGS (MUSIC) ---------- */
-.setting-row{ display:flex; justify-content:space-between; align-items:center; }
-.music-toggle{
-  background: rgba(255,95,109,0.15); border: 1px solid var(--signal); color: var(--signal);
-  font-family:'JetBrains Mono', monospace; font-weight:700; font-size: 11px; padding: 5px 16px;
-  border-radius: 8px; cursor: pointer; transition: all .2s; min-width: 52px;
-}
-.music-toggle.on{ background: rgba(41,217,194,0.15); border-color: var(--photon); color: var(--photon); box-shadow: 0 0 12px rgba(41,217,194,0.3); }
-.vol-slider{
-  -webkit-appearance: none; width: 100%; height: 6px; border-radius: 6px; outline: none;
-  background: linear-gradient(90deg, var(--iris), var(--photon));
-}
-.vol-slider::-webkit-slider-thumb{
-  -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
-  background: var(--gold); box-shadow: 0 0 10px rgba(255,179,0,0.6); cursor: pointer;
-}
 
 /* ---------- BLOCKED SCREEN OVERLAY ---------- */
 #blocked-screen {
