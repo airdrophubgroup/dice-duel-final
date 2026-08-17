@@ -625,13 +625,46 @@ window.openUserHistoryModal = async function() {
   const container = $('user-history-list');  
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading history...</div>`;  
   try {  
-    const { data } = await supabaseClient.from('match_history').select('*').eq('wallet_address', myAddress).neq('action_type', 'ADMIN_FEE').order('created_at', { ascending: false }).limit(20);  
-    if (!data || data.length === 0) { container.innerHTML = `<div style="text-align:center; color:var(--slate);">No match history found.</div>`; return; }  
-    let html = '';  
-    data.forEach(item => {  
-      let color = item.action_type === 'DEFEAT' ? 'var(--signal)' : 'var(--photon)';  
-      let timeStr = new Date(item.created_at).toLocaleString();  
-      html += `<div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); padding:8px 10px; border-radius:8px;"><div style="display:flex; justify-content:space-between; font-weight:700; color:${color};"><span>${item.action_type}</span><span>${item.amount} WLD</span></div><div style="color:var(--slate); font-size:10.5px;">${item.description}</div><div style="color:#777; font-size:9.5px; text-align:right; margin-top:2px;">${timeStr}</div></div>`;  
+    // Server-side cleanup: delete this user's matches older than the
+    // latest 10 (completed ones only, refund-pending never touched).
+    // Best-effort — never block the history view on cleanup.
+    try {
+      await supabaseClient.rpc('prune_user_matches', { p_wallet: myAddress });
+    } catch (e) { /* prune is best-effort */ }
+    const { data } = await supabaseClient.from('matches')  
+      .select('*')  
+      .or(`p1_address.eq.${myAddress},p2_address.eq.${myAddress}`)  
+      .order('created_at', { ascending: false })  
+      .limit(10);  
+    if (!data || data.length === 0) {  
+      container.innerHTML = `<div style="text-align:center; color:var(--slate);">No match history found.</div>`;  
+      return;  
+    }  
+    const me = myAddress.toLowerCase();  
+    let html = `<div style="background:rgba(41,217,194,0.07); border:1px solid rgba(41,217,194,0.25); color:var(--photon); font-size:10px; padding:7px 9px; border-radius:8px; margin-bottom:8px; line-height:1.4;">ℹ️ Only your latest <b>10 matches</b> are shown. Older matches are automatically deleted from the server.</div>`;  
+    data.forEach(m => {  
+      const isP1 = (m.p1_address || '').toLowerCase() === me;  
+      const opp = isP1 ? (m.p2_username || 'Unknown') : (m.p1_username || 'Unknown');  
+      const myScore = isP1 ? m.p1_score : m.p2_score;  
+      const oppScore = isP1 ? m.p2_score : m.p1_score;  
+      let resultText, color;  
+      if (m.status === 'completed') {  
+        if (m.tie) { resultText = 'TIE · refunded'; color = 'var(--gold)'; }  
+        else if ((m.winner_address || '').toLowerCase() === me) { resultText = 'WON +' + Number(m.payout_amount || 0).toFixed(2) + ' WLD'; color = 'var(--photon)'; }  
+        else { resultText = 'LOST'; color = 'var(--signal)'; }  
+      } else if (m.status === 'cancelled') { resultText = 'CANCELLED'; color = 'var(--slate)'; }  
+      else { resultText = m.status.toUpperCase(); color = 'var(--gold)'; }  
+      const timeStr = m.created_at ? new Date(m.created_at).toLocaleString() : '';  
+      html += `<div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); padding:8px 10px; border-radius:8px; margin-bottom:6px;">  
+        <div style="display:flex; justify-content:space-between; align-items:center;">  
+          <span style="font-weight:700; font-size:11.5px;">vs ${opp}</span>  
+          <span style="font-weight:700; color:${color}; font-size:11px;">${resultText}</span>  
+        </div>  
+        <div style="display:flex; justify-content:space-between; color:var(--slate); font-size:10.5px; margin-top:3px;">  
+          <span>${Number(m.fee || 0).toFixed(2)} WLD entry · ${myScore} - ${oppScore}</span>  
+        </div>  
+        <div style="color:#777; font-size:9.5px; text-align:right; margin-top:2px;">${timeStr}</div>  
+      </div>`;  
     });  
     container.innerHTML = html;  
   } catch(e) {}  
