@@ -148,6 +148,22 @@ function waitForMiniKitReady(timeoutMs = 5000) {
 window.addEventListener('DOMContentLoaded', async () => {  
   try { MiniKit.install(WORLD_APP_ID); } catch(e) {}  
 
+  // Restore the last known wallet IMMEDIATELY so balances render on
+  // page load instead of sitting at 0/0.00 until the silent auth
+  // completes (which may require a user gesture in the WebView). The
+  // silent sign-in below refreshes/validates it.
+  const savedAddress = localStorage.getItem('myAddress');  
+  const savedUsername = localStorage.getItem('myUsername');  
+  if (savedAddress && !myAddress) {  
+    myAddress = savedAddress.toLowerCase();  
+    myUsername = savedUsername || ('@W_' + savedAddress.substring(2, 8));  
+    $('display-username').innerText = myUsername;  
+    $('my-name-tag').innerText = myUsername;  
+    realWorldIdUser = true;  
+    // Fire and forget — TNV shows instantly, WLD loads in parallel.
+    fetchUserBalanceAndLeaderboard(myAddress);  
+  }  
+
   const ready = await waitForMiniKitReady();  
   if (!ready) { checkWorldAppEnvironment(); return; }  
 
@@ -420,8 +436,10 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
 
   try {  
     const cleanWallet = wallet ? wallet.toLowerCase().trim() : '';  
-    const realBalance = await fetchRealWldBalance(cleanWallet);  
 
+    // STEP 1 — TNV + blocked status come from the DB instantly. Never
+    // block them behind the slow on-chain WLD fetch: the user must see
+    // their TNV immediately even if the RPC layer is down.
     const { data, error } = await supabaseClient  
       .from('user_rewards')  
       .select('tnv_balance, wld_balance, is_blocked')  
@@ -431,24 +449,30 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
     if (!error && data && data.is_blocked) { $('blocked-screen').style.display = 'flex'; return; }  
 
     currentTnvBalance = Number(data?.tnv_balance || 0);  
+    // Start with the last-known-good persisted balance, then upgrade it
+    // to the live on-chain value when the fetch completes.
+    currentWldBalance = Number(data?.wld_balance || 0);  
+    renderBalances();  
 
-    if (realBalance !== null) {  
-      currentWldBalance = realBalance;  
-      // Persist the real on-chain balance so user_rewards.wld_balance
-      // is never stale and the UI fallback shows the last-known-good
-      // value when every RPC is down. (Informational only — payouts are
-      // on-chain via MiniKit, never from this column.)
-      supabaseClient.rpc('secure_update_wld_balance', { p_wallet: cleanWallet, p_balance: realBalance }).catch(() => {});  
-      if (!data) {  
-        await supabaseClient.rpc('secure_ensure_user_row', { p_wallet: cleanWallet });  
-      }  
-    } else {  
-      currentWldBalance = Number(data?.wld_balance || 0);  
-      if (!data) {  
-        await supabaseClient.rpc('secure_ensure_user_row', { p_wallet: cleanWallet });  
-      }  
+    if (!data) {  
+      await supabaseClient.rpc('secure_ensure_user_row', { p_wallet: cleanWallet });  
     }  
 
+    // STEP 2 — live WLD balance, in PARALLEL with a tight timeout so a
+    // flaky network can never leave the page on 0.00 for tens of seconds.
+    fetchRealWldBalance(cleanWallet).then((realBalance) => {  
+      if (realBalance !== null) {  
+        currentWldBalance = realBalance;  
+        renderBalances();  
+        supabaseClient.rpc('secure_update_wld_balance', { p_wallet: cleanWallet, p_balance: realBalance }).catch(() => {});  
+      }  
+    }).catch(() => {});  
+  } catch (e) { console.error('Balance load error:', e); }  
+  fetchLeaderboard();  
+}  
+
+function renderBalances() {  
+  try {  
     $('balance-num').innerText = currentTnvBalance;  
     if ($('wld-balance-num')) $('wld-balance-num').innerText = currentWldBalance.toFixed(2);  
     $('progress-text').innerText = `${currentTnvBalance.toLocaleString()} / 5,000 TNV`;  
@@ -456,7 +480,6 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
     if (currentTnvBalance >= 5000) $('withdraw-btn').removeAttribute('disabled');  
     else $('withdraw-btn').setAttribute('disabled', 'true');  
   } catch (e) {}  
-  fetchLeaderboard();  
 }  
 
 async function logMatchHistory(wallet, type, amount, details) {  
