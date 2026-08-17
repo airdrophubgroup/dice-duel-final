@@ -1858,6 +1858,76 @@ window.submitBotTxHash = async function() {
     botAddMsg('bot', '✅ Transaction verified on-chain!');
     botAddHtmlMsg('bot', `📋 <b>From:</b> ${fromAddr.slice(0,10)}...<br><b>To:</b> ${toAddr.slice(0,10)}...<br><b>Status:</b> Confirmed ✅`);
 
+    // ----------------------------------------------------------
+    // DUPLICATE / ALREADY-REFUNDED CHECK
+    // A real payment tx hash can only ever belong to ONE match
+    // (server-side dedupe). Find that match, then check whether a
+    // refund already exists for it:
+    //   - 'done' with a tx_hash -> refund already processed, show
+    //     the refund hash + copy + explorer link
+    //   - 'pending'/'processing' -> already queued, wait a minute
+    //   - 'failed' -> try re-queueing it
+    //   - none -> proceed to the normal refund flow below
+    // ----------------------------------------------------------
+    const { data: paidMatches } = await supabaseClient
+      .from('matches')
+      .select('id, status, fee, p1_address, p2_address, p1_payment_tx_hash, p2_payment_tx_hash')
+      .or(`p1_payment_tx_hash.eq.${txHash},p2_payment_tx_hash.eq.${txHash}`)
+      .limit(5);
+
+    let hashMatch = null;
+    if (paidMatches && paidMatches.length > 0) {
+      hashMatch = paidMatches.find(m =>
+        (m.p1_payment_tx_hash || '').toLowerCase() === txHash.toLowerCase() ||
+        (m.p2_payment_tx_hash || '').toLowerCase() === txHash.toLowerCase()
+      ) || paidMatches[0];
+    }
+
+    if (hashMatch) {
+      // refund_queue has no public RLS, so read only the caller's own
+      // refund status through the get_refund_status security-definer RPC.
+      const { data: refundStatus } = await supabaseClient
+        .rpc('get_refund_status', { p_match_id: hashMatch.id, p_wallet: userWallet });
+      const refund = refundStatus && refundStatus.found === true ? refundStatus : null;
+
+      if (refund && refund.status === 'done' && refund.tx_hash) {
+        const refundTx = refund.tx_hash;
+        const rShort = `${refundTx.slice(0,10)}...${refundTx.slice(-8)}`;
+        botAddMsg('success', `✅ Refund ALREADY PROCESSED for this payment!`);
+        botAddMsg('bot', `Your ${refund.fee} WLD refund was already sent on-chain. Here is your refund transaction hash:`);
+        botAddHtmlMsg('bot', `<div style="font-family:'JetBrains Mono',monospace; font-size:10px; word-break:break-all; background:rgba(41,217,194,0.08); border:1px solid rgba(41,217,194,0.35); border-radius:8px; padding:8px 10px; color:var(--photon);">${refundTx}</div>` +
+          `<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">` +
+          `<button onclick="navigator.clipboard.writeText('${refundTx}'); this.textContent='✅ Copied!';" style="background:rgba(41,217,194,0.15); border:1px solid rgba(41,217,194,0.5); color:var(--photon); font-size:10px; padding:5px 10px; border-radius:6px; cursor:pointer;">📋 Copy refund hash</button>` +
+          `<a href="https://worldscan.org/tx/${refundTx}" target="_blank" rel="noopener" style="background:rgba(255,179,0,0.15); border:1px solid rgba(255,179,0,0.5); color:var(--gold); font-size:10px; padding:5px 10px; border-radius:6px; text-decoration:none;">🔍 View on explorer</a>` +
+          `</div>`);
+        botAddMsg('bot', 'You can copy it and paste it anywhere to verify (e.g. worldscan.org). No further action needed! 🎲');
+        botAddBtn('👍 Done', () => closeSupportBot());
+        return;
+      }
+
+      if (refund && (refund.status === 'pending' || refund.status === 'processing')) {
+        botAddMsg('bot', `⏳ Your ${refund.fee} WLD refund is ALREADY QUEUED and being processed. It will arrive within ~1 minute.`);
+        botAddMsg('bot', 'No need to submit again — sit tight! 🎲');
+        botAddBtn('👍 Done', () => closeSupportBot());
+        return;
+      }
+
+      if (refund && refund.status === 'failed') {
+        botAddMsg('bot', `⚠️ A previous refund attempt for this payment failed (${refund.error || 'unknown error'}). Let me try again for you...`);
+        // fall through to the re-queue flow below
+      }
+    }
+
+    // Also guard against re-using a hash that was already recorded on
+    // a completed match (fake re-submission of a settled payment).
+    if (hashMatch && hashMatch.status === 'completed') {
+      botAddMsg('bot', 'ℹ️ This payment belongs to a match that was already completed. If the match finished normally, the winner payout was already handled.');
+      botAddMsg('bot', 'If you think something is wrong, contact @TNVTEAMWLD on Telegram.');
+      botAddBtn('💬 Open Telegram', () => window.open('https://t.me/TNVTEAMWLD', '_blank'));
+      botAddBtn('👍 Done', () => closeSupportBot());
+      return;
+    }
+
     // Now find the match this payment was for and queue refund
     botAddMsg('system', '🔄 Looking up your match and processing refund...');
     botShowTyping();
