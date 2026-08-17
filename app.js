@@ -107,9 +107,14 @@ const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
 const $ = (id) => document.getElementById(id);  
 
 function checkWorldAppEnvironment() {  
+  // SECURITY: World App ONLY. MiniKit.isInstalled() returns true ONLY
+  // inside the official World App — so the old `|| window.ethereum`
+  // fallback is removed: it let ANY injected wallet (MetaMask, Trust,
+  // Rainbow, normal browser extensions) open the app. Now only the
+  // World App's own bridge passes.
   let miniOk = false;  
   try { miniOk = typeof MiniKit !== 'undefined' && typeof MiniKit.isInstalled === 'function' && MiniKit.isInstalled(); } catch (e) {}  
-  const isWorldApp = miniOk || window.ethereum;  
+  const isWorldApp = miniOk;  
   if (!isWorldApp) {  
     document.body.innerHTML = `  
       <div style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#050000; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:999999; font-family:sans-serif; text-align:center; padding:20px;">  
@@ -137,7 +142,9 @@ function waitForMiniKitReady(timeoutMs = 5000) {
       // wallet detected. It must always resolve.  
       let miniOk = false;  
       try { miniOk = typeof MiniKit !== 'undefined' && typeof MiniKit.isInstalled === 'function' && MiniKit.isInstalled(); } catch (e) {}  
-      if (miniOk || window.ethereum) {  
+      // World App ONLY — same strict gate as checkWorldAppEnvironment.
+      // The old window.ethereum fallback let non-World wallets through.
+      if (miniOk) {  
         resolve(true);  
       } else if (Date.now() - start > timeoutMs) {  
         resolve(false);  
@@ -789,7 +796,17 @@ window.openAdminEarningsModal = async function() {
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading revenue...</div>`;  
   try {  
     // ALL admin fees — no limit. Whatever was collected, every row shows.
-    const { data } = await supabaseClient.from('match_history').select('*').eq('wallet_address', PAYMENT_RECV_WALLET).eq('action_type', 'ADMIN_FEE').order('created_at', { ascending: false });  
+    // match_history direct reads are now revoked (privacy lockdown); the
+    // admin reads their own fee ledger through the admin_get_revenue RPC.
+    let data = null;
+    try {
+      const { data: rd } = await supabaseClient.rpc('admin_get_revenue', { p_admin_wallet: PAYMENT_RECV_WALLET });
+      data = rd && Array.isArray(rd) ? rd : null;
+    } catch (e) { /* RPC unavailable — fall back to direct read */ }
+    if (!data) {
+      const { data: fd } = await supabaseClient.from('match_history').select('*').eq('wallet_address', PAYMENT_RECV_WALLET).eq('action_type', 'ADMIN_FEE').order('created_at', { ascending: false });
+      data = fd;
+    }  
     if (!data || data.length === 0) { container.innerHTML = `<div style="text-align:center; color:var(--slate);">No fees collected.</div>`; return; }  
     let total = 0, html = '';  
     data.forEach(i => {   
