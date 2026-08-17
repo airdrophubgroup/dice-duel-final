@@ -458,9 +458,13 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
   if (wallet.toLowerCase() === ADMIN_WALLET.toLowerCase()) {  
     $('admin-panel').style.display = 'block';  
     $('admin-cheaters-panel').style.display = 'block';  
+    $('admin-tickets-panel').style.display = 'block';  
+    $('admin-alerts-panel').style.display = 'block';  
     if ($('admin-history-nav-btn')) $('admin-history-nav-btn').style.display = 'inline-block';  
     fetchAdminWithdrawRequests();  
     fetchAdminCheaters();  
+    fetchAdminTickets();  
+    fetchAdminAlerts();  
   }  
 
   try {  
@@ -566,6 +570,85 @@ async function fetchAdminCheaters() {
         <div class="admin-req-item">  
           <div class="admin-req-row"><span style="color:var(--signal); font-family:'JetBrains Mono', monospace;">${shortAddr}</span><span style="font-size:10px; color:var(--slate);">${new Date(log.detected_at).toLocaleString()}</span></div>  
           <div class="admin-req-row"><span style="font-size:11px; color:var(--gold); font-weight:600;">Attempts: ${log.click_count}x</span><button class="block-btn" onclick="promptBlockUser('${log.wallet_address}')">BLOCK</button></div>  
+        </div>  
+      `;  
+    });  
+    container.innerHTML = html;  
+  } catch (e) {}  
+}  
+
+async function fetchAdminTickets() {  
+  try {  
+    const { data } = await supabaseClient.rpc('admin_get_tickets', { p_admin_wallet: myAddress });  
+    const container = $('admin-tickets-container');  
+    if (!container) return;  
+    if (!data || data.success === false || !Array.isArray(data) || data.length === 0) {  
+      container.innerHTML = `<div style="font-size:11px; color:var(--slate); text-align:center;">No open tickets</div>`;  
+      return;  
+    }  
+    let html = '';  
+    data.forEach(t => {  
+      const shortAddr = (t.user_wallet || '').slice(0, 6) + '...' + (t.user_wallet || '').slice(-4);  
+      const verified = t.verified && typeof t.verified === 'object' ? t.verified : {};  
+      const vKeys = Object.keys(verified);  
+      const vHtml = vKeys.length > 0 ? `<div style="font-size:10px; color:var(--photon); margin-top:4px; font-family:'JetBrains Mono',monospace;">${vKeys.map(k => `${k}: ${JSON.stringify(verified[k])}`).join(' · ')}</div>` : '';  
+      html += `  
+        <div class="admin-req-item" style="border-left:3px solid ${t.status === 'replied' ? 'var(--gold)' : 'var(--photon)'};">  
+          <div class="admin-req-row">  
+            <span style="color:var(--photon); font-family:'JetBrains Mono',monospace;" title="${t.user_wallet}">${shortAddr}</span>  
+            <span style="font-size:10px; color:var(--slate);">${t.user_username || ''} · ${t.status.toUpperCase()} · ${new Date(t.created_at).toLocaleString()}</span>  
+          </div>  
+          <div style="font-size:11.5px; color:#fff; margin-top:4px;">${t.summary}</div>  
+          ${vHtml}  
+          ${t.admin_reply ? `<div style="font-size:10.5px; color:var(--gold); margin-top:4px; border-top:1px dashed rgba(255,179,0,0.25); padding-top:4px;">💬 You (${t.admin_username || 'Admin'}): ${t.admin_reply}</div>` : ''}  
+          <div style="display:flex; gap:6px; margin-top:6px;">  
+            <input id="ticket-reply-${t.id}" class="modal-input" style="flex:1; font-size:11px; padding:7px 9px;" placeholder="Type your reply (your real username will show)..." />  
+            <button class="approve-btn" onclick="adminReplyTicket(${t.id})">SEND</button>  
+          </div>  
+        </div>  
+      `;  
+    });  
+    container.innerHTML = html;  
+  } catch (e) {}  
+}  
+
+window.adminReplyTicket = async function(ticketId) {  
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;  
+  const reply = ($(`ticket-reply-${ticketId}`)?.value || '').trim();  
+  if (!reply) { showNeonToast('Type a reply first!', 'warning'); return; }  
+  const { data } = await supabaseClient.rpc('admin_reply_ticket', {  
+    p_admin_wallet: myAddress,  
+    p_ticket_id: ticketId,  
+    p_reply: reply,  
+    p_admin_username: myUsername || 'Admin'  
+  });  
+  if (data && data.success) {  
+    showNeonToast('Reply sent — user will see it with your real username.', 'success');  
+    fetchAdminTickets();  
+  } else {  
+    showNeonToast('Reply failed: ' + (data?.error || 'unknown'), 'error');  
+  }  
+};  
+
+async function fetchAdminAlerts() {  
+  try {  
+    const { data } = await supabaseClient.rpc('admin_get_alerts', { p_admin_wallet: myAddress });  
+    const container = $('admin-alerts-container');  
+    if (!container) return;  
+    if (!data || data.success === false || !Array.isArray(data) || data.length === 0) {  
+      container.innerHTML = `<div style="font-size:11px; color:var(--photon); text-align:center;">✅ All systems healthy — no alerts</div>`;  
+      return;  
+    }  
+    let html = '';  
+    data.forEach(a => {  
+      const color = a.severity === 'critical' ? 'var(--signal)' : a.severity === 'warning' ? 'var(--gold)' : 'var(--photon)';  
+      html += `  
+        <div class="admin-req-item" style="border-left:3px solid ${color};">  
+          <div class="admin-req-row">  
+            <span style="color:${color}; font-size:10.5px; font-weight:700;">${a.severity.toUpperCase()} · ${a.category.toUpperCase()}</span>  
+            <span style="font-size:10px; color:var(--slate);">${new Date(a.created_at).toLocaleString()}</span>  
+          </div>  
+          <div style="font-size:11px; color:#fff; margin-top:3px;">${a.message}</div>  
         </div>  
       `;  
     });  
@@ -1571,15 +1654,31 @@ window.openSupportBot = function() {
     botAddMsg('bot', 'Please sign in first so I can check your account. Tap PLAY NOW to connect your wallet.');
     botAddBtn('Got it', () => closeSupportBot());
     return;
-  }
+  }  botAddMsg('bot', '👋 Hi! I\'m the Payment Support Bot.');  
+  // Show any admin replies from a previous Agent ticket first — the
+  // admin replies with their REAL Worldcoin username.
+  botShowAdminReplies();  
+  botAddMsg('bot', 'Did you make a payment for a match that didn\'t connect or didn\'t get a refund?');  
+  botStep = 1;  
+  botAddBtn('✅ Yes, I paid', () => botHandleYes());  
+  botAddBtn('❌ No', () => botHandleNo(), 'danger');  
+  botAddBtn('❓ How to find my Tx Hash', () => { botClearBtns(); botStep = 3; botShowTxInput(); });  
+  botAddBtn('🤝 Talk to Agent airdrophubgroup', () => botStartAgent(), 'agent');  
+};  
 
-  botAddMsg('bot', '👋 Hi! I\'m the Payment Support Bot.');
-  botAddMsg('bot', 'Did you make a payment for a match that didn\'t connect or didn\'t get a refund?');
-  botStep = 1;
-  botAddBtn('✅ Yes, I paid', () => botHandleYes());
-  botAddBtn('❌ No', () => botHandleNo(), 'danger');
-  botAddBtn('❓ How to find my Tx Hash', () => { botClearBtns(); botStep = 3; botShowTxInput(); });
-};
+async function botShowAdminReplies() {  
+  if (!myAddress) return;  
+  try {  
+    const { data } = await supabaseClient.rpc('get_my_tickets', { p_wallet: myAddress.toLowerCase() });  
+    if (!data || !Array.isArray(data)) return;  
+    const replied = data.filter(t => t.status === 'replied' && t.admin_reply);  
+    if (replied.length === 0) return;  
+    replied.slice(0, 3).forEach(t => {  
+      botAddMsg('bot', `📬 You have a reply on support ticket #${t.id}`);  
+      botAddHtmlMsg('bot', `<div style="font-size:11.5px; line-height:1.5;">💬 <b style="color:var(--gold);">${(t.admin_username || 'Admin')}</b> (Admin): ${(t.admin_reply || '').replace(/</g, '&lt;')}</div><div style="color:#777; font-size:9.5px; text-align:right; margin-top:3px;">${new Date(t.admin_reply_at).toLocaleString()}</div>`);  
+    });  
+  } catch (e) {}  
+}
 
 window.closeSupportBot = function() {
   $('support-bot-modal').style.display = 'none';
@@ -1739,12 +1838,11 @@ async function botHandleYes() {
       botAddMsg('bot', `⚠️ ${failCount} refund(s) couldn\'t be queued. Please paste your transaction hash below for manual verification.`);
       botStep = 3;
       botShowTxInput();
-    }
-
-    if (successCount > 0 && failCount === 0) {
-      botAddBtn('👍 Thanks!', () => closeSupportBot());
-      botAddBtn('📋 Check another', () => { botClearBtns(); botHandleYes(); });
-    }
+    }    if (successCount > 0 && failCount === 0) {  
+      botAddBtn('👍 Thanks!', () => closeSupportBot());  
+      botAddBtn('📋 Check another', () => { botClearBtns(); botHandleYes(); });  
+      botAddBtn('🤝 Not satisfied? Talk to Agent', () => botStartAgent(), 'agent');  
+    }  
 
   } catch (e) {
     botHideTyping();
@@ -1752,6 +1850,144 @@ async function botHandleYes() {
     botStep = 3;
     botShowTxInput();
     console.error('Bot scan error:', e);
+  }
+}
+
+// ============ AGENT AIRDROPHUBGROUP — HUMAN SUPPORT ============
+// When the automated bot can't fully satisfy a user, they talk to a
+// real team member (Agent airdrophubgroup). The agent listens, verifies
+// everything step by step, then creates a ticket the admin answers from
+// the admin panel — the reply carries the admin's REAL Worldcoin
+// username.
+let botAgentStep = 0;
+let botAgentVerified = null;
+let botAgentSummary = '';
+
+function botStartAgent() {
+  botClearBtns();
+  botAddHtmlMsg('bot', '🤝 Hi! I\'m <b>Agent airdrophubgroup</b> — a real person from the airdrophubgroup team, not a bot. 🤗');
+  botAddMsg('bot', 'I understand you\'re having trouble. Please don\'t worry — I\'ll personally look into it with you, step by step, and make sure you\'re taken care of. ❤️');
+  botAddMsg('bot', 'Can you tell me what happened?');
+  botAgentStep = 1;
+  botAddBtn('💸 I paid but no refund', () => botAgentIssue('norefund'));
+  botAddBtn('🔗 Match never connected', () => botAgentIssue('noconnect'));
+  botAddBtn('❓ Something else', () => botAgentIssue('other'));
+}
+
+async function botAgentIssue(kind) {
+  botClearBtns();
+  const labels = { norefund: 'I paid but my refund never came.', noconnect: 'I joined a match but it never connected.', other: 'I have another problem with the game.' };
+  botAddMsg('user', labels[kind] || labels.other);
+  botAddMsg('bot', 'Okay, thank you for telling me. 🙏 Let me carefully check your account right now — I\'ll verify every single thing before we go further.');
+  botShowTyping();
+  botAgentStep = 2;
+
+  const verified = { issue: kind, checked_at: new Date().toISOString() };
+  try {
+    const wallet = myAddress.toLowerCase().trim();
+    // Step 1: the user's matches
+    const { data: matches } = await supabaseClient
+      .from('matches')
+      .select('id, status, fee, p1_address, p2_address, p1_paid, p2_paid, p1_payment_tx_hash, p2_payment_tx_hash, created_at')
+      .or(`p1_address.eq.${wallet},p2_address.eq.${wallet}`)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    verified.match_count = matches ? matches.length : 0;
+
+    // Step 2: paid-but-unrefunded matches
+    let paidMatches = [];
+    if (matches) {
+      for (const m of matches) {
+        const isP1 = (m.p1_address || '').toLowerCase() === wallet;
+        const paid = isP1 ? m.p1_paid : m.p2_paid;
+        if (paid === true) {
+          paidMatches.push({ fee: Number(m.fee || 0), status: m.status, created_at: m.created_at, id: m.id });
+        }
+      }
+    }
+    verified.paid_matches = paidMatches.length;
+
+    // Step 3: refund status for each paid match
+    let refunded = 0, pending = 0, missing = 0;
+    for (const pm of paidMatches) {
+      const { data: rq } = await supabaseClient
+        .from('refund_queue')
+        .select('status')
+        .eq('match_id', pm.id)
+        .eq('wallet_address', wallet)
+        .limit(1);
+      const st = rq && rq[0] ? rq[0].status : null;
+      if (st === 'done' || st === 'completed') refunded++;
+      else if (st === 'pending' || st === 'processing') pending++;
+      else missing++;
+    }
+    verified.refunded = refunded;
+    verified.pending = pending;
+    verified.missing = missing;
+
+    // Step 4: their support tickets
+    const { data: tickets } = await supabaseClient.rpc('get_my_tickets', { p_wallet: wallet });
+    verified.tickets = Array.isArray(tickets) ? tickets.length : 0;
+  } catch (e) {
+    verified.error = String(e);
+  }
+
+  botHideTyping();
+  botAgentVerified = verified;
+
+  // Empathetic summary
+  botAddMsg('bot', 'Alright, I\'ve personally checked everything on your account. Here\'s what I found: 👇');
+  botAddHtmlMsg('bot',
+    `<div style="font-size:11px; line-height:1.7; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:9px 11px;">` +
+    `📊 <b>Your account verification</b><br/>` +
+    `🎮 Matches found: <b>${verified.match_count || 0}</b><br/>` +
+    `💸 Payments made: <b>${verified.paid_matches || 0}</b><br/>` +
+    `✅ Refunds received: <b>${verified.refunded || 0}</b><br/>` +
+    `⏳ Refunds processing: <b>${verified.pending || 0}</b><br/>` +
+    `⚠️ Payments without refund: <b>${verified.missing || 0}</b><br/>` +
+    `🎫 Your support tickets: <b>${verified.tickets || 0}</b>` +
+    `</div>`
+  );
+
+  if ((verified.missing || 0) > 0) {
+    botAddMsg('bot', 'I can see you have a payment that hasn\'t been refunded yet — that\'s not fair to you, and I\'m sorry. 😔 I\'ll make sure the team handles it personally.');
+  } else {
+    botAddMsg('bot', 'I checked everything and didn\'t find any missing refund on your account. But if you\'re still worried, I\'ll happily create a ticket so the team reviews it personally — no question is too small. 😊');
+  }
+
+  botAgentStep = 3;
+  botAddBtn('✅ Yes, create my ticket', () => botCreateTicket());
+  botAddBtn('↩️ Let me check again', () => { botClearBtns(); botHandleYes(); });
+  botAddBtn('❌ Never mind', () => closeSupportBot());
+}
+
+async function botCreateTicket() {
+  botClearBtns();
+  const v = botAgentVerified || {};
+  const issueLabels = { norefund: 'Paid but no refund', noconnect: 'Match never connected', other: 'Other issue' };
+  const summary = `${issueLabels[v.issue] || 'Support request'} — Payments: ${v.paid_matches || 0}, Refunded: ${v.refunded || 0}, Missing: ${v.missing || 0}`;
+  botShowTyping();
+  try {
+    const { data } = await supabaseClient.rpc('create_support_ticket', {
+      p_wallet: myAddress.toLowerCase(),
+      p_username: myUsername || '',
+      p_summary: summary,
+      p_verified: v
+    });
+    botHideTyping();
+    if (data && data.success) {
+      botAddMsg('success', `✅ Your support ticket #${data.ticket_id} has been created!`);
+      botAddHtmlMsg('bot', 'The admin (airdrophubgroup team) has been notified and will personally reply to you <b>right here</b> — the reply will show their real Worldcoin username. 🙌');
+      botAddMsg('bot', 'Thank you for your patience — we\'ll take care of you. ❤️');
+      botAddBtn('👍 Done', () => closeSupportBot());
+    } else {
+      botAddMsg('error', '❌ Could not create the ticket: ' + (data?.error || 'unknown error'));
+      botAddBtn('🔄 Try again', () => botCreateTicket());
+    }
+  } catch (e) {
+    botHideTyping();
+    botAddMsg('error', '❌ Something went wrong creating the ticket. Please try again.');
+    botAddBtn('🔄 Try again', () => botCreateTicket());
   }
 }
 
