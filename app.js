@@ -609,6 +609,9 @@ window.openUserHistoryModal = async function() {
 };  
 
 window.closeUserHistoryModal = function() { $('user-history-modal').style.display = 'none'; };  
+
+window.closeUserWithdrawalsModal = function() { $('user-withdrawals-modal').style.display = 'none'; };  
+
 window.openUserWithdrawalsModal = async function() {  
   if (!myAddress) { showNeonToast('Please sign in first!', 'warning'); return; }  
   $('user-withdrawals-modal').style.display = 'flex';  
