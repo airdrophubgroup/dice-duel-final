@@ -159,7 +159,9 @@ function setMusicVolume(v) {
 }  
 
 function checkWorldAppEnvironment() {  
-  const isWorldApp = (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) || window.ethereum;  
+  let miniOk = false;  
+  try { miniOk = typeof MiniKit !== 'undefined' && typeof MiniKit.isInstalled === 'function' && MiniKit.isInstalled(); } catch (e) {}  
+  const isWorldApp = miniOk || window.ethereum;  
   if (!isWorldApp) {  
     document.body.innerHTML = `  
       <div style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#050000; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:999999; font-family:sans-serif; text-align:center; padding:20px;">  
@@ -177,11 +179,17 @@ function checkWorldAppEnvironment() {
   return true;  
 }  
 
-function waitForMiniKitReady(timeoutMs = 2000) {  
+function waitForMiniKitReady(timeoutMs = 5000) {  
   return new Promise((resolve) => {  
     const start = Date.now();  
     (function check() {  
-      if ((typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) || window.ethereum) {  
+      // isInstalled() can throw in flaky WebView bridges — an unguarded
+      // call here used to reject the timer callback, so the Promise
+      // NEVER resolved and the whole app froze on the homepage with no
+      // wallet detected. It must always resolve.  
+      let miniOk = false;  
+      try { miniOk = typeof MiniKit !== 'undefined' && typeof MiniKit.isInstalled === 'function' && MiniKit.isInstalled(); } catch (e) {}  
+      if (miniOk || window.ethereum) {  
         resolve(true);  
       } else if (Date.now() - start > timeoutMs) {  
         resolve(false);  
@@ -198,9 +206,15 @@ window.addEventListener('DOMContentLoaded', async () => {
   const ready = await waitForMiniKitReady();  
   if (!ready) { checkWorldAppEnvironment(); return; }  
 
-  if (typeof MiniKit !== 'undefined' && MiniKit.isInstalled()) {  
+  // Sign in even when isInstalled() is flaky: the walletAuth call itself
+  // is the real gate and fails gracefully outside the World App. This
+  // keeps the app from silently sitting on a dead homepage.  
+  if (typeof MiniKit !== 'undefined') {  
     if ($('landingHint')) $('landingHint').textContent = 'World App detected — signing in...';  
     try { await performWalletAuth(true); } catch(err) {}  
+  }  
+  if (!myAddress && $('landingHint')) {  
+    $('landingHint').textContent = 'Tap PLAY NOW to connect your wallet';  
   }  
 
   let waitingOverlay = $('waiting-overlay');  
@@ -794,7 +808,7 @@ function neonConfirm(message) {
 
 async function performWalletAuth(silent = false){  
   if (!checkWorldAppEnvironment()) return false;  
-  if (!MiniKit.isInstalled()) return false;  
+  if (typeof MiniKit === 'undefined') return false;  
   if (myAddress && realWorldIdUser) return true;  
 
   try {  

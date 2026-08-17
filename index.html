@@ -322,10 +322,10 @@
   </div>
 </div>
 
-<audio id="bg-music" src="assets/bg-music.mp3" loop preload="auto" style="display:none;"></audio>
+<!-- Music streams on demand (preload=none) so the 4MB mp3 never slows
+     the World App page load; the engine starts it on the first tap. -->
+<audio id="bg-music" src="assets/bg-music.mp3" loop preload="none" style="display:none;"></audio>
 
 <script type="module" src="app.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-<script>eruda.init();</script>
 </body>
 </html>
