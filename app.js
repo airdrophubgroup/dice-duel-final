@@ -51,6 +51,31 @@ async function recordDepositOnce(matchIdB32, matchUuid, playerAddr, feeWei, txHa
   return { ok: depositRes.ok && !!depositData.success, data: depositData };
 }
 
+// Safety net: keep verifying a payment + queueing its refund in the
+// background even AFTER the search was cancelled. A flaky public RPC at
+// cancel time must never strand the player's money: the server accepts
+// verified payments on cancelled matches (record_verified_payment) and
+// queue_refund_request is idempotent, so a late success here still
+// books the refund that the cron resolver pays out.
+function ensureRefundQueuedInBackground(matchUuid, wallet) {
+  const feeWei = FEE_WEI[selectedFee] || null;
+  const b32 = matchIdBytes32Global;
+  let attempts = 0;
+  const t = setInterval(async () => {
+    attempts++;
+    if (attempts > 12) { clearInterval(t); return; } // ~1 minute of retries
+    try {
+      const r = await recordDepositOnce(b32, matchUuid, wallet, feeWei, null);
+      if (r.ok) {
+        const d = await supabaseClient.rpc('queue_refund_request', {
+          p_match_id: matchUuid, p_wallet: wallet.toLowerCase().trim()
+        }).catch(() => ({}));
+        if (d && d.data && d.data.success === true) { clearInterval(t); return; }
+      }
+    } catch (e) { /* keep retrying */ }
+  }, 5000);
+}
+
 const supabaseClient = createClient(SB_URL, SB_KEY);  
 
 let myAddress = "", myUsername = "", matchId = null, matchIdBytes32Global = null, isP1, myScore = 0, oppScore = 0;  
@@ -900,6 +925,13 @@ async function handlePlayButtonClick(){
       showNeonToast('✅ Payment confirmed on-chain', 'success');
     } else {
       showNeonToast('⚠️ Payment was cancelled or failed. No WLD was deducted.', 'warning');
+      // Safety net: if the payment actually landed on-chain (delayed
+      // confirmation, flaky scan window), keep verifying in the
+      // background and queue the refund automatically — a failed
+      // MiniKit callback must never strand the player's WLD.
+      if (matchId && myAddress) {
+        ensureRefundQueuedInBackground(matchId, myAddress.toLowerCase().trim());
+      }
       try { await supabaseClient.rpc('secure_leave_waiting_match', { p_match_id: matchId, p_wallet: myAddress }); } catch(e) {}  
       resetToHome();  
       return;  
@@ -913,64 +945,31 @@ async function handlePlayButtonClick(){
 
   const txHash = payRes?.finalPayload?.transaction_id || payRes?.finalPayload?.transaction_hash || null;
 
-  // ------------------------------------------------------------------
-  // VERIFY THE PAYMENT ON-CHAIN
-  //
-  // MiniKit's transaction_id is not always the on-chain tx hash and the
-  // RPC can be flaky, so we retry here AND in the background below.
-  // /api/record-deposit verifies the real payment on-chain (scanning
-  // recent WLD transfers if needed) and only then returns success, so
-  // a transient failure here never means the player's money is lost.
-  // ------------------------------------------------------------------
+  // Start the SEARCH IMMEDIATELY — the UI must never freeze while the
+  // on-chain verification runs. The public World Chain RPC can be slow
+  // or rate-limited, and three sequential waits (the old code) left the
+  // app looking hung for a minute+ after paying. Verification now runs
+  // in the background: the match only starts when BOTH players are
+  // verified paid (checkBothReady), so starting the search early can
+  // never begin an unverified game.
   let depositBooked = false;
-  let lastDepositError = '';
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const r = await recordDepositOnce(matchIdBytes32Global, matchId, myAddress, FEE_WEI[selectedFee], txHash);
-      if (r.ok) { depositBooked = true; paymentVerified = true; break; }
-      lastDepositError = JSON.stringify(r.data);
-    } catch (e) {
-      lastDepositError = e.message || String(e);
-    }
-    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 1500));
-  }
+  let bookingRetryTimer = null;
 
-  // Background retry while the player searches — a transient failure
-  // self-heals instead of leaving the deposit unbooked. The loop stops
-  // itself once booked or once the search ends; if the search is
-  // cancelled or times out, cancelMatchmaking() queues the automatic
-  // refund so WLD is never stuck.
-  let bookingInFlight = false;
-  const bookingRetryTimer = setInterval(async () => {
-    if (!matchmakingActive || gameActive || depositBooked) {
-      clearInterval(bookingRetryTimer);
-      return;
-    }
-    if (bookingInFlight) return;
-    bookingInFlight = true;
-    try {
-      const r = await recordDepositOnce(matchIdBytes32Global, matchId, myAddress, FEE_WEI[selectedFee], txHash);
-      if (r.ok) {
-        depositBooked = true;
-        paymentVerified = true;
-        clearInterval(bookingRetryTimer);
-        // recordDepositOnce marks the paid flag server-side; nothing more
-        // is needed here for matchmaking or refunds.
-        showNeonToast('✅ Deposit confirmed on-chain', 'success');
-      }
-    } catch (e) { /* keep retrying */ }
-    finally { bookingInFlight = false; }
-  }, 5000);
+  // One quick bounded attempt so paid is usually set before the search
+  // even starts (seamless matchmaking), then the background loop below
+  // keeps retrying. Never blocks the UI for more than ~10s.
+  try {
+    const quick = await Promise.race([
+      recordDepositOnce(matchIdBytes32Global, matchId, myAddress, FEE_WEI[selectedFee], txHash),
+      new Promise((res) => setTimeout(() => res({ ok: false, data: { timed_out: true } }), 10000)),
+    ]);
+    if (quick.ok) { depositBooked = true; paymentVerified = true; }
+  } catch (e) { /* background retry covers it */ }
 
-  // Mark the payment as done in the DB so matchmaking can proceed — but
-  // ONLY when the payment was actually verified on-chain (record-deposit
-  // confirmed it). MiniKit "success" without a real on-chain transfer
-  // (test mode) must NOT mark the player as paid — otherwise fake
-  // payments would queue refund rows. p1_paid/p2_paid are the gate for
-  // both matchmaking and refunds.
-  if (depositBooked || paymentVerified) {
-    // recordDepositOnce already marked the paid flag server-side.
-
+  async function afterBooked() {
+    depositBooked = true;
+    paymentVerified = true;
+    if (bookingRetryTimer) clearInterval(bookingRetryTimer);
     // If the player cancelled while the payment was still completing, the
     // match is already cancelled — queue the refund immediately so the
     // payment that just arrived is not left stuck.
@@ -982,14 +981,10 @@ async function handlePlayButtonClick(){
         });
       }
     } catch(e) { /* non-fatal */ }
+    showNeonToast('✨ Payment confirmed! Waiting for opponent...', 'success');
   }
 
-  if (depositBooked) {
-    showNeonToast('✨ Payment confirmed! Waiting for opponent...', 'success');
-  } else {
-    console.warn('record-deposit not booked yet:', lastDepositError);
-    showNeonToast("⚠️ Payment received — booking deposit. If the match doesn't start, your WLD is refunded automatically.", 'warning');
-  }
+  if (depositBooked) afterBooked();
 
   $('wait-status').innerText = `SEARCHING... (Cancel anytime)`;  
 
@@ -1012,6 +1007,26 @@ async function handlePlayButtonClick(){
 
   setupChannel();  
   pollTimer = setInterval(checkBothReady, 1000);  
+
+  // Background retry while the player searches — a transient failure
+  // self-heals instead of leaving the deposit unbooked. The loop stops
+  // itself once booked; if the search is cancelled or times out,
+  // cancelMatchmaking() (and ensureRefundQueuedInBackground) queue the
+  // automatic refund so WLD is never stuck.
+  let bookingInFlight = false;
+  bookingRetryTimer = setInterval(async () => {
+    if (depositBooked || gameActive) {
+      if (bookingRetryTimer) clearInterval(bookingRetryTimer);
+      return;
+    }
+    if (bookingInFlight) return;
+    bookingInFlight = true;
+    try {
+      const r = await recordDepositOnce(matchIdBytes32Global, matchId, myAddress, FEE_WEI[selectedFee], txHash);
+      if (r.ok) afterBooked();
+    } catch (e) { /* keep retrying */ }
+    finally { bookingInFlight = false; }
+  }, 4000);
 }  
 
 function selectFee(amount, element){  
@@ -1087,7 +1102,14 @@ async function cancelMatchmaking(showAlert = true) {
           }).catch(() => ({}));
           refundQueued = !!d2 && d2.success === true;
         }
-      } catch (e) { /* non-fatal */ }
+      } catch (e) { /* handled by the background sweep below */ }
+
+      // The RPC may be slow/flaky right now — keep verifying + queueing
+      // in the background (the server accepts verified payments on
+      // cancelled matches, so a late success still books the refund).
+      if (!refundQueued) {
+        ensureRefundQueuedInBackground(targetMatchId, targetWallet);
+      }
     }
   }
 

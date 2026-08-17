@@ -31,7 +31,11 @@ body{
 
 /* ---------- ANIMATED AURORA BACKGROUND ---------- */
 .bg-aurora{ position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
-.bg-aurora .orb{ position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.32; will-change: transform; }
+/* blur filters + background-position animation force continuous repaints
+   in mobile WebViews (World App) and can make the whole mini-app janky.
+   The orbs keep a soft blur but smaller; the grid now animates via a
+   transform on an oversized pseudo-element (GPU-composited, zero repaint). */
+.bg-aurora .orb{ position: absolute; border-radius: 50%; filter: blur(40px); opacity: 0.3; will-change: transform; }
 .bg-aurora .o1{ width: 340px; height: 340px; top: -90px; left: -110px; background: radial-gradient(circle, rgba(108,92,231,0.85), transparent 70%); animation: drift1 22s ease-in-out infinite alternate; }
 .bg-aurora .o2{ width: 300px; height: 300px; top: 28%; right: -130px; background: radial-gradient(circle, rgba(41,217,194,0.7), transparent 70%); animation: drift2 26s ease-in-out infinite alternate; }
 .bg-aurora .o3{ width: 260px; height: 260px; bottom: -70px; left: 18%; background: radial-gradient(circle, rgba(255,179,0,0.5), transparent 70%); animation: drift3 30s ease-in-out infinite alternate; }
@@ -40,14 +44,18 @@ body{
 @keyframes drift3{ to{ transform: translate(50px, -60px) scale(1.2); } }
 
 .bg-grid{
-  position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.35;
+  position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.35; overflow: hidden;
+}
+.bg-grid::after{
+  content: ''; position: absolute; inset: -42px;
   background-image:
     linear-gradient(rgba(41,217,194,0.06) 1px, transparent 1px),
     linear-gradient(90deg, rgba(108,92,231,0.06) 1px, transparent 1px);
   background-size: 42px 42px;
   animation: gridMove 42s linear infinite;
+  will-change: transform;
 }
-@keyframes gridMove{ to{ background-position: 42px 42px, 42px 42px; } }
+@keyframes gridMove{ to{ transform: translateY(42px); } }
 
 /* SUPPORT (LEFT) & GREEN GLOBAL CHAT (RIGHT) CORNER BUTTONS */
 .support-container {
@@ -82,6 +90,7 @@ body{
   flex-direction: column; gap: 4px; backdrop-filter: blur(10px);
 }
 .support-dropdown.show { display: flex; }
+.support-dropdown { backdrop-filter: none; }
 .support-link {
   background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.04);
   color: var(--bone); padding: 6px 10px; border-radius: 8px; font-size: 11px;
@@ -292,7 +301,7 @@ main{ flex:1; display:flex; flex-direction:column; }
 
 /* ---------- WITHDRAW & ADMIN MODALS ---------- */
 .custom-modal {
-  position: fixed; inset:0; background: rgba(11,11,20,0.92); backdrop-filter: blur(8px);
+  position: fixed; inset:0; background: rgba(11,11,20,0.97);
   z-index: 3000; display:none; flex-direction:column; align-items:center; justify-content:center; padding: 0 24px;
 }
 .modal-card {
@@ -380,7 +389,7 @@ main{ flex:1; display:flex; flex-direction:column; }
 }
 
 #waiting-overlay{
-  position: fixed; inset:0; background: rgba(11,11,20,0.94); backdrop-filter: blur(6px);
+  position: fixed; inset:0; background: rgba(11,11,20,0.97);
   z-index: 1000; display:none; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding: 0 24px;
 }
 #wait-status{ font-family:'Space Grotesk', sans-serif; font-weight:600; font-size: 19px; margin: 0; transition: color 0.3s ease; }
@@ -427,7 +436,7 @@ main{ flex:1; display:flex; flex-direction:column; }
 .fineprint{ text-align:center; margin-top: 14px; font-family:'JetBrains Mono', monospace; font-size: 11px; color: var(--slate); opacity:0.8; }
 
 #result-overlay{
-  position: fixed; inset:0; background: rgba(11,11,20,0.94); backdrop-filter: blur(8px);
+  position: fixed; inset:0; background: rgba(11,11,20,0.97);
   z-index: 2000; display:none; flex-direction:column; align-items:center; justify-content:center; padding: 0 24px;
   animation: fadeIn 0.3s ease;
 }
