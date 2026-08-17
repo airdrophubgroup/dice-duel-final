@@ -127,8 +127,13 @@ h1.brand{
 .fee-chip .chip-earn {
   font-size: 9.5px; font-family: 'JetBrains Mono', monospace; color: var(--photon); opacity: 0.75; font-weight: 500;
 }
+.fee-chip .chip-tnv {
+  font-size: 8px; font-family: 'JetBrains Mono', monospace; color: var(--gold); opacity: 0.8; font-weight: 500;
+  white-space: nowrap;
+}
 .fee-chip.active{ background: linear-gradient(135deg, var(--iris), #4c3fc9); box-shadow: 0 6px 18px -6px rgba(108,92,231,0.7); border-color: transparent; }
 .fee-chip.active .chip-earn { color: var(--gold); opacity: 1; }
+.fee-chip.active .chip-tnv { opacity: 1; }
 .fee-chip:active{ transform: scale(0.96); }
 
 .btn{

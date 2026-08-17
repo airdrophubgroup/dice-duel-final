@@ -1234,14 +1234,29 @@ async function finalizeGame(){
   let winTnv = getTnvRewardForFee(matchFee);  
   let earnedTnv = isWin ? winTnv : Math.floor(winTnv / 3);  
 
-  if (myAddress && !sessionStorage.getItem(`tnv_settled_${matchId}_${myAddress}`)) {  
-    sessionStorage.setItem(`tnv_settled_${matchId}_${myAddress}`, "true");  
-    try {  
-      const { data: tnvResult } = await supabaseClient.rpc('secure_credit_tnv', {  
-        p_match_id: matchId, p_wallet: myAddress  
-      });  
-      if (tnvResult && tnvResult.earnedTnv !== undefined) earnedTnv = tnvResult.earnedTnv;  
-    } catch(e) {}  
+  // TIE = void match (both players refunded, no winner/loser) → NO TNV
+  // for anyone. secure_credit_tnv also rejects ties server-side; skipping
+  // here keeps the popup consistent with the rules.  
+  // The settled flag is only set on SUCCESS — a transient RPC failure is
+  // retried (3x) so the player's TNV is never silently lost.  
+  if (myAddress && !isTie && !sessionStorage.getItem(`tnv_settled_${matchId}_${myAddress}`)) {  
+    for (let attempt = 1; attempt <= 3; attempt++) {  
+      try {  
+        const { data: tnvResult } = await supabaseClient.rpc('secure_credit_tnv', {  
+          p_match_id: matchId, p_wallet: myAddress  
+        });  
+        if (tnvResult && tnvResult.earnedTnv !== undefined) {  
+          earnedTnv = tnvResult.earnedTnv;  
+          sessionStorage.setItem(`tnv_settled_${matchId}_${myAddress}`, "true");  
+          break;  
+        }  
+        if (tnvResult && tnvResult.error === 'already_credited') {  
+          sessionStorage.setItem(`tnv_settled_${matchId}_${myAddress}`, "true");  
+          break;  
+        }  
+      } catch(e) {}  
+      if (attempt < 3) await new Promise(r => setTimeout(r, 1500));  
+    }  
   }  
 
   if (isTie){  
