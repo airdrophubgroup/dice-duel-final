@@ -529,24 +529,33 @@ async function logMatchHistory(wallet, type, amount, details) {
 
 async function fetchAdminWithdrawRequests() {  
   try {  
-    const { data, error } = await supabaseClient.from('withdraw_requests').select('*').eq('status', 'pending').order('created_at', { ascending: false });  
+    // Show ALL withdrawal requests (no limit) — how many came, that many show.
+    const { data, error } = await supabaseClient.from('withdraw_requests').select('*').order('created_at', { ascending: false });  
     const container = $('admin-req-container');  
     if (!container) return;  
     if (error || !data || data.length === 0) {  
-      container.innerHTML = `<div style="font-size:11px; color:var(--slate); text-align:center;">No pending requests</div>`;  
+      container.innerHTML = `<div style="font-size:11px; color:var(--slate); text-align:center;">No withdrawal requests yet</div>`;  
       return;  
     }  
     let html = '';  
+    const pendingCount = data.filter(r => r.status === 'pending').length;  
+    html += `<div style="font-size:10.5px; color:var(--photon); margin-bottom:6px;">Total requests: <b>${data.length}</b> · Pending: <b>${pendingCount}</b></div>`;  
     data.forEach(req => {  
       let shortAddr = req.wallet_address.slice(0, 6) + '...' + req.wallet_address.slice(-4);  
+      const st = (req.status || 'pending').toUpperCase();  
+      const stColor = req.status === 'approved' ? 'var(--photon)' : req.status === 'pending' ? 'var(--gold)' : 'var(--signal)';  
+      const actionBtn = req.status === 'pending' 
+        ? `<button class="approve-btn" onclick="openAdminModal('${req.id}', '${req.wallet_address}', ${req.amount})">APPROVE / PAY</button>` 
+        : `<span style="font-size:9px; color:var(--slate);">${req.tx_hash ? 'Paid' : '—'}</span>`;  
       html += `  
         <div class="admin-req-item">  
           <div class="admin-req-row">  
             <span style="color:var(--photon); font-family:'JetBrains Mono', monospace;" title="${req.wallet_address}">${shortAddr}</span>  
             <button onclick="navigator.clipboard.writeText('${req.wallet_address}'); showNeonToast('User address copied!','success');" style="background:rgba(255,255,255,0.1); border:none; color:#fff; font-size:9px; padding:2px 6px; border-radius:4px; cursor:pointer;">Copy Addr</button>  
             <span style="color:var(--gold); font-family:'JetBrains Mono', monospace; font-weight:700;">${req.amount} TNV</span>  
+            <span style="color:${stColor}; font-size:9px; font-weight:700;">${st}</span>  
           </div>  
-          <div class="admin-req-row"><span style="font-size:10px; color:var(--slate);">${new Date(req.created_at).toLocaleString()}</span><button class="approve-btn" onclick="openAdminModal('${req.id}', '${req.wallet_address}', ${req.amount})">APPROVE / PAY</button></div>  
+          <div class="admin-req-row"><span style="font-size:10px; color:var(--slate);">${new Date(req.created_at).toLocaleString()}</span>${actionBtn}</div>  
         </div>  
       `;  
     });  
@@ -779,7 +788,8 @@ window.openAdminEarningsModal = async function() {
   const container = $('admin-earnings-list');  
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading revenue...</div>`;  
   try {  
-    const { data } = await supabaseClient.from('match_history').select('*').eq('wallet_address', PAYMENT_RECV_WALLET).eq('action_type', 'ADMIN_FEE').order('created_at', { ascending: false }).limit(50);  
+    // ALL admin fees — no limit. Whatever was collected, every row shows.
+    const { data } = await supabaseClient.from('match_history').select('*').eq('wallet_address', PAYMENT_RECV_WALLET).eq('action_type', 'ADMIN_FEE').order('created_at', { ascending: false });  
     if (!data || data.length === 0) { container.innerHTML = `<div style="text-align:center; color:var(--slate);">No fees collected.</div>`; return; }  
     let total = 0, html = '';  
     data.forEach(i => {   
@@ -795,7 +805,7 @@ window.openAdminEarningsModal = async function() {
         </div>  
       `;   
     });  
-    container.innerHTML = `<div style="color:var(--gold); font-weight:700; margin-bottom:8px;">Total: ${total.toFixed(2)} WLD</div>` + html;  
+    container.innerHTML = `<div style="color:var(--gold); font-weight:700; margin-bottom:8px;">Total: ${total.toFixed(2)} WLD · ${data.length} fee(s)</div>` + html;  
   } catch(e) {}  
 };  
 
