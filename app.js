@@ -74,9 +74,12 @@ function ensureRefundQueuedInBackground(matchUuid, wallet) {
     try {
       const r = await recordDepositOnce(b32, matchUuid, wallet, feeWei, null);
       if (r.ok) {
-        const d = await supabaseClient.rpc('queue_refund_request', {
+        // NOTE: supabase-js builders are thenable but have no .catch —
+        // wrap in try/catch instead (a .catch on the builder throws).
+        let d = null;
+        try { d = await supabaseClient.rpc('queue_refund_request', {
           p_match_id: matchUuid, p_wallet: wallet.toLowerCase().trim()
-        }).catch(() => ({}));
+        }); } catch (e) {}
         if (d && d.data && d.data.success === true) { clearInterval(t); return; }
       }
     } catch (e) { /* keep retrying */ }
@@ -86,7 +89,7 @@ function ensureRefundQueuedInBackground(matchUuid, wallet) {
 const supabaseClient = createClient(SB_URL, SB_KEY);  
 
 let myAddress = "", myUsername = "", matchId = null, matchIdBytes32Global = null, isP1, myScore = 0, oppScore = 0;  
-let gameActive = false, matchmakingActive = false, channel, globalChatChannel, mTimer, pollTimer, gameTimerInterval;  
+let gameActive = false, matchmakingActive = false, channel, globalChatChannel, mTimer, pollTimer, gameTimerInterval, bookingRetryTimer = null;  
 let selectedFee = 0.5;  
 let realWorldIdUser = false;   
 let currentTnvBalance = 0;  
@@ -493,11 +496,12 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
 
     // STEP 2 — live WLD balance, in PARALLEL with a tight timeout so a
     // flaky network can never leave the page on 0.00 for tens of seconds.
-    fetchRealWldBalance(cleanWallet).then((realBalance) => {  
+    fetchRealWldBalance(cleanWallet).then(async (realBalance) => {  
       if (realBalance !== null) {  
         currentWldBalance = realBalance;  
         renderBalances();  
-        supabaseClient.rpc('secure_update_wld_balance', { p_wallet: cleanWallet, p_balance: realBalance }).catch(() => {});  
+        // NOTE: supabase-js builders have no .catch — use try/catch.
+        try { await supabaseClient.rpc('secure_update_wld_balance', { p_wallet: cleanWallet, p_balance: realBalance }); } catch (e) {}  
       }  
     }).catch(() => {});  
   } catch (e) { console.error('Balance load error:', e); }  
@@ -539,25 +543,24 @@ async function fetchAdminWithdrawRequests() {
     }  
     let html = '';  
     const pendingCount = data.filter(r => r.status === 'pending').length;  
-    html += `<div style="font-size:10.5px; color:var(--photon); margin-bottom:6px;">Total requests: <b>${data.length}</b> · Pending: <b>${pendingCount}</b></div>`;  
-    data.forEach(req => {  
-      let shortAddr = req.wallet_address.slice(0, 6) + '...' + req.wallet_address.slice(-4);  
-      const st = (req.status || 'pending').toUpperCase();  
-      const stColor = req.status === 'approved' ? 'var(--photon)' : req.status === 'pending' ? 'var(--gold)' : 'var(--signal)';  
+    html += `<div style="font-size:10.5px; color:var(--photon); margin-bottom:6px;">Total requests: <b>${data.length}</b> · Pending: <b>${pendingCount}</b></div>`;    data.forEach(req => {
+      let shortAddr = escapeHtml(req.wallet_address.slice(0, 6) + '...' + req.wallet_address.slice(-4));
+      const st = (req.status || 'pending').toUpperCase();
+      const stColor = req.status === 'approved' ? 'var(--photon)' : req.status === 'pending' ? 'var(--gold)' : 'var(--signal)';
       const actionBtn = req.status === 'pending' 
-        ? `<button class="approve-btn" onclick="openAdminModal('${req.id}', '${req.wallet_address}', ${req.amount})">APPROVE / PAY</button>` 
-        : `<span style="font-size:9px; color:var(--slate);">${req.tx_hash ? 'Paid' : '—'}</span>`;  
+        ? `<button class="approve-btn" onclick="openAdminModal('${escapeHtml(req.id)}', '${escapeHtml(req.wallet_address)}', ${Number(req.amount)})">APPROVE / PAY</button>` 
+        : `<span style="font-size:9px; color:var(--slate);">${req.tx_hash ? 'Paid' : '—'}</span>`;
       html += `  
         <div class="admin-req-item">  
           <div class="admin-req-row">  
-            <span style="color:var(--photon); font-family:'JetBrains Mono', monospace;" title="${req.wallet_address}">${shortAddr}</span>  
-            <button onclick="navigator.clipboard.writeText('${req.wallet_address}'); showNeonToast('User address copied!','success');" style="background:rgba(255,255,255,0.1); border:none; color:#fff; font-size:9px; padding:2px 6px; border-radius:4px; cursor:pointer;">Copy Addr</button>  
-            <span style="color:var(--gold); font-family:'JetBrains Mono', monospace; font-weight:700;">${req.amount} TNV</span>  
+            <span style="color:var(--photon); font-family:'JetBrains Mono', monospace;" title="${escapeHtml(req.wallet_address)}">${shortAddr}</span>  
+            <button onclick="navigator.clipboard.writeText('${escapeHtml(req.wallet_address)}'); showNeonToast('User address copied!','success');" style="background:rgba(255,255,255,0.1); border:none; color:#fff; font-size:9px; padding:2px 6px; border-radius:4px; cursor:pointer;">Copy Addr</button>  
+            <span style="color:var(--gold); font-family:'JetBrains Mono', monospace; font-weight:700;">${Number(req.amount)} TNV</span>  
             <span style="color:${stColor}; font-size:9px; font-weight:700;">${st}</span>  
           </div>  
           <div class="admin-req-row"><span style="font-size:10px; color:var(--slate);">${new Date(req.created_at).toLocaleString()}</span>${actionBtn}</div>  
         </div>  
-      `;  
+      `;
     });  
     container.innerHTML = html;  
   } catch (e) {}  
@@ -572,15 +575,14 @@ async function fetchAdminCheaters() {
       container.innerHTML = `<div style="font-size:11px; color:var(--slate); text-align:center;">No suspicious activity</div>`;  
       return;  
     }  
-    let html = '';  
-    data.forEach(log => {  
-      let shortAddr = log.wallet_address.slice(0, 6) + '...' + log.wallet_address.slice(-4);  
+    let html = '';    data.forEach(log => {
+      let shortAddr = escapeHtml(log.wallet_address.slice(0, 6) + '...' + log.wallet_address.slice(-4));
       html += `  
         <div class="admin-req-item">  
           <div class="admin-req-row"><span style="color:var(--signal); font-family:'JetBrains Mono', monospace;">${shortAddr}</span><span style="font-size:10px; color:var(--slate);">${new Date(log.detected_at).toLocaleString()}</span></div>  
-          <div class="admin-req-row"><span style="font-size:11px; color:var(--gold); font-weight:600;">Attempts: ${log.click_count}x</span><button class="block-btn" onclick="promptBlockUser('${log.wallet_address}')">BLOCK</button></div>  
+          <div class="admin-req-row"><span style="font-size:11px; color:var(--gold); font-weight:600;">Attempts: ${Number(log.click_count)}x</span><button class="block-btn" onclick="promptBlockUser('${escapeHtml(log.wallet_address)}')">BLOCK</button></div>  
         </div>  
-      `;  
+      `;
     });  
     container.innerHTML = html;  
   } catch (e) {}  
@@ -594,22 +596,21 @@ async function fetchAdminTickets() {
     if (!data || data.success === false || !Array.isArray(data) || data.length === 0) {  
       container.innerHTML = `<div style="font-size:11px; color:var(--slate); text-align:center;">No open tickets</div>`;  
       return;  
-    }  
-    let html = '';  
-    data.forEach(t => {  
-      const shortAddr = (t.user_wallet || '').slice(0, 6) + '...' + (t.user_wallet || '').slice(-4);  
-      const verified = t.verified && typeof t.verified === 'object' ? t.verified : {};  
-      const vKeys = Object.keys(verified);  
-      const vHtml = vKeys.length > 0 ? `<div style="font-size:10px; color:var(--photon); margin-top:4px; font-family:'JetBrains Mono',monospace;">${vKeys.map(k => `${k}: ${JSON.stringify(verified[k])}`).join(' · ')}</div>` : '';  
+    }    let html = '';
+    data.forEach(t => {
+      const shortAddr = (t.user_wallet || '').slice(0, 6) + '...' + (t.user_wallet || '').slice(-4);
+      const verified = t.verified && typeof t.verified === 'object' ? t.verified : {};
+      const vKeys = Object.keys(verified);
+      const vHtml = vKeys.length > 0 ? `<div style="font-size:10px; color:var(--photon); margin-top:4px; font-family:'JetBrains Mono',monospace;">${vKeys.map(k => `${escapeHtml(String(k))}: ${escapeHtml(JSON.stringify(verified[k]))}`).join(' · ')}</div>` : '';
       html += `  
         <div class="admin-req-item" style="border-left:3px solid ${t.status === 'replied' ? 'var(--gold)' : 'var(--photon)'};">  
           <div class="admin-req-row">  
-            <span style="color:var(--photon); font-family:'JetBrains Mono',monospace;" title="${t.user_wallet}">${shortAddr}</span>  
-            <span style="font-size:10px; color:var(--slate);">${t.user_username || ''} · ${t.status.toUpperCase()} · ${new Date(t.created_at).toLocaleString()}</span>  
+            <span style="color:var(--photon); font-family:'JetBrains Mono',monospace;" title="${escapeHtml(t.user_wallet || '')}">${shortAddr}</span>  
+            <span style="font-size:10px; color:var(--slate);">${escapeHtml(t.user_username || '')} · ${escapeHtml(String(t.status || '').toUpperCase())} · ${new Date(t.created_at).toLocaleString()}</span>  
           </div>  
-          <div style="font-size:11.5px; color:#fff; margin-top:4px;">${t.summary}</div>  
+          <div style="font-size:11.5px; color:#fff; margin-top:4px;">${escapeHtml(t.summary || '')}</div>  
           ${vHtml}  
-          ${t.admin_reply ? `<div style="font-size:10.5px; color:var(--gold); margin-top:4px; border-top:1px dashed rgba(255,179,0,0.25); padding-top:4px;">💬 You (${t.admin_username || 'Admin'}): ${t.admin_reply}</div>` : ''}  
+          ${t.admin_reply ? `<div style="font-size:10.5px; color:var(--gold); margin-top:4px; border-top:1px dashed rgba(255,179,0,0.25); padding-top:4px;">💬 You (${escapeHtml(t.admin_username || 'Admin')}): ${escapeHtml(t.admin_reply)}</div>` : ''}  
           <div style="display:flex; gap:6px; margin-top:6px;">  
             <input id="ticket-reply-${t.id}" class="modal-input" style="flex:1; font-size:11px; padding:7px 9px;" placeholder="Type your reply (your real username will show)..." />  
             <button class="approve-btn" onclick="adminReplyTicket(${t.id})">SEND</button>  
@@ -733,11 +734,10 @@ window.openUserHistoryModal = async function() {
       return;  
     }  
     const me = myAddress.toLowerCase();  
-    let html = `<div style="background:rgba(41,217,194,0.07); border:1px solid rgba(41,217,194,0.25); color:var(--photon); font-size:10px; padding:7px 9px; border-radius:8px; margin-bottom:8px; line-height:1.4;">ℹ️ Only your latest <b>10 matches</b> are shown. Older matches are automatically deleted from the server.</div>`;  
-    data.forEach(m => {  
-      const isP1 = (m.p1_address || '').toLowerCase() === me;  
-      const opp = isP1 ? (m.p2_username || 'Unknown') : (m.p1_username || 'Unknown');  
-      const myScore = isP1 ? m.p1_score : m.p2_score;  
+    let html = `<div style="background:rgba(41,217,194,0.07); border:1px solid rgba(41,217,194,0.25); color:var(--photon); font-size:10px; padding:7px 9px; border-radius:8px; margin-bottom:8px; line-height:1.4;">ℹ️ Only your latest <b>10 matches</b> are shown. Older matches are automatically deleted from the server.</div>`;    data.forEach(m => {
+      const isP1 = (m.p1_address || '').toLowerCase() === me;
+      const opp = escapeHtml(isP1 ? (m.p2_username || 'Unknown') : (m.p1_username || 'Unknown'));
+      const myScore = isP1 ? m.p1_score : m.p2_score;
       const oppScore = isP1 ? m.p2_score : m.p1_score;  
       let resultText, color;  
       if (m.status === 'completed') {  
@@ -885,16 +885,17 @@ async function autoScanAndRefund(wallet) {
       const paid = isP1 ? m.p1_paid : m.p2_paid;
       if (paid !== true) continue;
 
-      // Check if refund already exists
-      const { data: existingRefund } = await supabaseClient
-        .from('refund_queue')
-        .select('id, status')
-        .eq('match_id', m.id)
-        .eq('wallet_address', w)
-        .limit(1);
-
-      const hasRefund = existingRefund && existingRefund.length > 0 &&
-        ['completed', 'pending', 'processing'].includes(existingRefund[0]?.status);
+      // Check if refund already exists — refund_queue is RLS-blocked for
+      // the public key, so a direct table query returns [] and would make
+      // already-refunded matches look stuck. Use the get_refund_status RPC.
+      let hasRefund = false;
+      try {
+        const { data: rs } = await supabaseClient.rpc('get_refund_status', {
+          p_match_id: m.id, p_wallet: w
+        });
+        const st = rs && rs.found === true ? rs.status : null;
+        hasRefund = !!st && ['done', 'completed', 'pending', 'processing'].includes(st);
+      } catch (e) { /* silent */ }
 
       if (!hasRefund) {
         // Stuck payment found — auto-queue refund silently
@@ -1238,9 +1239,17 @@ async function handlePlayButtonClick(){
   // cancelMatchmaking() (and ensureRefundQueuedInBackground) queue the
   // automatic refund so WLD is never stuck.
   let bookingInFlight = false;
+  let bookingAttempts = 0;
   bookingRetryTimer = setInterval(async () => {
-    if (depositBooked || gameActive) {
-      if (bookingRetryTimer) clearInterval(bookingRetryTimer);
+    if (depositBooked || gameActive || !matchmakingActive) {
+      if (bookingRetryTimer) { clearInterval(bookingRetryTimer); bookingRetryTimer = null; }
+      return;
+    }
+    // Hard cap: ~3 minutes of retries max. Never run forever — a
+    // cancelled search must not leave an infinite edge-function loop.
+    bookingAttempts++;
+    if (bookingAttempts > 45) {
+      if (bookingRetryTimer) { clearInterval(bookingRetryTimer); bookingRetryTimer = null; }
       return;
     }
     if (bookingInFlight) return;
@@ -1320,10 +1329,11 @@ async function cancelMatchmaking(showAlert = true) {
         const r = await recordDepositOnce(matchIdBytes32Global, targetMatchId, targetWallet, FEE_WEI[selectedFee] || null, null);
         if (r.ok) {
           // recordDepositOnce marks the paid flag server-side, so the
-          // refund can now be queued.
-          const { data: d2 } = await supabaseClient.rpc('queue_refund_request', {
+          // refund can now be queued. (No .catch on the builder — wrap.)
+          let d2 = null;
+          try { d2 = (await supabaseClient.rpc('queue_refund_request', {
             p_match_id: targetMatchId, p_wallet: targetWallet
-          }).catch(() => ({}));
+          })).data; } catch (e) {}
           refundQueued = !!d2 && d2.success === true;
         }
       } catch (e) { /* handled by the background sweep below */ }
@@ -1412,6 +1422,12 @@ async function startSyncCountdown(){
     $('target-dot').classList.remove('connected');  
 
     myTurnsLeft = 15;  
+    // Fresh game — reset scores so a second match in the same session
+    // never carries over the previous game's totals.
+    myScore = 0;
+    oppScore = 0;
+    $('my-score').innerText = '0';
+    $('opp-score').innerText = '0';
     $('turn-indicator').innerText = `tap the die to roll (${myTurnsLeft} turns left)`;  
     runTimer(new Date().toISOString());   
   }, 2000);  
@@ -1527,9 +1543,12 @@ async function finalizeGame(){
   // non-tie completed match can never be refunded this way). Each
   // player's device queues its own refund.
   if (isTie && matchId && myAddress) {
-    supabaseClient.rpc('queue_refund_request', {
+    // NOTE: supabase-js builders have no .catch — a .catch on the
+    // builder THROWS and previously killed finalizeGame() right here,
+    // so the TIE result popup never appeared. Wrap in try/catch.
+    try { await supabaseClient.rpc('queue_refund_request', {
       p_match_id: matchId, p_wallet: myAddress.toLowerCase().trim()
-    }).catch(() => {});
+    }); } catch (e) { /* refund is also queued by the resolver */ }
   }
 
   // Only the winner's device triggers the on-chain payout, so it fires
@@ -1628,6 +1647,7 @@ function resetToHome(){
   clearInterval(mTimer);  
   if (pollTimer) clearInterval(pollTimer);  
   if (gameTimerInterval) clearInterval(gameTimerInterval);  
+  if (bookingRetryTimer) { clearInterval(bookingRetryTimer); bookingRetryTimer = null; }
   if (channel) channel.unsubscribe();  
   $('waiting-overlay').style.display = 'none';  
   $('start-btn').disabled = false;  
@@ -1685,7 +1705,7 @@ async function botShowAdminReplies() {
     if (replied.length === 0) return;  
     replied.slice(0, 3).forEach(t => {  
       botAddMsg('bot', `📬 You have a reply on support ticket #${t.id}`);  
-      botAddHtmlMsg('bot', `<div style="font-size:11.5px; line-height:1.5;">💬 <b style="color:var(--gold);">${(t.admin_username || 'Admin')}</b> (Admin): ${(t.admin_reply || '').replace(/</g, '&lt;')}</div><div style="color:#777; font-size:9.5px; text-align:right; margin-top:3px;">${new Date(t.admin_reply_at).toLocaleString()}</div>`);  
+      botAddHtmlMsg('bot', `<div style="font-size:11.5px; line-height:1.5;">💬 <b style="color:var(--gold);">${escapeHtml(t.admin_username || 'Admin')}</b> (Admin): ${escapeHtml(t.admin_reply || '')}</div><div style="color:#777; font-size:9.5px; text-align:right; margin-top:3px;">${new Date(t.admin_reply_at).toLocaleString()}</div>`);  
     });  
   } catch (e) {}  
 }
@@ -1764,26 +1784,26 @@ async function botHandleYes() {
       return;
     }
 
-    // Find matches where THIS user paid but match didn't complete
-    let refundableMatches = [];
     for (const m of matches) {
       const isP1 = m.p1_address && m.p1_address.toLowerCase() === wallet;
       const paid = isP1 ? m.p1_paid : m.p2_paid;
-      if (paid === true) {
-        // Check if refund already exists
-        const { data: existingRefund } = await supabaseClient
-          .from('refund_queue')
-          .select('id, status')
-          .eq('match_id', m.id)
-          .eq('wallet_address', wallet)
-          .limit(1);
+      if (paid !== true) continue;
 
-        const hasRefund = existingRefund && existingRefund.length > 0 &&
-          (existingRefund[0].status === 'completed' || existingRefund[0].status === 'pending' || existingRefund[0].status === 'processing');
+      // Check if refund already exists — refund_queue has no public RLS,
+      // so the ONLY correct read is the get_refund_status security-definer
+      // RPC (a direct table query silently returns [] and would make every
+      // already-refunded match look unrefunded).
+      let hasRefund = false;
+      try {
+        const { data: rs } = await supabaseClient.rpc('get_refund_status', {
+          p_match_id: m.id, p_wallet: wallet
+        });
+        const st = rs && rs.found === true ? rs.status : null;
+        hasRefund = !!st && ['done', 'completed', 'pending', 'processing'].includes(st);
+      } catch (e) { /* treat as no refund found */ }
 
-        if (!hasRefund) {
-          refundableMatches.push({ ...m, isP1 });
-        }
+      if (!hasRefund) {
+        refundableMatches.push({ ...m, isP1 });
       }
     }
 
@@ -1917,16 +1937,18 @@ async function botAgentIssue(kind) {
     }
     verified.paid_matches = paidMatches.length;
 
-    // Step 3: refund status for each paid match
+    // Step 3: refund status for each paid match — refund_queue has no
+    // public RLS, so use the get_refund_status security-definer RPC (a
+    // direct table read would return [] and misreport every refund).
     let refunded = 0, pending = 0, missing = 0;
     for (const pm of paidMatches) {
-      const { data: rq } = await supabaseClient
-        .from('refund_queue')
-        .select('status')
-        .eq('match_id', pm.id)
-        .eq('wallet_address', wallet)
-        .limit(1);
-      const st = rq && rq[0] ? rq[0].status : null;
+      let st = null;
+      try {
+        const { data: rs } = await supabaseClient.rpc('get_refund_status', {
+          p_match_id: pm.id, p_wallet: wallet
+        });
+        st = rs && rs.found === true ? rs.status : null;
+      } catch (e) { /* null */ }
       if (st === 'done' || st === 'completed') refunded++;
       else if (st === 'pending' || st === 'processing') pending++;
       else missing++;
