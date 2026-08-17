@@ -388,7 +388,8 @@ html.page-hidden .stats-box::before,
 html.page-hidden .scanner .sweep,
 html.page-hidden .scanner .core,
 html.page-hidden .scanner .dot-1,
-html.page-hidden .scanner .dot-2{
+html.page-hidden .scanner .dot-2,
+html.page-hidden .eco-chip{
   animation-play-state: paused !important;
 }
 
@@ -487,3 +488,75 @@ html.page-hidden .scanner .dot-2{
 .bot-typing span:nth-child(3) { animation-delay: 0.4s; }
 @keyframes typingBounce { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-6px); opacity: 1; } }
 @keyframes popIn { to{ transform: scale(1); } }
+
+/* ---------- TNV ECOSYSTEM (perf: transform-only motion, zero repaint) ---------- */
+.ecosystem-card{
+  margin-top: 18px;
+  padding: 1px; /* gradient border trick */
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(108,92,231,0.55), rgba(41,217,194,0.35), rgba(255,179,0,0.45));
+  overflow: hidden;
+}
+.ecosystem-card > * {
+  background: rgba(13,13,26,0.96);
+  padding: 0 14px;
+}
+.eco-header{
+  display: flex; justify-content: space-between; align-items: center;
+  padding-top: 14px !important;
+}
+.eco-title{
+  font-family:'Space Grotesk', sans-serif; font-weight:700; font-size:15px;
+  background: linear-gradient(90deg, var(--photon), var(--iris), var(--gold));
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+.eco-live{
+  font-family:'JetBrains Mono', monospace; font-size:8.5px; letter-spacing:1.5px;
+  color: var(--photon); border:1px solid rgba(41,217,194,0.4); border-radius:20px;
+  padding:2px 8px; background: rgba(41,217,194,0.08);
+}
+.eco-sub{ font-size:10.5px; color: var(--slate); margin-top:4px; }
+
+/* Floating chips — ONLY translateY transform (GPU composited, no paint). */
+.eco-floats{
+  position: relative; height: 92px; margin: 10px 0 2px;
+}
+.eco-chip{
+  position: absolute; left: var(--x); top: 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  transform: translateY(var(--y));
+  animation: ecoFloat 3.6s ease-in-out infinite alternate;
+  animation-delay: var(--d);
+  will-change: transform;
+}
+@keyframes ecoFloat{
+  from{ transform: translateY(calc(var(--y) - 7px)); }
+  to  { transform: translateY(calc(var(--y) + 7px)); }
+}
+.eco-emoji{ font-size: 24px; filter: drop-shadow(0 0 10px rgba(41,217,194,0.35)); }
+.eco-name{
+  font-family:'JetBrains Mono', monospace; font-size: 8.5px; color: var(--photon);
+  background: rgba(41,217,194,0.08); border: 1px solid rgba(41,217,194,0.2);
+  padding: 1px 7px; border-radius: 20px; white-space: nowrap;
+}
+
+.eco-links{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding-bottom: 4px !important; }
+.eco-link{
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 10px; padding: 9px 10px; font-size: 11.5px; font-weight:600; color: var(--bone);
+  cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.eco-link:active{ transform: scale(0.97); }
+.eco-link-ic{ font-size: 15px; }
+.eco-link .badge-coming{
+  margin-left: auto; font-size: 8px; letter-spacing: 1px; color: var(--gold);
+  border: 1px solid rgba(255,179,0,0.35); border-radius: 20px; padding: 1px 7px;
+  background: rgba(255,179,0,0.07); white-space: nowrap;
+}
+.eco-note{
+  padding-bottom: 13px !important; font-size: 9.5px; color: var(--slate);
+  text-align: center; margin-top: 6px;
+}
+@media (prefers-reduced-motion: reduce){ .eco-chip{ animation: none !important; } }
