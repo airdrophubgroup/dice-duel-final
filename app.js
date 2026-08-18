@@ -910,8 +910,9 @@ async function fetchLeaderboard() {
     let html = '';  
     data.forEach((row, index) => {  
       let rankClass = index === 0 ? 'top-1' : (index === 1 ? 'top-2' : (index === 2 ? 'top-3' : ''));  
+      let badge = index === 0 ? '<span class="lb-badge lb-badge-gold" title="1st Place">🥇</span>' : (index === 1 ? '<span class="lb-badge lb-badge-silver" title="2nd Place">🥈</span>' : (index === 2 ? '<span class="lb-badge lb-badge-bronze" title="3rd Place">🥉</span>' : ''));  
       let shortWallet = row.wallet_address.startsWith('0xDEV') ? 'Dev_' + row.wallet_address.slice(-4) : row.wallet_address.slice(0, 6) + '...' + row.wallet_address.slice(-4);  
-      html += `<div class="lb-item ${rankClass}"><span class="lb-rank">#${index + 1}</span><span class="lb-user">${shortWallet}</span><span class="lb-score">${row.tnv_balance} TNV</span></div>`;  
+      html += `<div class="lb-item ${rankClass}">${badge}<span class="lb-rank">#${index + 1}</span><span class="lb-user">${shortWallet}</span><span class="lb-score">${row.tnv_balance} TNV</span></div>`;  
     });  
     lbContainer.innerHTML = html;  
   } catch (e) {}  
