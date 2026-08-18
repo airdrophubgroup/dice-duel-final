@@ -45,7 +45,7 @@ declare
   v_last_refund timestamptz;
   v_refunds_today int;
   v_refunds_wld numeric;
-  v_reward_row record;
+  v_refunds_today_date date;
 begin
   -- Load match
   select fee, status, p1_address, p2_address, p1_paid, p2_paid,
@@ -93,7 +93,7 @@ begin
 
   -- ANTI-DRAIN: Per-wallet cooldown — minimum 30 seconds between refunds
   select last_refund_at, refunds_today, refunds_today_wld, refunds_today_date
-    into v_last_refund, v_refunds_today, v_refunds_wld, v_reward_row.refunds_today_date
+    into v_last_refund, v_refunds_today, v_refunds_wld, v_refunds_today_date
     from public.user_rewards
    where wallet_address = v_wallet
    limit 1;
@@ -103,7 +103,7 @@ begin
   end if;
 
   -- ANTI-DRAIN: Daily refund cap (max 5 refunds OR max 5 WLD per day)
-  if v_reward_row.refunds_today_date = v_today then
+  if v_refunds_today_date = v_today then
     if coalesce(v_refunds_today, 0) >= 5 then
       return json_build_object('success', false, 'error', 'daily refund limit reached (5/day)');
     end if;
@@ -117,7 +117,7 @@ begin
   values (p_match_id, v_wallet, v_fee, 'pending');
 
   -- Update cooldown tracking
-  if v_reward_row.refunds_today_date = v_today then
+  if v_refunds_today_date = v_today then
     update public.user_rewards
     set last_refund_at = now(),
         refunds_today = refunds_today + 1,
