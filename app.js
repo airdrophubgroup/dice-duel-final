@@ -958,6 +958,46 @@ function showAuthBanner(msg){
   el.style.display = 'block';  
 }  
 
+// Green "Payment Confirmed" popup — a prominent, animated overlay
+// shown IMMEDIATELY when MiniKit reports the payment succeeded, so
+// the player sees a clear green confirmation right away instead of
+// waiting for the slower server-side on-chain verify (which used to
+// gate the only confirmation toast and could take 10s+ or silently
+// fail). Auto-dismisses; never blocks the search UI.
+function showPaymentConfirmedPopup(amountWld) {
+  const prev = document.getElementById('payment-confirmed-popup');
+  if (prev) prev.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'payment-confirmed-popup';
+  overlay.style.cssText = 'position:fixed; inset:0; z-index:999997; display:flex; align-items:center; justify-content:center; background:rgba(4,18,14,0.55); backdrop-filter:blur(5px); animation:payFadeIn .25s ease;';
+  const card = document.createElement('div');
+  card.style.cssText = 'width:min(86vw, 340px); background:linear-gradient(165deg, rgba(10,44,34,0.98), rgba(6,22,18,0.98)); border:2px solid var(--photon); border-radius:22px; padding:28px 22px; text-align:center; font-family:"Space Grotesk", sans-serif; box-shadow:0 0 45px rgba(41,217,194,0.45), inset 0 0 28px rgba(41,217,194,0.08); animation:payPop .38s cubic-bezier(.2,1.5,.4,1);';
+  card.innerHTML = '';
+  const icon = document.createElement('div');
+  icon.textContent = '✅';
+  icon.style.cssText = 'font-size:52px; line-height:1; margin-bottom:12px; filter:drop-shadow(0 0 14px rgba(41,217,194,0.7));';
+  const title = document.createElement('div');
+  title.textContent = 'PAYMENT CONFIRMED';
+  title.style.cssText = 'color:var(--photon); font-size:19px; font-weight:800; letter-spacing:1.5px; text-shadow:0 0 16px rgba(41,217,194,0.6);';
+  const sub = document.createElement('div');
+  sub.textContent = amountWld ? `${Number(amountWld).toFixed(2)} WLD secured — searching for opponent...` : 'Your entry fee is secured — searching for opponent...';
+  sub.style.cssText = 'color:#9fe8de; font-size:12px; margin-top:8px; opacity:.9; line-height:1.5;';
+  const bar = document.createElement('div');
+  bar.style.cssText = 'width:56px; height:3px; margin:16px auto 0; border-radius:2px; background:linear-gradient(90deg, transparent, var(--photon), transparent); background-size:200% 100%; animation:payBar 1s linear infinite;';
+  card.appendChild(icon);
+  card.appendChild(title);
+  card.appendChild(sub);
+  card.appendChild(bar);
+  overlay.appendChild(card);
+  overlay.addEventListener('click', () => overlay.remove());
+  document.body.appendChild(overlay);
+  setTimeout(() => {
+    overlay.style.transition = 'opacity .3s ease';
+    overlay.style.opacity = '0';
+    setTimeout(() => overlay.remove(), 320);
+  }, 2400);
+}
+
 // Neon toast — replaces every native alert() with styled UI.
 // types: 'success' | 'warning' | 'error' | 'info'
 function showNeonToast(message, type = 'info') {
@@ -1142,6 +1182,9 @@ async function handlePlayButtonClick(){
     
     if (payRes && payRes.finalPayload && payRes.finalPayload.status === 'success') {
       paymentSuccessful = true;
+      // GREEN PAYMENT CONFIRMED POPUP — shown the instant MiniKit
+      // reports success (before the slower on-chain verify below).
+      showPaymentConfirmedPopup(selectedFee);
     } else {
       paymentSuccessful = false;
     }
@@ -1164,6 +1207,7 @@ async function handlePlayButtonClick(){
 
     if (recoveredPayment) {
       paymentSuccessful = true;
+      showPaymentConfirmedPopup(selectedFee);
       showNeonToast('✅ Payment confirmed on-chain', 'success');
     } else {
       showNeonToast('⚠️ Payment was cancelled or failed. No WLD was deducted.', 'warning');
