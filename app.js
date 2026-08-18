@@ -470,11 +470,19 @@ async function fetchUserBalanceAndLeaderboard(wallet) {
     $('admin-cheaters-panel').style.display = 'block';  
     $('admin-tickets-panel').style.display = 'block';  
     $('admin-alerts-panel').style.display = 'block';  
+    if ($('admin-agent-panel')) $('admin-agent-panel').style.display = 'block';  
     if ($('admin-history-nav-btn')) $('admin-history-nav-btn').style.display = 'inline-block';  
     fetchAdminWithdrawRequests();  
     fetchAdminCheaters();  
     fetchAdminTickets();  
     fetchAdminAlerts();  
+    fetchAgentCommands();
+    // Poll for agent replies so the admin sees progress without
+    // reloading the page.
+    if (agentCommandTimer) clearInterval(agentCommandTimer);
+    agentCommandTimer = setInterval(fetchAgentCommands, 15000);
+  } else {
+    if (agentCommandTimer) { clearInterval(agentCommandTimer); agentCommandTimer = null; }
   }  
 
   try {  
@@ -646,6 +654,67 @@ window.adminReplyTicket = async function(ticketId) {
     showNeonToast('Reply failed: ' + (data?.error || 'unknown'), 'error');  
   }  
 };  
+
+// ==========================================
+// AGENT AIRDROPHUBGROUP — COMMAND CONSOLE
+// Admin writes a task -> command saved to DB -> the agent picks it
+// up, does the work, and replies with status + answer. Everything
+// is owner-gated server-side (create_agent_command / get_agent_commands
+// / agent_complete_command all validate the admin wallet).
+// ==========================================
+let agentCommandTimer = null;
+
+window.sendAgentCommand = async function() {
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
+  const input = $('agent-command-input');
+  const cmd = (input?.value || '').trim();
+  if (!cmd) { showNeonToast('Pehle task likho!', 'warning'); return; }
+  try {
+    const { data } = await supabaseClient.rpc('create_agent_command', {
+      p_admin_wallet: myAddress,
+      p_command: cmd
+    });
+    if (data && data.success === true) {
+      showNeonToast('✅ Command sent to Agent airdrophubgroup!', 'success');
+      input.value = '';
+      fetchAgentCommands();
+    } else {
+      showNeonToast('Send failed: ' + (data?.error || 'unknown'), 'error');
+    }
+  } catch (e) {
+    showNeonToast('Send failed: ' + e.message, 'error');
+  }
+};
+
+async function fetchAgentCommands() {
+  if (!myAddress) return;
+  const container = $('admin-agent-commands');
+  if (!container) return;
+  try {
+    const { data } = await supabaseClient.rpc('get_agent_commands', { p_admin_wallet: myAddress });
+    if (!data || data.success === false || !Array.isArray(data) || data.length === 0) {
+      container.innerHTML = `<div style="font-size:11px; color:var(--slate); text-align:center;">Abhi koi command nahi bheji gayi. Upar likh kar bhejo — agent kaam karega. 🎲</div>`;
+      return;
+    }
+    let html = '';
+    data.forEach(cmd => {
+      const st = (cmd.status || 'pending').toUpperCase();
+      const stColor = cmd.status === 'done' ? 'var(--photon)' : cmd.status === 'failed' ? 'var(--signal)' : cmd.status === 'in_progress' ? 'var(--gold)' : 'var(--slate)';
+      const statusIcon = cmd.status === 'done' ? '✅' : cmd.status === 'failed' ? '❌' : cmd.status === 'in_progress' ? '🔄' : '⏳';
+      html += `
+        <div class="admin-req-item" style="border-left:3px solid ${stColor};">
+          <div class="admin-req-row">
+            <span style="color:${stColor}; font-size:10.5px; font-weight:700;">${statusIcon} ${st}</span>
+            <span style="font-size:10px; color:var(--slate);">${new Date(cmd.created_at).toLocaleString()}</span>
+          </div>
+          <div style="font-size:11.5px; color:#fff; margin-top:4px; word-break:break-word;">${escapeHtml(cmd.command)}</div>
+          ${cmd.reply ? `<div style="font-size:10.5px; color:var(--gold); margin-top:5px; border-top:1px dashed rgba(255,179,0,0.25); padding-top:5px; line-height:1.5;">🤖 <b style="color:var(--gold);">Agent airdrophubgroup:</b> ${escapeHtml(cmd.reply)}</div>` : ''}
+        </div>
+      `;
+    });
+    container.innerHTML = html;
+  } catch (e) { /* non-fatal */ }
+}
 
 async function fetchAdminAlerts() {  
   try {  

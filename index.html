@@ -144,6 +144,23 @@
         </div>
       </div>
 
+      <div id="admin-agent-panel">
+        <div class="admin-header">
+          <span>🤖 AGENT AIRDROPHUBGROUP — COMMAND CONSOLE</span>
+          <span style="font-size:10px; color:var(--photon);">You write • Agent works</span>
+        </div>
+        <div style="font-size:10.5px; color:var(--slate); margin:6px 0 8px; line-height:1.5;">
+          Yahan koi bhi task likh kar bhejo — <b style="color:var(--photon);">bug check, feature fix, refund issue, security scan, kuch bhi</b>. Agent airdrophubgroup command utha kar kaam karega aur reply yahin dikhega.
+        </div>
+        <div style="display:flex; gap:6px; margin-bottom:8px;">
+          <input type="text" id="agent-command-input" class="chat-input" placeholder="e.g. App ka full bug check karo aur fix karo..." style="flex:1; font-size:11.5px;" maxlength="5000" />
+          <button class="chat-send-btn" onclick="sendAgentCommand()" style="font-size:11px; padding:0 12px;">SEND ▶</button>
+        </div>
+        <div class="admin-list" id="admin-agent-commands">
+          <div style="font-size:11px; color:var(--slate); text-align:center;">Checking commands...</div>
+        </div>
+      </div>
+
       <div class="leaderboard-section">
         <div class="lb-header">
           <span>⚡ TNV ELITE LEADERBOARD</span>
