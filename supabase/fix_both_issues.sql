@@ -125,8 +125,11 @@ grant execute on function public.agent_start_command(text, bigint) to anon, auth
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
--- Remove any old refund cron job (safe if doesn't exist)
-select cron.unschedule('refund-resolver-every-minute');
+-- Remove old refund cron job if it exists (skip error if not)
+do $$ begin
+  perform cron.unschedule('refund-resolver-every-minute');
+exception when others then null;
+end $$;
 
 -- Schedule refund-resolver to run every minute
 -- It processes all 'pending' refund_queue rows and sends WLD back to players
