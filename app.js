@@ -615,8 +615,23 @@ async function fetchAdminTickets() {
     data.forEach(t => {
       const shortAddr = (t.user_wallet || '').slice(0, 6) + '...' + (t.user_wallet || '').slice(-4);
       const verified = t.verified && typeof t.verified === 'object' ? t.verified : {};
-      const vKeys = Object.keys(verified);
+      const vKeys = Object.keys(verified).filter(k => k !== 'conversation');
       const vHtml = vKeys.length > 0 ? `<div style="font-size:10px; color:var(--photon); margin-top:4px; font-family:'JetBrains Mono',monospace;">${vKeys.map(k => `${escapeHtml(String(k))}: ${escapeHtml(JSON.stringify(verified[k]))}`).join(' · ')}</div>` : '';
+      // Full conversation the user had with Agent airdrophubgroup — shown
+      // to the admin as a chat transcript (user right / agent left).
+      const conv = Array.isArray(verified.conversation) ? verified.conversation : [];
+      const convHtml = conv.length > 0
+        ? `<div style="margin-top:6px; border:1px solid rgba(41,217,194,0.2); border-radius:8px; background:rgba(41,217,194,0.04); padding:6px 8px;">
+             <div style="font-size:9px; letter-spacing:1px; color:var(--gold); font-weight:700; margin-bottom:4px;">💬 USER CONVERSATION (Agent airdrophubgroup)</div>
+             ${conv.map(m => {
+               const who = m.who === 'user' ? 'user' : 'agent';
+               const name = m.who === 'user' ? escapeHtml(t.user_username || 'User') : '🤖 Agent';
+               const align = m.who === 'user' ? 'text-align:right; margin-left:24px;' : 'text-align:left; margin-right:24px;';
+               const bg = m.who === 'user' ? 'rgba(255,179,0,0.10); border:1px solid rgba(255,179,0,0.3);' : 'rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);';
+               return `<div style="margin:3px 0;"><div style="font-size:8.5px; color:var(--slate);">${name}</div><div style="${align} display:inline-block; max-width:85%; padding:4px 7px; border-radius:7px; font-size:10.5px; line-height:1.4; ${bg}">${escapeHtml(m.text || '')}</div></div>`;
+             }).join('')}
+           </div>`
+        : '';
       html += `  
         <div class="admin-req-item" style="border-left:3px solid ${t.status === 'replied' ? 'var(--gold)' : 'var(--photon)'};">  
           <div class="admin-req-row">  
@@ -625,6 +640,7 @@ async function fetchAdminTickets() {
           </div>  
           <div style="font-size:11.5px; color:#fff; margin-top:4px;">${escapeHtml(t.summary || '')}</div>  
           ${vHtml}  
+          ${convHtml}  
           ${t.admin_reply ? `<div style="font-size:10.5px; color:var(--gold); margin-top:4px; border-top:1px dashed rgba(255,179,0,0.25); padding-top:4px;">💬 You (${escapeHtml(t.admin_username || 'Admin')}): ${escapeHtml(t.admin_reply)}</div>` : ''}  
           <div style="display:flex; gap:6px; margin-top:6px;">  
             <input id="ticket-reply-${t.id}" class="modal-input" style="flex:1; font-size:11px; padding:7px 9px;" placeholder="Type your reply (your real username will show)..." />  
@@ -1856,12 +1872,19 @@ window.closeSupportBot = function() {
   botStep = 0;
 };
 
+// Conversation transcript — every bot/user message is logged here so
+// that when the user talks to Agent airdrophubgroup, the ADMIN sees the
+// user's FULL conversation (what they said, step by step) right in the
+// ticket. The transcript is attached to the ticket's verified JSON.
+let botTranscript = [];
+
 function botAddMsg(type, text) {
   const div = document.createElement('div');
   div.className = `bot-msg ${type}`;
   div.textContent = text;
   $('bot-messages').appendChild(div);
   $('bot-messages').scrollTop = $('bot-messages').scrollHeight;
+  logBotTranscript(type, text);
 }
 
 function botAddHtmlMsg(type, html) {
@@ -1870,6 +1893,21 @@ function botAddHtmlMsg(type, html) {
   div.innerHTML = html;
   $('bot-messages').appendChild(div);
   $('bot-messages').scrollTop = $('bot-messages').scrollHeight;
+  logBotTranscript(type, stripHtml(html));
+}
+
+// Strip tags from HTML messages so the transcript stays clean text.
+function stripHtml(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  return (tmp.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+}
+
+function logBotTranscript(type, text) {
+  if (!text) return;
+  const who = type === 'user' ? 'user' : 'bot';
+  botTranscript.push({ who, text: String(text).slice(0, 300), t: Date.now() });
+  if (botTranscript.length > 120) botTranscript.splice(0, botTranscript.length - 120);
 }
 
 function botShowTyping() {
@@ -2036,6 +2074,9 @@ let botAgentSummary = '';
 
 function botStartAgent() {
   botClearBtns();
+  // Start a fresh transcript for this agent session — the admin will see
+  // this user's full conversation attached to the ticket.
+  botTranscript = [];
   botAddHtmlMsg('bot', '🤝 Hi! I\'m <b>Agent airdrophubgroup</b> — a real person from the airdrophubgroup team, not a bot. 🤗');
   botAddMsg('bot', 'I understand you\'re having trouble. Please don\'t worry — I\'ll personally look into it with you, step by step, and make sure you\'re taken care of. ❤️');
   botAddMsg('bot', 'Can you tell me what happened?');
@@ -2141,11 +2182,14 @@ async function botCreateTicket() {
   const summary = `${issueLabels[v.issue] || 'Support request'} — Payments: ${v.paid_matches || 0}, Refunded: ${v.refunded || 0}, Missing: ${v.missing || 0}`;
   botShowTyping();
   try {
+    // Attach the FULL conversation transcript so the admin (airdrophubgroup)
+    // sees exactly what the user said in their own words.
+    const verifiedWithConversation = Object.assign({}, v, { conversation: botTranscript });
     const { data } = await supabaseClient.rpc('create_support_ticket', {
       p_wallet: myAddress.toLowerCase(),
       p_username: myUsername || '',
       p_summary: summary,
-      p_verified: v
+      p_verified: verifiedWithConversation
     });
     botHideTyping();
     if (data && data.success) {

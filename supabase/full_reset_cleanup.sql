@@ -28,6 +28,8 @@ delete from public.user_rewards;
 delete from public.withdraw_requests;
 delete from public.cheater_logs;
 delete from public.system_alerts;
+delete from public.support_tickets;
+delete from public.agent_commands;
 
 -- 6. Reset serial sequences so IDs start from 1 again (fresh start)
 do $$
