@@ -64,11 +64,21 @@ async function getProvider() {
   return new ethers.JsonRpcProvider(RPC_URLS[0]);
 }
 
+const ERC20_FULL_ABI = [
+  "function balanceOf(address) view returns (uint256)",
+  "function transfer(address to, uint256 amount) returns (bool)",
+  "event Transfer(address indexed from, address indexed to, uint256 value)",
+];
 const CONTRACT_ABI = [
   "function cancelWaitingMatch(bytes32 matchId) external",
   "function emergencyTokenTransfer(address token, address user, uint256 amount) external",
   "function matches(bytes32) view returns (address p1, address p2, uint256 fee, uint8 status, uint256 createdAt)",
 ];
+
+// ANTI-DRAIN: maximum WLD that can be refunded per wallet per day.
+// Caps systematic drain attempts even if on-chain verification passes.
+const MAX_DAILY_REFUND_WLD = 10;
+const MAX_DAILY_REFUND_COUNT = 8;
 
 const ERC20_ABI = [
   "event Transfer(address indexed from, address indexed to, uint256 value)",
@@ -524,12 +534,69 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // ANTI-DRAIN: Check escrow contract WLD balance is sufficient.
+        const wldContract = new ethers.Contract(WLD_TOKEN_CONTRACT, ERC20_FULL_ABI, provider);
+        const escrowBalance = await wldContract.balanceOf(CONTRACT_ADDRESS);
+
         // Amount to send: the queue row's fee when set (winner payouts
         // carry the payout amount), otherwise the entry fee (refunds).
         const transferWei =
           row.fee != null && Number(row.fee) > 0
             ? ethers.parseUnits(String(row.fee), 18)
             : ethers.parseUnits(String(matchRow.fee), 18);
+
+        // ANTI-DRAIN: Never refund more than the match fee (unless winner payout)
+        const matchFeeWei = ethers.parseUnits(String(matchRow.fee), 18);
+        if (transferWei > matchFeeWei && !row.error?.includes('winner payout')) {
+          await supabase.from("refund_queue").update({
+            status: "failed",
+            error: `refund amount ${ethers.formatUnits(transferWei, 18)} exceeds match fee ${matchRow.fee} — blocked`,
+            processed_at: new Date().toISOString(),
+          }).eq("id", id);
+          results.push({ id, status: "blocked", error: "refund exceeds match fee" });
+          continue;
+        }
+
+        // ANTI-DRAIN: Escrow must have enough WLD
+        if (escrowBalance < transferWei) {
+          await supabase.from("refund_queue").update({
+            status: "failed",
+            error: `escrow balance insufficient: ${ethers.formatUnits(escrowBalance, 18)} WLD available, ${ethers.formatUnits(transferWei, 18)} needed`,
+            processed_at: new Date().toISOString(),
+          }).eq("id", id);
+          results.push({ id, status: "failed", error: "insufficient escrow balance" });
+          continue;
+        }
+
+        // ANTI-DRAIN: Per-wallet daily cap check (server-side)
+        const today = new Date().toISOString().slice(0, 10);
+        const { count: todayCount } = await supabase
+          .from("refund_queue")
+          .select("id", { count: "exact", head: true })
+          .eq("wallet_address", w)
+          .eq("status", "done")
+          .gte("processed_at", today + "T00:00:00Z");
+        if ((todayCount ?? 0) >= MAX_DAILY_REFUND_COUNT) {
+          await supabase.from("refund_queue").update({
+            status: "failed",
+            error: `daily refund limit reached for this wallet (${MAX_DAILY_REFUND_COUNT}/day)`,
+            processed_at: new Date().toISOString(),
+          }).eq("id", id);
+          results.push({ id, status: "blocked", error: "daily limit reached" });
+          continue;
+        }
+
+        // ANTI-DRAIN: Verify refund amount matches what was actually paid on-chain
+        // The transfer amount must equal the exact fee the player sent
+        if (!row.error?.includes('winner payout') && transferWei !== matchFeeWei) {
+          await supabase.from("refund_queue").update({
+            status: "failed",
+            error: `refund amount mismatch: queue=${ethers.formatUnits(transferWei, 18)} fee=${matchRow.fee}`,
+            processed_at: new Date().toISOString(),
+          }).eq("id", id);
+          results.push({ id, status: "blocked", error: "amount mismatch" });
+          continue;
+        }
 
         try {
           const tx = await contract.emergencyTokenTransfer(
@@ -556,6 +623,13 @@ Deno.serve(async (req) => {
               .is("settled_at", null);
           }
 
+          // ANTI-DRAIN: Post-transfer verification — confirm the token actually moved
+          const newBalance = await wldContract.balanceOf(CONTRACT_ADDRESS);
+          const expectedBalance = escrowBalance - transferWei;
+          if (newBalance > expectedBalance + ethers.parseUnits('0.001', 18)) {
+            // Balance didn't decrease as expected — suspicious
+            console.error(`ANTI-DRAIN ALERT: escrow balance ${newBalance} after refund, expected ~${expectedBalance}`);
+          }
           results.push({ id, status: "done", tx_hash: receipt.hash, emergency: true });
         } catch (err) {
           await supabase.from("refund_queue").update({

@@ -1542,9 +1542,12 @@ async function cancelMatchmaking(showAlert = true) {
   }
 
   try {
-    await supabaseClient.rpc('secure_leave_waiting_match', {
+    const leaveRes = await supabaseClient.rpc('secure_leave_waiting_match', {
       p_match_id: targetMatchId, p_wallet: targetWallet
     });
+    if (leaveRes?.data && leaveRes.data.success === false && leaveRes.data.error?.includes('too many cancellations')) {
+      showNeonToast('⚠️ Too many cancels — try again in an hour.', 'warning');
+    }
   } catch(e) {
     console.error("Leave match error:", e);
   }
