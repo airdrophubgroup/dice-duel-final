@@ -726,10 +726,15 @@ window.openUserHistoryModal = async function() {
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading history...</div>`;  
   try {  
     // Server-side cleanup: delete this user's matches older than the
-    // latest 10 (completed ones only, refund-pending never touched).
-    // Best-effort — never block the history view on cleanup.
+    // latest 10 (completed ones only, refund-pending never touched)
+    // AND their old match_history ledger rows (ADMIN_FEE rows are
+    // never touched — that is the admin revenue ledger). Best-effort
+    // — never block the history view on cleanup.
     try {
       await supabaseClient.rpc('prune_user_matches', { p_wallet: myAddress });
+    } catch (e) { /* prune is best-effort */ }
+    try {
+      await supabaseClient.rpc('prune_user_history', { p_wallet: myAddress });
     } catch (e) { /* prune is best-effort */ }
     const { data } = await supabaseClient.from('matches')  
       .select('*')  
@@ -884,6 +889,11 @@ window.submitWithdrawRequest = async function() {
 async function autoScanAndRefund(wallet) {
   if (!wallet) return;
   const w = wallet.toLowerCase().trim();
+  // DB hygiene: keep the database clean automatically — delete this
+  // user's old matches + ledger rows beyond the latest 10 (best-effort,
+  // never blocks, never touches ADMIN_FEE / refund-pending rows).
+  try { await supabaseClient.rpc('prune_user_matches', { p_wallet: w }); } catch (e) {}
+  try { await supabaseClient.rpc('prune_user_history', { p_wallet: w }); } catch (e) {}
   try {
     // Find any cancelled/waiting/matched/expired matches where this user paid
     // but has no pending/completed refund
