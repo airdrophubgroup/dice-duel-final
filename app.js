@@ -881,23 +881,43 @@ window.openUserWithdrawalsModal = async function() {
 };  
 
 window.openAdminEarningsModal = async function() {  
+  // ADMIN-ONLY: the revenue ledger belongs to the admin wallet alone.
+  // This check runs in the UI AND the RPC validates server-side.
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) { showNeonToast('Admin only', 'error'); return; }  
   $('admin-earnings-modal').style.display = 'flex';  
   const container = $('admin-earnings-list');  
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading revenue...</div>`;  
   try {  
-    // ALL admin fees — no limit. Whatever was collected, every row shows.
-    // match_history direct reads are now revoked (privacy lockdown); the
-    // admin reads their own fee ledger through the admin_get_revenue RPC.
+    // Daily revenue summary (24h groups) — admin wallet only.
+    let daily = null;
+    try {
+      const { data: dd } = await supabaseClient.rpc('admin_get_daily_revenue', { p_admin_wallet: myAddress });
+      if (dd && dd.success) daily = dd;
+    } catch (e) { /* not live yet — fall through */ }
+    // Full fee ledger — every ADMIN_FEE row (admin wallet only).
     let data = null;
     try {
-      const { data: rd } = await supabaseClient.rpc('admin_get_revenue', { p_admin_wallet: PAYMENT_RECV_WALLET });
+      const { data: rd } = await supabaseClient.rpc('admin_get_revenue', { p_admin_wallet: myAddress });
       data = rd && Array.isArray(rd) ? rd : null;
-    } catch (e) { /* RPC unavailable — fall back to direct read */ }
-    if (!data) {
-      const { data: fd } = await supabaseClient.from('match_history').select('*').eq('wallet_address', PAYMENT_RECV_WALLET).eq('action_type', 'ADMIN_FEE').order('created_at', { ascending: false });
-      data = fd;
-    }  
+    } catch (e) { /* RPC unavailable */ }
     if (!data || data.length === 0) { container.innerHTML = `<div style="text-align:center; color:var(--slate);">No fees collected.</div>`; return; }  
+    // --- Daily revenue cards (24h groups) ---
+    let dayHtml = '';
+    if (daily && Array.isArray(daily.days) && daily.days.length > 0) {
+      dayHtml += `<div style="font-size:10px; letter-spacing:1.2px; color:var(--gold); font-weight:700; margin:8px 0 6px;">📅 DAILY REVENUE (24H)</div>`;
+      dayHtml += daily.days.map(d => {
+        const isToday = daily.today && String(d.day) === String(daily.today.date);
+        const label = isToday ? 'TODAY' : String(d.day).slice(0, 10);
+        return `<div style="display:flex; justify-content:space-between; align-items:center; padding:7px 10px; border-radius:8px; margin-bottom:5px; background:${isToday ? 'rgba(255,179,0,0.14)' : 'rgba(255,255,255,0.03)'}; border:1px solid ${isToday ? 'rgba(255,179,0,0.45)' : 'rgba(255,255,255,0.06)'};">` +
+          `<span style="font-size:10.5px; font-weight:700; color:${isToday ? 'var(--gold)' : 'var(--bone)'};">${label}</span>` +
+          `<span style="font-size:11px; font-weight:700; color:var(--gold);">+${Number(d.total).toFixed(2)} WLD <span style="color:var(--slate); font-weight:400;">· ${d.fees} fee(s)</span></span>` +
+          `</div>`;
+      }).join('');
+      if (daily.all_time_total !== undefined) {
+        dayHtml += `<div style="font-size:10.5px; color:var(--slate); text-align:right; margin-top:3px;">🏆 All-time total: <b style="color:var(--gold);">${Number(daily.all_time_total).toFixed(2)} WLD</b></div>`;
+      }
+    }
+    // --- Full ledger ---
     let total = 0, html = '';  
     data.forEach(i => {   
       total += Number(i.amount || 0);   
@@ -912,7 +932,7 @@ window.openAdminEarningsModal = async function() {
         </div>  
       `;   
     });  
-    container.innerHTML = `<div style="color:var(--gold); font-weight:700; margin-bottom:8px;">Total: ${total.toFixed(2)} WLD · ${data.length} fee(s)</div>` + html;  
+    container.innerHTML = dayHtml + `<div style="color:var(--gold); font-weight:700; margin:8px 0;">Total: ${total.toFixed(2)} WLD · ${data.length} fee(s)</div>` + html;  
   } catch(e) {}  
 };  
 
