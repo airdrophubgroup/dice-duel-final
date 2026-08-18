@@ -695,10 +695,19 @@ window.sendAgentCommand = async function() {
       input.value = '';
       fetchAgentCommands();
     } else {
-      showNeonToast('Send failed: ' + (data?.error || 'unknown'), 'error');
+      const errMsg = data?.error || 'unknown';
+      if (errMsg === 'unauthorized') {
+        showNeonToast('This feature is admin-only.', 'error');
+      } else {
+        showNeonToast('Send failed: ' + errMsg + ' (Run agent_commands.sql in Supabase Dashboard)', 'error');
+      }
     }
   } catch (e) {
-    showNeonToast('Send failed: ' + e.message, 'error');
+    if (e.message && e.message.includes('404')) {
+      showNeonToast('Agent commands not set up yet. Admin: run agent_commands.sql in Supabase Dashboard.', 'error');
+    } else {
+      showNeonToast('Send failed: ' + e.message, 'error');
+    }
   }
 };
 

@@ -243,7 +243,7 @@
     </section>
   </main>
 
-  <div id="chat-modal" class="custom-modal">
+  <div id="chat-modal" class="custom-modal" onclick="if(event.target===this)closeChatModal()">
     <div class="modal-card chat-card">
       <div class="chat-header">
         <span>💬 Community Global Chat</span>
@@ -259,7 +259,7 @@
     </div>
   </div>
 
-  <div id="user-history-modal" class="custom-modal">
+  <div id="user-history-modal" class="custom-modal" onclick="if(event.target===this)closeUserHistoryModal()">
     <div class="modal-card" style="max-width:420px; width:92%;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
         <h3 style="margin:0; color:var(--photon);">📜 Match History <span style="font-size:10px; color:var(--slate);">(Latest 10)</span></h3>
@@ -272,7 +272,7 @@
     </div>
   </div>
 
-  <div id="user-withdrawals-modal" class="custom-modal">
+  <div id="user-withdrawals-modal" class="custom-modal" onclick="if(event.target===this)closeUserWithdrawalsModal()">
     <div class="modal-card" style="max-width:420px; width:92%;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
         <h3 style="margin:0; color:var(--photon);">💸 Withdrawal Requests</h3>
@@ -285,7 +285,7 @@
     </div>
   </div>
 
-  <div id="admin-earnings-modal" class="custom-modal">
+  <div id="admin-earnings-modal" class="custom-modal" onclick="if(event.target===this)closeAdminEarningsModal()">
     <div class="modal-card" style="max-width:450px; width:92%;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
         <h3 style="margin:0; color:var(--gold);">🛡️ Admin Revenue Ledger</h3>
@@ -310,8 +310,9 @@
     </div>
   </div>
 
-  <div id="withdraw-modal" class="custom-modal">
-    <div class="modal-card">
+  <div id="withdraw-modal" class="custom-modal" onclick="if(event.target===this)closeWithdrawModal()">
+    <div class="modal-card" style="position:relative;">
+      <button onclick="closeWithdrawModal()" style="position:absolute;top:12px;right:12px;background:none;border:none;color:var(--slate);font-size:18px;cursor:pointer;padding:4px 8px;">✕</button>
       <h3>⚡ WITHDRAW TNV</h3>
       <p style="font-size:12px; color:var(--slate); margin:4px 0 16px;">Available: <span id="modal-bal" style="color:var(--gold);">0</span> TNV</p>
       
@@ -327,7 +328,7 @@
   </div>
 
   <!-- PAYMENT SUPPORT BOT -->
-  <div id="support-bot-modal" class="custom-modal">
+  <div id="support-bot-modal" class="custom-modal" onclick="if(event.target===this)closeSupportBot()">
     <div class="modal-card" style="max-width:380px; width:95%; height:70vh; display:flex; flex-direction:column; padding:0 !important; overflow:hidden;">
       <div style="background:linear-gradient(135deg, rgba(41,217,194,0.15), rgba(108,92,231,0.15)); padding:14px 16px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
         <div style="display:flex; align-items:center; gap:8px;">
@@ -352,8 +353,9 @@
     </div>
   </div>
 
-  <div id="admin-approve-modal" class="custom-modal">
-    <div class="modal-card">
+  <div id="admin-approve-modal" class="custom-modal" onclick="if(event.target===this)closeAdminModal()">
+    <div class="modal-card" style="position:relative;">
+      <button onclick="closeAdminModal()" style="position:absolute;top:12px;right:12px;background:none;border:none;color:var(--slate);font-size:18px;cursor:pointer;padding:4px 8px;">✕</button>
       <h3>🛡️ APPROVE WITHDRAWAL</h3>
       <p id="admin-modal-info" style="font-size:12px; color:var(--slate); margin:4px 0 12px;"></p>
       
