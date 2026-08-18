@@ -1094,9 +1094,9 @@ function showPaymentConfirmedPopup(amountWld) {
   if (prev) prev.remove();
   const overlay = document.createElement('div');
   overlay.id = 'payment-confirmed-popup';
-  overlay.style.cssText = 'position:fixed; inset:0; z-index:999997; display:flex; align-items:center; justify-content:center; background:rgba(4,18,14,0.55); backdrop-filter:blur(5px); animation:payFadeIn .25s ease;';
+  overlay.style.cssText = 'position:fixed; inset:0; z-index:999997; display:flex; align-items:center; justify-content:center; background:rgba(4,18,14,0.55); animation:payFadeIn .25s ease; pointer-events:none;';
   const card = document.createElement('div');
-  card.style.cssText = 'width:min(86vw, 340px); background:linear-gradient(165deg, rgba(10,44,34,0.98), rgba(6,22,18,0.98)); border:2px solid var(--photon); border-radius:22px; padding:28px 22px; text-align:center; font-family:"Space Grotesk", sans-serif; box-shadow:0 0 45px rgba(41,217,194,0.45), inset 0 0 28px rgba(41,217,194,0.08); animation:payPop .38s cubic-bezier(.2,1.5,.4,1);';
+  card.style.cssText = 'width:min(86vw, 340px); background:linear-gradient(165deg, rgba(10,44,34,0.98), rgba(6,22,18,0.98)); border:2px solid var(--photon); border-radius:22px; padding:28px 22px; text-align:center; font-family:"Space Grotesk", sans-serif; box-shadow:0 0 45px rgba(41,217,194,0.45), inset 0 0 28px rgba(41,217,194,0.08); animation:payPop .38s cubic-bezier(.2,1.5,.4,1); pointer-events:auto;';
   card.innerHTML = '';
   const icon = document.createElement('div');
   icon.textContent = '✅';
@@ -1114,7 +1114,7 @@ function showPaymentConfirmedPopup(amountWld) {
   card.appendChild(sub);
   card.appendChild(bar);
   overlay.appendChild(card);
-  overlay.addEventListener('click', () => overlay.remove());
+  card.addEventListener('click', () => overlay.remove());
   document.body.appendChild(overlay);
   setTimeout(() => {
     overlay.style.transition = 'opacity .3s ease';
