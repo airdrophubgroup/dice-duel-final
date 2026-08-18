@@ -1962,9 +1962,22 @@ async function botHandleYes() {
   botShowTyping();
   botStep = 2;
 
+  // Ensure wallet is available — restore from localStorage if needed
+  if (!myAddress) {
+    myAddress = (localStorage.getItem('myAddress') || '').toLowerCase();
+    myUsername = localStorage.getItem('myUsername') || '';
+  }
+  if (!myAddress) {
+    botHideTyping();
+    botAddMsg('error', '⚠️ Please sign in first so I can check your account. Tap PLAY NOW to connect your wallet.');
+    botAddBtn('👍 Got it', () => closeSupportBot());
+    return;
+  }
+
   try {
     // Step 1: Find user's recent cancelled/waiting matches with payment
     const wallet = myAddress.toLowerCase().trim();
+    const refundableMatches = [];
     const { data: matches, error } = await supabaseClient
       .from('matches')
       .select('id, match_id, status, fee, p1_address, p2_address, p1_paid, p2_paid, p1_payment_tx_hash, p2_payment_tx_hash, created_at')
@@ -2286,6 +2299,17 @@ window.submitBotTxHash = async function() {
   }
   if (!txHash.startsWith('0x') || txHash.length < 10) {
     botAddMsg('error', 'Invalid transaction hash format. It should start with 0x.');
+    return;
+  }
+
+  // Ensure wallet is available
+  if (!myAddress) {
+    myAddress = (localStorage.getItem('myAddress') || '').toLowerCase();
+    myUsername = localStorage.getItem('myUsername') || '';
+  }
+  if (!myAddress) {
+    botAddMsg('error', '⚠️ Please sign in first so I can verify your transaction.');
+    botAddBtn('👍 Got it', () => closeSupportBot());
     return;
   }
 
