@@ -442,8 +442,9 @@ html.page-hidden .eco-chip{
 .stats-box .score.pop{ animation: scorePop 0.35s cubic-bezier(0.175,0.885,0.32,1.275); }
 @keyframes scorePop{ 0%{ transform: scale(1); } 50%{ transform: scale(1.35); color: var(--gold); } 100%{ transform: scale(1); } }
 #my-name-tag{ color: var(--photon); }
-#opp-name-tag{ color: var(--gold); }
-#game-timer{ font-family:'JetBrains Mono', monospace; color: var(--signal); font-weight:700; font-size: 28px; }
+#opp-name-tag{ color: var(--gold); }#game-timer{ font-family:'JetBrains Mono', monospace; color:var(--signal); font-weight:700; font-size: 28px; }
+#game-screen:not([style*='display: block']) .scene,
+#game-screen[style*='display: none'] .scene{ animation-play-state: paused !important; }
 
 .scene{ width: 120px; height: 120px; margin: 24px auto; perspective: 700px; animation: diceFloat 3.6s ease-in-out infinite; position:relative; }
 @keyframes diceFloat{ 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-10px); } }

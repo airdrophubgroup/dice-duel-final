@@ -1632,19 +1632,24 @@ async function runTimer(startTime = null){
 
     gameTimerInterval = setInterval(() => {  
         const elapsed = Math.floor((Date.now() - new Date(startTime).getTime()) / 1000);  
-        const remaining = 32 - elapsed;  
+        const remaining = 45 - elapsed;  
         $("game-timer").innerText = Math.max(remaining, 0) + "s";  
         if (remaining <= 2) $('turn-indicator').innerText = 'Calculating winner...';  
         if (remaining <= 0) {  
             clearInterval(gameTimerInterval);  
-            if (isP1) channel.send({ type: "broadcast", event: "game_force_end" });  
+            // BOTH players trigger game_force_end — if only P1 sends it,
+            // P2's game never ends when P1's device closes.
+            if (channel) channel.send({ type: 'broadcast', event: 'game_force_end' });  
             finalizeGame();  
         }  
     }, 1000);  
 }  
 
 // GLOWING ROLL FLASH: big neon number popup on screen
+// Limit max active flashes to prevent DOM stacking under rapid rolls.
 function showRollFlash(roll, label) {
+  // Remove any existing roll flash first to prevent stacking
+  document.querySelectorAll('.roll-flash').forEach(e => e.remove());
   const el = document.createElement('div');
   el.className = 'roll-flash';
   el.innerHTML = `<div style="text-align:center;"><div style="font-family:'Space Grotesk',sans-serif; font-size:12px; color:var(--photon); opacity:0.7; margin-bottom:8px; letter-spacing:1px;">${label || ''}</div><div class="roll-num">${roll}</div></div>`;
@@ -1661,7 +1666,8 @@ function showOpponentRoll(roll) {
     oppDice.classList.remove('hide');
     oppDice.classList.add('show');
   }
-  // Also show a brief flash overlay (smaller, gold-themed)
+  // Remove existing opponent flash to prevent stacking
+  document.querySelectorAll('.opp-roll-flash').forEach(e => e.remove());
   const el = document.createElement('div');
   el.className = 'opp-roll-flash';
   el.innerHTML = `<div style="text-align:center;"><div class="roll-num">${roll}</div><div class="roll-label">Opponent rolled</div></div>`;
@@ -1677,7 +1683,7 @@ async function rollDice(){
 
   isTimingLocked = true;  
   myTurnsLeft--;  
-  $('turn-indicator').innerText = `⏳ Please wait 2s... (${myTurnsLeft} turns left)`;  
+  $('turn-indicator').innerText = `Rolling... (${myTurnsLeft} turns left)`;  
 
   const roll = Math.floor(Math.random() * 6) + 1;  
 
@@ -1737,7 +1743,7 @@ async function rollDice(){
     if (myTurnsLeft > 0 && gameActive && $('game-timer').innerText !== '0s') {  
       $('turn-indicator').innerText = `tap the die to roll (${myTurnsLeft} turns left)`;  
     }  
-  }, 2000);  
+  }, 1200);  
 }  
 
 async function finalizeGame(){  
@@ -1880,7 +1886,7 @@ function resetToHome(){
   if (pollTimer) clearInterval(pollTimer);  
   if (gameTimerInterval) clearInterval(gameTimerInterval);  
   if (bookingRetryTimer) { clearInterval(bookingRetryTimer); bookingRetryTimer = null; }
-  if (channel) channel.unsubscribe();  
+  if (channel) { channel.unsubscribe(); channel = null; }
   $('waiting-overlay').style.display = 'none';  
   $('start-btn').disabled = false;  
   $('start-btn').innerText = `PLAY NOW (${selectedFee} WLD)`;  
