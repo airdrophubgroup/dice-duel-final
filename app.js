@@ -1473,6 +1473,10 @@ function setupChannel() {
         $('opp-score').innerText = oppScore;  
         const el = $('opp-score');  
         if (el) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }  
+        // SHOW OPPONENT'S DICE ROLL in real-time
+        if (payload.roll) {
+          showOpponentRoll(payload.roll);
+        }
       }  
     })  
     .on('broadcast', { event: 'game_force_end' }, () => finalizeGame())  
@@ -1639,6 +1643,32 @@ async function runTimer(startTime = null){
     }, 1000);  
 }  
 
+// GLOWING ROLL FLASH: big neon number popup on screen
+function showRollFlash(roll, label) {
+  const el = document.createElement('div');
+  el.className = 'roll-flash';
+  el.innerHTML = `<div style="text-align:center;"><div style="font-family:'Space Grotesk',sans-serif; font-size:12px; color:var(--photon); opacity:0.7; margin-bottom:8px; letter-spacing:1px;">${label || ''}</div><div class="roll-num">${roll}</div></div>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1200);
+}
+
+// OPPONENT ROLL: show what the opponent just rolled in real-time
+function showOpponentRoll(roll) {
+  // Update the opponent dice display area
+  const oppDice = $('opp-dice-display');
+  if (oppDice) {
+    oppDice.textContent = roll;
+    oppDice.classList.remove('hide');
+    oppDice.classList.add('show');
+  }
+  // Also show a brief flash overlay (smaller, gold-themed)
+  const el = document.createElement('div');
+  el.className = 'opp-roll-flash';
+  el.innerHTML = `<div style="text-align:center;"><div class="roll-num">${roll}</div><div class="roll-label">Opponent rolled</div></div>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1200);
+}
+
 async function rollDice(){  
   if (!checkWorldAppEnvironment()) return;  
   if (!gameActive || $('game-timer').innerText === '0s') return;  
@@ -1683,11 +1713,24 @@ async function rollDice(){
     myTurnsLeft = rpcRes.taps_left;  
   }  
 
+  // GLOWING DICE: shake + spin + glow pulse
+  const scene = $('dice-scene');
+  const cube = $('dice-cube');
+  if (scene) { scene.classList.remove('rolling'); void scene.offsetWidth; scene.classList.add('rolling'); }
+  if (cube) { cube.classList.remove('rolling','roll-glow','glow-pulse'); void cube.offsetWidth; cube.classList.add('rolling','roll-glow'); }
+
   const faceRotations = { 1: {x:0, y:0}, 2: {x:0, y:180}, 3: {x:0, y:-90}, 4: {x:0, y:90}, 5: {x:-90, y:0}, 6: {x:90, y:0} };  
   const rot = faceRotations[roll];  
-  $('dice-cube').style.transform = `rotateX(${rot.x + 720}deg) rotateY(${rot.y + 720}deg)`;  
+  setTimeout(() => {
+    if (cube) cube.style.transform = `rotateX(${rot.x + 720}deg) rotateY(${rot.y + 720}deg)`;
+  }, 100);
+  setTimeout(() => { if (cube) { cube.classList.remove('roll-glow'); cube.classList.add('glow-pulse'); } }, 700);
 
-  if (channel) channel.send({ type: 'broadcast', event: 'score_update', payload: { sender: myAddress, score: myScore } });  
+  // FLASH: big glowing number on screen
+  showRollFlash(roll, 'You rolled');
+
+  // Broadcast BOTH score AND roll value to opponent in real-time
+  if (channel) channel.send({ type: 'broadcast', event: 'score_update', payload: { sender: myAddress, score: myScore, roll: roll } });  
 
   setTimeout(() => {  
     isTimingLocked = false;  
@@ -1847,6 +1890,9 @@ function resetToHome(){
   paymentVerified = false;
   matchId = null;
   matchIdBytes32Global = null;
+  // Reset opponent dice display
+  const oppDice = $('opp-dice-display');
+  if (oppDice) { oppDice.classList.remove('show'); oppDice.classList.add('hide'); oppDice.textContent = '-'; }
 }document.querySelectorAll('.fee-chip').forEach(chip => {
   chip.addEventListener('click', () => selectFee(chip.dataset.fee, chip));
 });

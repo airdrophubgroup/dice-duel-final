@@ -445,26 +445,65 @@ html.page-hidden .eco-chip{
 #opp-name-tag{ color: var(--gold); }
 #game-timer{ font-family:'JetBrains Mono', monospace; color: var(--signal); font-weight:700; font-size: 28px; }
 
-.scene{ width: 110px; height: 110px; margin: 30px auto; perspective: 600px; animation: diceFloat 3.6s ease-in-out infinite; }
+.scene{ width: 120px; height: 120px; margin: 24px auto; perspective: 700px; animation: diceFloat 3.6s ease-in-out infinite; position:relative; }
 @keyframes diceFloat{ 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-10px); } }
-.cube{ width:100%; height:100%; position:relative; transform-style: preserve-3d; transition: transform .5s cubic-bezier(.175,.885,.32,1.275); cursor:pointer; }
+.scene.rolling{ animation: diceRollShake 0.6s ease-in-out; }
+@keyframes diceRollShake{ 0%{ transform: translateY(0) rotate(0deg); } 20%{ transform: translateY(-8px) rotate(5deg); } 40%{ transform: translateY(4px) rotate(-4deg); } 60%{ transform: translateY(-4px) rotate(3deg); } 80%{ transform: translateY(2px) rotate(-2deg); } 100%{ transform: translateY(0) rotate(0deg); } }
+.cube{ width:100%; height:100%; position:relative; transform-style: preserve-3d; transition: transform .6s cubic-bezier(.175,.885,.32,1.275); cursor:pointer; filter: drop-shadow(0 0 12px rgba(41,217,194,0.3)); }
+.cube.rolling{ animation: cubeSpin 0.6s cubic-bezier(.25,.46,.45,.94); }
+@keyframes cubeSpin{ 0%{ transform: rotateX(0) rotateY(0); } 25%{ transform: rotateX(180deg) rotateY(90deg); } 50%{ transform: rotateX(360deg) rotateY(180deg); } 75%{ transform: rotateX(540deg) rotateY(270deg); } 100%{ transform: rotateX(720deg) rotateY(360deg); } }
+.cube.roll-glow{ filter: drop-shadow(0 0 25px rgba(41,217,194,0.8)) drop-shadow(0 0 50px rgba(108,92,231,0.5)); transition: filter 0.3s ease; }
 .cube__face{
-  position:absolute; width:110px; height:110px; border: 1px solid var(--border);
-  background: radial-gradient(circle at 32% 32%, #ffffff 0%, #e6e6e6 70%, #cfcfcf 100%);
-  border-radius: 18px; display:flex; align-items:center; justify-content:center;
-  box-shadow: inset 0 0 10px rgba(0,0,0,0.15);
+  position:absolute; width:120px; height:120px;
+  border: 2px solid rgba(41,217,194,0.4);
+  background: linear-gradient(145deg, #1a2a25 0%, #0d1a16 50%, #152220 100%);
+  border-radius: 20px; display:flex; align-items:center; justify-content:center;
+  box-shadow: inset 0 0 20px rgba(41,217,194,0.1), 0 0 15px rgba(41,217,194,0.15);
 }
-.pip{ width:16px; height:16px; background: radial-gradient(circle at 40% 40%, #333, #000); border-radius:50%; display:inline-block; }
-.pip.red{ background: radial-gradient(circle at 40% 40%, var(--signal), #9c1c26); }
+.pip{ width:18px; height:18px; background: radial-gradient(circle at 35% 35%, var(--photon), #0a3a30 80%); border-radius:50%; display:inline-block; box-shadow: 0 0 8px rgba(41,217,194,0.6), 0 0 16px rgba(41,217,194,0.3), inset 0 0 4px rgba(255,255,255,0.3); }
+.pip.red{ background: radial-gradient(circle at 35% 35%, var(--signal), #5a0a10 80%); box-shadow: 0 0 8px rgba(255,95,109,0.6), 0 0 16px rgba(255,95,109,0.3), inset 0 0 4px rgba(255,255,255,0.3); }
 
-.front{ transform: rotateY(0deg) translateZ(55px); }
-.back{ transform: rotateY(180deg) translateZ(55px); }
-.right{ transform: rotateY(90deg) translateZ(55px); }
-.left{ transform: rotateY(-90deg) translateZ(55px); }
-.top{ transform: rotateX(90deg) translateZ(55px); }
+.front{ transform: rotateY(0deg) translateZ(60px); }
+.back{ transform: rotateY(180deg) translateZ(60px); }
+.right{ transform: rotateY(90deg) translateZ(60px); }
+.left{ transform: rotateY(-90deg) translateZ(60px); }
+.top{ transform: rotateX(90deg) translateZ(60px); }
 .bottom{ transform: rotateX(-90deg) translateZ(55px); }
 
 .tap-hint{ text-align:center; font-family:'JetBrains Mono', monospace; font-size: 11.5px; color: var(--slate); margin-top: 8px; }
+
+/* Opponent dice result display */
+.opp-dice-area{ display:flex; align-items:center; justify-content:center; gap:14px; margin-top:16px; min-height:52px; }
+.opp-dice-label{ font-family:'Space Grotesk', sans-serif; font-size:11px; color:var(--gold); font-weight:600; letter-spacing:0.5px; }
+.opp-dice-value{ width:44px; height:44px; border-radius:14px; display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(145deg, rgba(255,179,0,0.15), rgba(255,179,0,0.05));
+  border:2px solid rgba(255,179,0,0.4); font-family:'JetBrains Mono', monospace; font-size:22px; font-weight:800;
+  color:var(--gold); box-shadow:0 0 14px rgba(255,179,0,0.3), inset 0 0 8px rgba(255,179,0,0.1);
+  opacity:0; transform:scale(0.5); transition:all 0.4s cubic-bezier(.175,.885,.32,1.275); }
+.opp-dice-value.show{ opacity:1; transform:scale(1); }
+.opp-dice-value.hide{ opacity:0; transform:scale(0.5); }
+
+/* Roll result flash overlay */
+.roll-flash{ position:fixed; inset:0; z-index:99999; display:flex; align-items:center; justify-content:center;
+  background:rgba(4,18,14,0.4); pointer-events:none; animation:rollFlashIn 0.3s ease, rollFlashOut 0.4s ease 0.6s forwards; }
+.roll-flash .roll-num{ font-family:'JetBrains Mono', monospace; font-size:72px; font-weight:900;
+  color:var(--photon); text-shadow:0 0 30px rgba(41,217,194,0.8), 0 0 60px rgba(41,217,194,0.4), 0 0 100px rgba(108,92,231,0.3);
+  animation:rollNumPop 0.5s cubic-bezier(.175,.885,.32,1.275); }
+@keyframes rollFlashIn{ from{opacity:0;} to{opacity:1;} }
+@keyframes rollFlashOut{ from{opacity:1;} to{opacity:0;} }
+@keyframes rollNumPop{ 0%{transform:scale(0.3) rotate(-15deg); opacity:0;} 60%{transform:scale(1.2) rotate(3deg); opacity:1;} 100%{transform:scale(1) rotate(0deg); opacity:1;} }
+
+/* Glow pulse on dice after roll */
+.cube.glow-pulse{ animation: glowPulse 0.8s ease-in-out; }
+@keyframes glowPulse{ 0%{filter:drop-shadow(0 0 12px rgba(41,217,194,0.3));} 50%{filter:drop-shadow(0 0 30px rgba(41,217,194,0.9)) drop-shadow(0 0 60px rgba(108,92,231,0.5));} 100%{filter:drop-shadow(0 0 12px rgba(41,217,194,0.3));} }
+
+/* Opponent roll incoming flash */
+.opp-roll-flash{ position:fixed; inset:0; z-index:99998; display:flex; align-items:center; justify-content:center;
+  background:rgba(10,10,10,0.3); pointer-events:none; animation:rollFlashIn 0.2s ease, rollFlashOut 0.3s ease 0.8s forwards; }
+.opp-roll-flash .roll-num{ font-family:'JetBrains Mono', monospace; font-size:48px; font-weight:900;
+  color:var(--gold); text-shadow:0 0 20px rgba(255,179,0,0.7), 0 0 50px rgba(255,179,0,0.3);
+  animation:rollNumPop 0.4s cubic-bezier(.175,.885,.32,1.275); }
+.opp-roll-flash .roll-label{ font-family:'Space Grotesk', sans-serif; font-size:13px; color:var(--gold); opacity:0.7; margin-top:8px; }
 .fineprint{ text-align:center; margin-top: 14px; font-family:'JetBrains Mono', monospace; font-size: 11px; color: var(--slate); opacity:0.8; }
 
 #result-overlay{
