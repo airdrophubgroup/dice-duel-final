@@ -532,17 +532,14 @@ function renderBalances() {
     if (currentTnvBalance >= 5000) $('withdraw-btn').removeAttribute('disabled');  
     else $('withdraw-btn').setAttribute('disabled', 'true');  
   } catch (e) {}  
-}  
-
-async function logMatchHistory(wallet, type, amount, details) {  
-  try {  
-    await supabaseClient.from('match_history').insert({  
-      wallet_address: wallet ? wallet.toLowerCase().trim() : '',   
-      action_type: type,   
-      amount: amount,   
-      description: details,   
-      created_at: new Date().toISOString()  
-    });  
+}async function logMatchHistory(wallet, type, amount, details) {
+  try {
+    await supabaseClient.rpc('log_match_history', {
+      p_wallet: wallet,
+      p_action: type,
+      p_amount: amount,
+      p_description: details
+    });
   } catch(e) {}  
 }  
 
@@ -583,7 +580,7 @@ async function fetchAdminWithdrawRequests() {
 
 async function fetchAdminCheaters() {  
   try {  
-    const { data, error } = await supabaseClient.from('cheater_logs').select('*').order('detected_at', { ascending: false }).limit(20);  
+    const { data, error } = await supabaseClient.rpc('admin_get_cheaters', { p_admin_wallet: myAddress });  
     const container = $('admin-cheaters-container');  
     if (!container) return;  
     if (error || !data || data.length === 0) {  
