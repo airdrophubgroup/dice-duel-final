@@ -56,15 +56,16 @@ Games  (or: Entertainment)
 TNV Duel Arena -- the 1v1 skill timing duel inside World App.
 
 FIND YOUR RIVAL
-Tap PLAY NOW, choose your duel fee (0.1 - 50 WLD), and you're matched
-in seconds with a real player who put the same amount on the line.
+Tap PLAY NOW, choose your duel fee (0.1 - 50 WLD), and we'll search
+for a real opponent. You only pay once an opponent is found -- no
+upfront charges, no wasted fees.
 
 THE DUEL
 30 seconds, 15 turns each. A timing meter sweeps across red, yellow,
 and green zones -- tap at the right moment to score higher. The closer
-your tap to the green zone, the more points you score. Both players
-must pay to play, and the match only starts when both are verified
-on-chain, so every duel is fair.
+your tap to the green zone, the more points you score. Once matched, both players confirm their entry fee. The match
+only starts when both payments are verified on-chain, so every
+duel is fair. Cancel anytime before paying -- zero cost.
 
 THE REWARD
 The winner takes the published payout (up to 90 WLD) and receives TNV
@@ -72,8 +73,8 @@ rewards. The loser still receives a consolation TNV amount for showing
 up. Every match is recorded -- check your latest matches anytime.
 
 GOT A PROBLEM?
-Our in-app Payment Support Bot checks your payments on-chain, finds
-any missed refund, and queues it automatically. Still not satisfied?
+Our in-app Payment Support Bot checks your payments on-chain,
+finds any missed refund, and queues it automatically. Still not satisfied?
 Reach out on Telegram -- a real human replies with their real
 World username.
 

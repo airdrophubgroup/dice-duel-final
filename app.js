@@ -1303,168 +1303,198 @@ async function performWalletAuth(silent = false){
     matchIdBytes32Global = await matchIdToBytes32(matchRow.match_id || matchId);  
   } catch (e) {}  
 
-  $('wait-status').innerText = `Confirm payment in World App...`;  
+  // ============================================
+  // NEW FLOW: Search first, pay when opponent found
+  // Reviewer rejected the old flow because users had to
+  // pay before even knowing if an opponent existed.
+  // ============================================
 
-  const paymentReference = 'ref_' + randomAlphaNumeric(16);  
-  let paymentSuccessful = false;  
-  let payRes;  
-
-  try {  
-    // Timeout guard: in some environments MiniKit's pay() never resolves.
-    // The on-chain fallback below still recovers the payment, so a hang
-    // here must not leave the player stuck.
-    payRes = await Promise.race([
-      MiniKit.commandsAsync.pay({  
-        reference: paymentReference,  
-        to: DICE_DUEL_CONTRACT,  
-        tokens: [{ symbol: Tokens.WLD, token_amount: tokenToDecimals(selectedFee, Tokens.WLD).toString() }],  
-        description: `Dice Duel entry fee: ${selectedFee} WLD`,  
-      }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('payment_response_timeout')), 120000)),
-    ]);
+  // Check if opponent was already found (we joined an existing match)
+  const opponentFound = (matchRow.status === 'matched' && matchRow.p2_address && matchRow.p1_address);
+  
+  if (opponentFound) {
+    // We joined an existing waiting match — opponent is already there
+    const oppName = (isP1 ? matchRow.p2_username : matchRow.p1_username) || 'Opponent';
+    $('opp-name-tag').innerText = oppName;
+    $('wait-status').innerText = `Opponent found: ${oppName}`;
+    showNeonToast(`Opponent found: ${oppName}!`, 'success');
+    // Proceed directly to payment
+    await performPaymentAndStartSearch();
+  } else {
+    // We created a new match — search for opponent first (NO payment yet)
+    $('wait-status').innerText = `Searching for opponent... (0 WLD charged)`;
+    showNeonToast('Searching for opponent. You will be asked to pay only after an opponent is found.', 'info');
     
-    if (payRes && payRes.finalPayload && payRes.finalPayload.status === 'success') {
-      paymentSuccessful = true;
-      // GREEN PAYMENT CONFIRMED POPUP — shown the instant MiniKit
-      // reports success (before the slower on-chain verify below).
-      showPaymentConfirmedPopup(selectedFee);
-    } else {
-      paymentSuccessful = false;
+    // Broadcast live bet alert so other players know someone is searching
+    if (globalChatChannel) {
+      globalChatChannel.send({
+        type: 'broadcast',
+        event: 'live_bet_alert',
+        payload: { username: myUsername || '@Player', fee: selectedFee, address: myAddress }
+      });
     }
-  } catch (err) {  
-    paymentSuccessful = false;  
-  }  
 
-  if (!paymentSuccessful) {  
-    // MiniKit reported cancelled/failed (or timed out) — BUT the payment
-    // can still have executed on-chain (confirmed real cases). Verify
-    // before giving up: recordDepositOnce scans recent WLD transfers and
-    // returns ok only if a real payment of the exact fee arrived. If it
-    // did, treat the payment as done so the player is never left with
-    // stuck money and can still get an automatic refund on cancel.
-    let recoveredPayment = false;
-    try {
-      const r = await recordDepositOnce(matchIdBytes32Global, matchId, myAddress, FEE_WEI[selectedFee], null);
-      if (r.ok) recoveredPayment = true;
-    } catch (e) { /* on-chain check failed — keep the failure state */ }
-
-    if (recoveredPayment) {
-      paymentSuccessful = true;
-      showPaymentConfirmedPopup(selectedFee);
-      showNeonToast('✅ Payment confirmed on-chain', 'success');
-    } else {
-      showNeonToast('⚠️ Payment was cancelled or failed. No WLD was deducted.', 'warning');
-      // Safety net: if the payment actually landed on-chain (delayed
-      // confirmation, flaky scan window), keep verifying in the
-      // background and queue the refund automatically — a failed
-      // MiniKit callback must never strand the player's WLD.
-      if (matchId && myAddress) {
-        ensureRefundQueuedInBackground(matchId, myAddress.toLowerCase().trim());
+    // Poll for opponent to join — check match status every 2 seconds
+    let searchTimeLeft = 60;
+    mTimer = setInterval(async () => {
+      searchTimeLeft--;
+      if (searchTimeLeft <= 0) {
+        clearInterval(mTimer);
+        if (pollTimer) clearInterval(pollTimer);
+        if (!gameActive) {
+          showNeonToast('No opponent found within 60 seconds. Try again!', 'warning');
+          await cancelMatchmaking(false);
+        }
       }
-      try { await supabaseClient.rpc('secure_leave_waiting_match', { p_match_id: matchId, p_wallet: myAddress }); } catch(e) {}  
-      resetToHome();  
-      return;  
-    }
-  }  
+    }, 1000);
 
-  // ==========================================
-  // VERIFY & RECORD THE DEPOSIT ON-CHAIN
-  // ==========================================
-  hasPaid = true;
-
-  const txHash = payRes?.finalPayload?.transaction_id || payRes?.finalPayload?.transaction_hash || null;
-
-  // Start the SEARCH IMMEDIATELY — the UI must never freeze while the
-  // on-chain verification runs. The public World Chain RPC can be slow
-  // or rate-limited, and three sequential waits (the old code) left the
-  // app looking hung for a minute+ after paying. Verification now runs
-  // in the background: the match only starts when BOTH players are
-  // verified paid (checkBothReady), so starting the search early can
-  // never begin an unverified game.
-  let depositBooked = false;
-  let bookingRetryTimer = null;
-
-  // One quick bounded attempt so paid is usually set before the search
-  // even starts (seamless matchmaking), then the background loop below
-  // keeps retrying. Never blocks the UI for more than ~10s.
-  try {
-    const quick = await Promise.race([
-      recordDepositOnce(matchIdBytes32Global, matchId, myAddress, FEE_WEI[selectedFee], txHash),
-      new Promise((res) => setTimeout(() => res({ ok: false, data: { timed_out: true } }), 10000)),
-    ]);
-    if (quick.ok) { depositBooked = true; paymentVerified = true; }
-  } catch (e) { /* background retry covers it */ }
-
-  async function afterBooked() {
-    depositBooked = true;
-    paymentVerified = true;
-    if (bookingRetryTimer) clearInterval(bookingRetryTimer);
-    // If the player cancelled while the payment was still completing, the
-    // match is already cancelled — queue the refund immediately so the
-    // payment that just arrived is not left stuck.
-    try {
-      const { data: chk } = await supabaseClient.from('matches').select('status').eq('id', matchId).single();
-      if (chk && chk.status === 'cancelled') {
-        await supabaseClient.rpc('queue_refund_request', {
-          p_match_id: matchId, p_wallet: myAddress.toLowerCase().trim()
-        });
+    // Poll match status for opponent join
+    let opponentSearchAttempts = 0;
+    pollTimer = setInterval(async () => {
+      if (!matchmakingActive || gameActive) {
+        clearInterval(pollTimer);
+        return;
       }
-    } catch(e) { /* non-fatal */ }
-    showNeonToast('✨ Payment confirmed! Waiting for opponent...', 'success');
+      opponentSearchAttempts++;
+      if (opponentSearchAttempts > 60) {
+        clearInterval(pollTimer);
+        return;
+      }
+      try {
+        const { data: statusRow, error: statusErr } = await supabaseClient
+          .from('matches')
+          .select('status, p2_address, p2_username')
+          .eq('id', matchId)
+          .single();
+        if (statusErr || !statusRow) return;
+        
+        if (statusRow.status === 'matched' && statusRow.p2_address) {
+          // Opponent found! Stop searching, show status, then prompt payment
+          clearInterval(pollTimer);
+          clearInterval(mTimer);
+          const oppNameFound = statusRow.p2_username || 'Opponent';
+          $('opp-name-tag').innerText = oppNameFound;
+          $('wait-status').innerText = `Opponent found: ${oppNameFound}`;
+          showNeonToast(`Opponent found: ${oppNameFound}! Confirm payment to start.`, 'success');
+          // Now ask for payment
+          await performPaymentAndStartSearch();
+        }
+      } catch (e) { /* keep polling */ }
+    }, 2000);
   }
 
-  if (depositBooked) afterBooked();
+  // ============================================
+  // Payment + search — called ONLY after opponent is found
+  // ============================================
+  async function performPaymentAndStartSearch() {
+    $('wait-status').innerText = `Confirm payment in World App...`;
 
-  $('wait-status').innerText = `SEARCHING... (Cancel anytime)`;  
+    const paymentReference = 'ref_' + randomAlphaNumeric(16);
+    let paymentSuccessful = false;
+    let payRes;
 
-  if (globalChatChannel) {  
-    globalChatChannel.send({  
-      type: 'broadcast',  
-      event: 'live_bet_alert',  
-      payload: { username: myUsername || '@Player', fee: selectedFee, address: myAddress }  
-    });  
-  }  
-
-  let timeLeft = 60;  
-  mTimer = setInterval(async () => {  
-    timeLeft--;  
-    if (timeLeft <= 0){  
-      clearInterval(mTimer);  
-      if (!gameActive) await cancelMatchmaking(false);  
-    }  
-  }, 1000);  
-
-  setupChannel();  
-  pollTimer = setInterval(checkBothReady, 1000);  
-
-  // Background retry while the player searches — a transient failure
-  // self-heals instead of leaving the deposit unbooked. The loop stops
-  // itself once booked; if the search is cancelled or times out,
-  // cancelMatchmaking() (and ensureRefundQueuedInBackground) queue the
-  // automatic refund so WLD is never stuck.
-  let bookingInFlight = false;
-  let bookingAttempts = 0;
-  bookingRetryTimer = setInterval(async () => {
-    if (depositBooked || gameActive || !matchmakingActive) {
-      if (bookingRetryTimer) { clearInterval(bookingRetryTimer); bookingRetryTimer = null; }
-      return;
-    }
-    // Hard cap: ~3 minutes of retries max. Never run forever — a
-    // cancelled search must not leave an infinite edge-function loop.
-    bookingAttempts++;
-    if (bookingAttempts > 45) {
-      if (bookingRetryTimer) { clearInterval(bookingRetryTimer); bookingRetryTimer = null; }
-      return;
-    }
-    if (bookingInFlight) return;
-    bookingInFlight = true;
     try {
-      const r = await recordDepositOnce(matchIdBytes32Global, matchId, myAddress, FEE_WEI[selectedFee], txHash);
-      if (r.ok) afterBooked();
-    } catch (e) { /* keep retrying */ }
-    finally { bookingInFlight = false; }
-  }, 4000);
-}function selectFee(amount, element){
+      payRes = await Promise.race([
+        MiniKit.commandsAsync.pay({
+          reference: paymentReference,
+          to: DICE_DUEL_CONTRACT,
+          tokens: [{ symbol: Tokens.WLD, token_amount: tokenToDecimals(selectedFee, Tokens.WLD).toString() }],
+          description: `Duel entry fee: ${selectedFee} WLD`,
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('payment_response_timeout')), 120000)),
+      ]);
+      if (payRes && payRes.finalPayload && payRes.finalPayload.status === 'success') {
+        paymentSuccessful = true;
+        showPaymentConfirmedPopup(selectedFee);
+      } else {
+        paymentSuccessful = false;
+      }
+    } catch (err) {
+      paymentSuccessful = false;
+    }
+
+    if (!paymentSuccessful) {
+      let recoveredPayment = false;
+      try {
+        const r = await recordDepositOnce(matchIdBytes32Global, matchId, myAddress, FEE_WEI[selectedFee], null);
+        if (r.ok) recoveredPayment = true;
+      } catch (e) {}
+
+      if (recoveredPayment) {
+        paymentSuccessful = true;
+        showPaymentConfirmedPopup(selectedFee);
+        showNeonToast('Payment confirmed on-chain', 'success');
+      } else {
+        showNeonToast('Payment was cancelled. No WLD was deducted.', 'warning');
+        if (matchId && myAddress) {
+          ensureRefundQueuedInBackground(matchId, myAddress.toLowerCase().trim());
+        }
+        try { await supabaseClient.rpc('secure_leave_waiting_match', { p_match_id: matchId, p_wallet: myAddress }); } catch(e) {}
+        resetToHome();
+        return;
+      }
+    }
+
+    // Payment verified — now proceed with on-chain recording + game start
+    hasPaid = true;
+
+    const txHash = payRes?.finalPayload?.transaction_id || payRes?.finalPayload?.transaction_hash || null;
+
+    let depositBooked = false;
+
+    try {
+      const quick = await Promise.race([
+        recordDepositOnce(matchIdBytes32Global, matchId, myAddress, FEE_WEI[selectedFee], txHash),
+        new Promise((res) => setTimeout(() => res({ ok: false, data: { timed_out: true } }), 10000)),
+      ]);
+      if (quick.ok) { depositBooked = true; paymentVerified = true; }
+    } catch (e) {}
+
+    async function afterBooked() {
+      depositBooked = true;
+      paymentVerified = true;
+      try {
+        const { data: chk } = await supabaseClient.from('matches').select('status').eq('id', matchId).single();
+        if (chk && chk.status === 'cancelled') {
+          await supabaseClient.rpc('queue_refund_request', {
+            p_match_id: matchId, p_wallet: myAddress.toLowerCase().trim()
+          });
+        }
+      } catch(e) {}
+      showNeonToast('Payment confirmed! Starting game...', 'success');
+    }
+
+    if (depositBooked) afterBooked();
+
+    $('wait-status').innerText = `Waiting for opponent to pay... (Cancel anytime)`;
+
+    setupChannel();
+    pollTimer = setInterval(checkBothReady, 1000);
+n    // Background retry for deposit booking
+    let bookingInFlight = false;
+    let bookingAttempts = 0;
+    bookingRetryTimer = setInterval(async () => {
+      if (depositBooked || gameActive || !matchmakingActive) {
+        if (bookingRetryTimer) { clearInterval(bookingRetryTimer); bookingRetryTimer = null; }
+        return;
+      }
+      bookingAttempts++;
+      if (bookingAttempts > 45) {
+        if (bookingRetryTimer) { clearInterval(bookingRetryTimer); bookingRetryTimer = null; }
+        return;
+      }
+      if (bookingInFlight) return;
+      bookingInFlight = true;
+      try {
+        const r = await recordDepositOnce(matchIdBytes32Global, matchId, myAddress, FEE_WEI[selectedFee], txHash);
+        if (r.ok) afterBooked();
+      } catch (e) {}
+      finally { bookingInFlight = false; }
+    }, 4000);
+  }
+}
+
+function selectFee(amount, element){
   if (matchmakingActive) return;
   const validFees = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 30, 40, 50];
   const parsed = parseFloat(amount);
@@ -1476,7 +1506,7 @@ async function performWalletAuth(silent = false){
   // Update fee subtitle
   const tnvRewards = {0.1:5,0.2:10,0.5:15,1:25,2:50,5:125,10:250,20:500,30:750,40:1000,50:1250};
   const sub = $('play-fee-sub');
-  if (sub) sub.innerHTML = `Fee: <b>${selectedFee} WLD</b> \u00b7 Win: <b>+${tnvRewards[selectedFee]||15} TNV</b>`;
+  if (sub) sub.innerHTML = `Fee: <b>${selectedFee} WLD</b> \u00b7 Pay only after opponent found`;
 }  
 
 function setupChannel() {  
@@ -2521,7 +2551,7 @@ window.submitBotTxHash = async function() {
     }
 
     if (!isToContract) {
-      botAddMsg('error', '❌ This transaction was not sent to our game contract. Please provide a Dice Duel payment transaction.');
+      botAddMsg('error', 'This transaction was not sent to our game contract. Please provide a valid payment transaction.');
       botAddMsg('bot', `Expected contract: ${DICE_DUEL_CONTRACT.slice(0,10)}...${DICE_DUEL_CONTRACT.slice(-6)}`);
       botAddBtn('🔄 Try again', () => botShowTxInput());
       botAddBtn('🏠 Go back', () => closeSupportBot());
