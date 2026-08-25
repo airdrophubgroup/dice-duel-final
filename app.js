@@ -951,23 +951,60 @@ window.openAdminEarningsModal = async function() {
   } catch(e) {}  
 };  
 
-window.closeAdminEarningsModal = function() { $('admin-earnings-modal').style.display = 'none'; };  
+window.closeAdminEarningsModal = function() { $('admin-earnings-modal').style.display = 'none'; };async function fetchLeaderboard() {
+  try {
+    const { data } = await supabaseClient.from('user_rewards').select('wallet_address, tnv_balance').order('tnv_balance', { ascending: false }).limit(10);
+    const lbContainer = $('lb-container');
+    if (!data || data.length === 0) { lbContainer.innerHTML = `<div class="lb-item" style="justify-content:center; color:var(--slate);">No leaders yet</div>`; return; }
+    let html = '';
+    data.forEach((row, index) => {
+      let rankClass = index === 0 ? 'top-1' : (index === 1 ? 'top-2' : (index === 2 ? 'top-3' : ''));
+      let badge = index === 0 ? '<span class="lb-badge lb-badge-gold" title="1st Place">🥇</span>' : (index === 1 ? '<span class="lb-badge lb-badge-silver" title="2nd Place">🥈</span>' : (index === 2 ? '<span class="lb-badge lb-badge-bronze" title="3rd Place">🥉</span>' : ''));
+      let shortWallet = row.wallet_address.startsWith('0xDEV') ? 'Dev_' + row.wallet_address.slice(-4) : row.wallet_address.slice(0, 6) + '...' + row.wallet_address.slice(-4);
+      html += `<div class="lb-item ${rankClass}">${badge}<span class="lb-rank">#${index + 1}</span><span class="lb-user">${shortWallet}</span><span class="lb-score">${row.tnv_balance} TNV</span></div>`;
+    });
+    lbContainer.innerHTML = html;
+  } catch (e) {}
+}
 
-async function fetchLeaderboard() {  
-  try {  
-    const { data } = await supabaseClient.from('user_rewards').select('wallet_address, tnv_balance').order('tnv_balance', { ascending: false }).limit(10);  
-    const lbContainer = $('lb-container');  
-    if (!data || data.length === 0) { lbContainer.innerHTML = `<div class="lb-item" style="justify-content:center; color:var(--slate);">No leaders yet</div>`; return; }  
-    let html = '';  
-    data.forEach((row, index) => {  
-      let rankClass = index === 0 ? 'top-1' : (index === 1 ? 'top-2' : (index === 2 ? 'top-3' : ''));  
-      let badge = index === 0 ? '<span class="lb-badge lb-badge-gold" title="1st Place">🥇</span>' : (index === 1 ? '<span class="lb-badge lb-badge-silver" title="2nd Place">🥈</span>' : (index === 2 ? '<span class="lb-badge lb-badge-bronze" title="3rd Place">🥉</span>' : ''));  
-      let shortWallet = row.wallet_address.startsWith('0xDEV') ? 'Dev_' + row.wallet_address.slice(-4) : row.wallet_address.slice(0, 6) + '...' + row.wallet_address.slice(-4);  
-      html += `<div class="lb-item ${rankClass}">${badge}<span class="lb-rank">#${index + 1}</span><span class="lb-user">${shortWallet}</span><span class="lb-score">${row.tnv_balance} TNV</span></div>`;  
-    });  
-    lbContainer.innerHTML = html;  
-  } catch (e) {}  
-}  
+// LIVE STATS: fetch withdrawal requests, agent messages, total matches, online players
+async function fetchLiveStats() {
+  try {
+    // 1. Withdrawal requests count
+    const { data: withdrawData } = await supabaseClient.from('withdraw_requests').select('id, status', { count: 'exact' });
+    if (withdrawData) {
+      const total = withdrawData.length;
+      const pending = withdrawData.filter(r => r.status === 'pending').length;
+      const el = $('stat-withdraw-requests');
+      if (el) el.innerText = total + (pending > 0 ? ` (${pending} pending)` : '');
+    }
+
+    // 2. Agent messages / support tickets count
+    const { data: ticketData } = await supabaseClient.from('support_tickets').select('id, status', { count: 'exact' });
+    if (ticketData) {
+      const total = ticketData.length;
+      const pending = ticketData.filter(t => t.status === 'pending' || t.status === 'open').length;
+      const el = $('stat-agent-messages');
+      if (el) el.innerText = total + (pending > 0 ? ` (${pending} open)` : '');
+    }
+
+    // 3. Total matches played
+    const { count: matchCount } = await supabaseClient.from('matches').select('id', { count: 'exact', head: true });
+    const matchEl = $('stat-total-matches');
+    if (matchEl) matchEl.innerText = matchCount || 0;    // 4. Online players (from chat presence)
+    const onlineEl = $('stat-online-players');
+    if (onlineEl) {
+      const onlineCountElem = $('online-count');
+      onlineEl.innerText = (onlineCountElem && onlineCountElem.innerText) ? onlineCountElem.innerText : '1';
+    }
+  } catch (e) {
+    console.error('fetchLiveStats error:', e);
+  }
+}
+
+// Fetch live stats on load and every 30 seconds
+setTimeout(fetchLiveStats, 3000);
+setInterval(fetchLiveStats, 30000);  
 
 window.openWithdrawModal = function() {  
   if (currentTnvBalance < 5000) { showNeonToast('Min 5,000 TNV required!', 'warning'); return; }  

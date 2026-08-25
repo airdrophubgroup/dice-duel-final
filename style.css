@@ -155,6 +155,40 @@ details[open] .accord-arrow{ transform:rotate(180deg); }
 .security-body p{ font-size:10px; color:var(--slate); line-height:1.5; margin:0; }
 .support-email-card{ text-align:center; padding:8px; background:var(--void-2); border:1px solid var(--border); border-radius:8px; margin-top:4px; }
 
+/* ---- TNV REWARDS CARD (More tab) ---- */
+.tnv-rewards-card{
+  background:var(--void-2); border:1px solid var(--border); border-radius:var(--radius); padding:10px;
+}
+.tnv-rewards-header{
+  font-family:'Space Grotesk',sans-serif; font-size:11px; font-weight:700;
+  letter-spacing:1px; text-transform:uppercase; color:var(--gold);
+  margin-bottom:6px; text-align:center;
+}
+.tnv-rewards-grid{ display:flex; flex-direction:column; gap:2px; }
+.tnv-rewards-row{
+  display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px;
+  padding:4px 8px; border-radius:6px; font-size:10px; font-family:'JetBrains Mono',monospace;
+}
+.tnv-rewards-header-row{ color:var(--slate); font-size:8px; letter-spacing:1px; text-transform:uppercase; border-bottom:1px solid var(--border); padding-bottom:4px; }
+.tnv-rewards-row:not(.tnv-rewards-header-row){ background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.04); }
+.tnv-rewards-note{ font-size:9px; color:var(--slate); text-align:center; margin-top:6px; font-family:'JetBrains Mono',monospace; }
+
+/* ---- LIVE STATS CARD (More tab) ---- */
+.live-stats-card{
+  background:var(--void-2); border:1px solid var(--border); border-radius:var(--radius); padding:10px;
+}
+.live-stats-header{
+  font-family:'Space Grotesk',sans-serif; font-size:11px; font-weight:700;
+  letter-spacing:1px; text-transform:uppercase; color:var(--photon);
+  margin-bottom:6px; text-align:center;
+}
+.live-stats-grid{ display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.live-stat-item{
+  background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.04);
+  border-radius:8px; padding:8px; text-align:center;
+}
+.live-stat-value{ font-family:'JetBrains Mono',monospace; font-size:18px; font-weight:700; color:var(--photon); }
+.live-stat-label{ font-size:9px; color:var(--slate); margin-top:2px; font-family:'JetBrains Mono',monospace; }
 
 
 /* ---- MORE TAB GRID ---- */

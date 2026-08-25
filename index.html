@@ -98,6 +98,44 @@
       <button class="more-tile" onclick="window.open('https://t.me/TNVTEAMWLD','_blank')"><span class="more-tile-icon">💬</span><span class="more-tile-label">Telegram</span></button>
       <button id="admin-history-nav-btn" class="more-tile admin-only" style="display:none;" onclick="openAdminEarningsModal()"><span class="more-tile-icon">🛡️</span><span class="more-tile-label">Admin</span></button>
     </div>
+    <!-- TNV REWARDS TABLE (visible to all) -->
+    <div class="tnv-rewards-card">
+      <div class="tnv-rewards-header">TNV REWARDS</div>
+      <div class="tnv-rewards-grid">
+        <div class="tnv-rewards-row tnv-rewards-header-row"><span>Fee</span><span>Win</span><span>Lose</span></div>
+        <div class="tnv-rewards-row"><span class="wld">0.1</span><span class="tnv">+5</span><span class="tnv">+1</span></div>
+        <div class="tnv-rewards-row"><span class="wld">0.5</span><span class="tnv">+15</span><span class="tnv">+5</span></div>
+        <div class="tnv-rewards-row"><span class="wld">1</span><span class="tnv">+25</span><span class="tnv">+8</span></div>
+        <div class="tnv-rewards-row"><span class="wld">5</span><span class="tnv">+125</span><span class="tnv">+41</span></div>
+        <div class="tnv-rewards-row"><span class="wld">10</span><span class="tnv">+250</span><span class="tnv">+83</span></div>
+        <div class="tnv-rewards-row"><span class="wld">50</span><span class="tnv">+1250</span><span class="tnv">+416</span></div>
+      </div>
+      <div class="tnv-rewards-note">Minimum 5,000 TNV to withdraw</div>
+    </div>
+
+    <!-- LIVE STATS (visible to all) -->
+    <div class="live-stats-card">
+      <div class="live-stats-header">LIVE STATS</div>
+      <div class="live-stats-grid">
+        <div class="live-stat-item">
+          <div class="live-stat-value" id="stat-withdraw-requests">0</div>
+          <div class="live-stat-label">Withdraw Requests</div>
+        </div>
+        <div class="live-stat-item">
+          <div class="live-stat-value" id="stat-agent-messages">0</div>
+          <div class="live-stat-label">Agent Messages</div>
+        </div>
+        <div class="live-stat-item">
+          <div class="live-stat-value" id="stat-total-matches">0</div>
+          <div class="live-stat-label">Total Matches</div>
+        </div>
+        <div class="live-stat-item">
+          <div class="live-stat-value" id="stat-online-players">0</div>
+          <div class="live-stat-label">Online Players</div>
+        </div>
+      </div>
+    </div>
+
     <details class="security-accordion">
       <summary class="payouts-summary">Security & Anti-Cheat <span class="accord-arrow">&#9662;</span></summary>
       <div class="security-body">
@@ -154,7 +192,7 @@
 
   <div id="chat-modal" class="custom-modal" onclick="if(event.target===this)closeChatModal()">
     <div class="modal-card chat-card">
-      <div class="chat-header"><span>Community Chat</span><button class="chat-close-btn" onclick="closeChatModal()">✕</button></div>
+      <div class="chat-header"><span>Community Chat</span><span style="font-size:10px;color:var(--slate);font-family:'JetBrains Mono',monospace;">Online: <span id="online-count" style="color:var(--photon);">1</span></span><button class="chat-close-btn" onclick="closeChatModal()">✕</button></div>
       <div id="chat-messages-container" class="chat-messages"><div style="text-align:center;color:var(--slate);font-size:11px;">Messages expire in 24h.</div></div>
       <div class="chat-input-area"><input type="text" id="chat-input-field" class="chat-input" placeholder="Type a message..." maxlength="150" /><button class="chat-send-btn" onclick="sendChatMessage()">Send</button></div>
     </div>
