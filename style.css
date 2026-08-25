@@ -102,14 +102,17 @@ h1.brand{
 .home-card{
   background:var(--void-2); border:1px solid var(--border); border-radius:var(--radius);
   padding:10px; display:flex; flex-direction:column; gap:8px;
+  animation:fadeSlideIn 0.4s ease-out;
 }
 .home-balances{ display:flex; align-items:center; justify-content:center; gap:16px; }
 .balance-divider{ width:1px; height:28px; background:var(--border); }
 .balance-item{ display:flex; flex-direction:column; align-items:center; gap:2px; }
 .balance-label{ font-size:9px; color:var(--slate); text-transform:uppercase; letter-spacing:1px; font-family:'JetBrains Mono',monospace; }
-.balance-value{ font-family:'JetBrains Mono',monospace; font-size:18px; font-weight:700; }
+.balance-value{ font-family:'JetBrains Mono',monospace; font-size:18px; font-weight:700; transition:transform 0.3s, color 0.3s; }
 .balance-value.gold{ color:var(--gold); }
 .balance-value.photon{ color:var(--photon); }
+.balance-value.updated{ animation:balancePop 0.5s ease; }
+@keyframes balancePop{ 0%{ transform:scale(1); } 50%{ transform:scale(1.15); } 100%{ transform:scale(1); } }
 
 .home-progress{ }
 .progress-text-row{ display:flex; justify-content:space-between; font-size:9px; color:var(--slate); margin-bottom:2px; font-family:'JetBrains Mono',monospace; }
@@ -193,18 +196,59 @@ details[open] .accord-arrow{ transform:rotate(180deg); }
 
 /* ---- MORE TAB GRID ---- */
 .more-grid{
-  display:grid; grid-template-columns:1fr 1fr; gap:6px;
+  display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px;
 }
 .more-tile{
   display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:4px; padding:12px 8px; background:var(--void-2); border:1px solid var(--border);
+  gap:4px; padding:12px 6px; background:var(--void-2); border:1px solid var(--border);
   border-radius:12px; color:var(--bone); font-family:'Space Grotesk',sans-serif;
-  font-weight:600; cursor:pointer; transition:all .15s;
+  font-weight:600; cursor:pointer; transition:all .2s ease;
+  position:relative; overflow:hidden;
 }
-.more-tile:active{ transform:scale(0.96); background:rgba(41,217,194,0.06); }
-.more-tile-icon{ font-size:22px; }
-.more-tile-label{ font-size:11px; }
+.more-tile::before{
+  content:''; position:absolute; inset:0; background:linear-gradient(135deg, rgba(41,217,194,0.1), transparent);
+  opacity:0; transition:opacity 0.3s;
+}
+.more-tile:hover::before{ opacity:1; }
+.more-tile:active{ transform:scale(0.95); }
+.more-tile-icon{ font-size:20px; position:relative; z-index:1; }
+.more-tile-label{ font-size:10px; position:relative; z-index:1; }
 .more-tile.admin-only{ display:none; }
+.more-tile-soon{ opacity:0.7; }
+.soon-badge{
+  position:absolute; top:4px; right:4px; font-size:7px; font-weight:700;
+  background:var(--gold); color:var(--void); padding:2px 4px; border-radius:4px;
+  letter-spacing:0.5px; z-index:2;
+}
+
+/* ---- ANIMATED CARDS ---- */
+.home-card, .tnv-rewards-card, .live-stats-card, .leaderboard-section{
+  animation:fadeSlideIn 0.4s ease-out;
+}
+@keyframes fadeSlideIn{
+  from{ opacity:0; transform:translateY(10px); }
+  to{ opacity:1; transform:translateY(0); }
+}
+
+/* ---- LIVE STAT PULSE ---- */
+.live-stat-value{
+  animation:statPulse 2s ease-in-out infinite;
+}
+@keyframes statPulse{
+  0%,100%{ opacity:1; }
+  50%{ opacity:0.7; }
+}
+
+/* ---- GLOW EFFECTS ---- */
+.more-tile:hover .more-tile-icon{
+  filter:drop-shadow(0 0 8px rgba(41,217,194,0.6));
+}
+.tnv-rewards-header, .live-stats-header{
+  background:linear-gradient(90deg, var(--gold), var(--photon));
+  -webkit-background-clip:text; background-clip:text;
+  -webkit-text-fill-color:transparent; animation:hueShift 4s linear infinite;
+  background-size:200% 100%;
+}
 
 /* ---- LEGACY MENU LIST (kept for modals) ---- */
 .menu-list{ display:flex; flex-direction:column; gap:2px; }
