@@ -1416,6 +1416,14 @@ async function performWalletAuth(silent = false){
           // Now ask for payment
           await performPaymentAndStartSearch();
         }
+        // Match was cancelled while we were waiting for opponent
+        if (statusRow.status === 'cancelled') {
+          clearInterval(pollTimer);
+          clearInterval(mTimer);
+          showNeonToast('Match was cancelled.', 'warning');
+          resetToHome();
+          return;
+        }
       } catch (e) { /* keep polling */ }
     }, 2000);
   }
@@ -1493,9 +1501,16 @@ async function performWalletAuth(silent = false){
       try {
         const { data: chk } = await supabaseClient.from('matches').select('status').eq('id', matchId).single();
         if (chk && chk.status === 'cancelled') {
-          await supabaseClient.rpc('queue_refund_request', {
-            p_match_id: matchId, p_wallet: myAddress.toLowerCase().trim()
-          });
+          // Match was cancelled while we were paying — queue refund immediately
+          showNeonToast('Match cancelled. Processing refund...', 'warning');
+          try {
+            await supabaseClient.rpc('queue_refund_request', {
+              p_match_id: matchId, p_wallet: myAddress.toLowerCase().trim()
+            });
+          } catch (e) {}
+          ensureRefundQueuedInBackground(matchId, myAddress.toLowerCase().trim());
+          resetToHome();
+          return;
         }
       } catch(e) {}
       showNeonToast('Payment confirmed! Starting game...', 'success');
@@ -1649,34 +1664,61 @@ async function cancelMatchmaking(showAlert = true) {
   }
 
   resetToHome();  
-}    
-
-async function checkBothReady(){  
-  if (!matchmakingActive || gameActive) return;  
+}async function checkBothReady(){
+  if (!matchmakingActive || gameActive) return;
   if (!matchId) return;
 
   const { data, error } = await supabaseClient
     .from('matches')
     .select('status, p1_username, p2_username, p1_paid, p2_paid, match_id')
     .eq('id', matchId)
-    .single();  
+    .single();
 
-  if (error || !data) return;  
+  if (error || !data) return;
 
-  if (data.p1_paid === true && data.p2_paid === true && (data.status === 'matched' || data.status === 'playing')){  
-    if (pollTimer) clearInterval(pollTimer);  
-    $('opp-name-tag').innerText = (isP1 ? data.p2_username : data.p1_username) || 'OPP';  
-    localStorage.setItem("currentMatchId", matchId);  
-    localStorage.setItem("isP1", isP1);  
+  // ============================================
+  // OPPONENT CANCELLED: match was cancelled while we were waiting.
+  // If WE paid, we need a refund. If we didn't pay, just go home.
+  // ============================================
+  if (data.status === 'cancelled') {
+    clearInterval(pollTimer);
+    clearInterval(mTimer);
+    if (bookingRetryTimer) { clearInterval(bookingRetryTimer); bookingRetryTimer = null; }
+
+    if (hasPaid && matchId && myAddress) {
+      // We paid but opponent cancelled — queue refund
+      showNeonToast('Match cancelled by opponent. Processing refund...', 'warning');
+      try {
+        await supabaseClient.rpc('queue_refund_request', {
+          p_match_id: matchId, p_wallet: myAddress.toLowerCase().trim()
+        });
+      } catch (e) {}
+      // Also try on-chain verification + refund in background
+      ensureRefundQueuedInBackground(matchId, myAddress.toLowerCase().trim());
+    } else {
+      showNeonToast('Match cancelled.', 'info');
+    }
+    resetToHome();
+    return;
+  }
+
+  // ============================================
+  // BOTH PAID: game can start
+  // ============================================
+  if (data.p1_paid === true && data.p2_paid === true && (data.status === 'matched' || data.status === 'playing')){
+    if (pollTimer) clearInterval(pollTimer);
+    $('opp-name-tag').innerText = (isP1 ? data.p2_username : data.p1_username) || 'OPP';
+    localStorage.setItem("currentMatchId", matchId);
+    localStorage.setItem("isP1", isP1);
 
     if (data.match_id) {
       matchIdBytes32Global = await matchIdToBytes32(data.match_id);
     }
 
-    channel.send({ type: 'broadcast', event: 'game_start', payload: { oppName: myUsername } });  
-    clearInterval(mTimer);  
-    startSyncCountdown();  
-  }  
+    channel.send({ type: 'broadcast', event: 'game_start', payload: { oppName: myUsername } });
+    clearInterval(mTimer);
+    startSyncCountdown();
+  }
 }  
 
 async function startSyncCountdown(){  
