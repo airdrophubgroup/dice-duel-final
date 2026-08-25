@@ -70,12 +70,10 @@ function ensureRefundQueuedInBackground(matchUuid, wallet) {
   let attempts = 0;
   const t = setInterval(async () => {
     attempts++;
-    if (attempts > 12) { clearInterval(t); return; } // ~1 minute of retries
+    if (attempts > 30) { clearInterval(t); return; } // ~60 seconds of fast retries
     try {
       const r = await recordDepositOnce(b32, matchUuid, wallet, feeWei, null);
       if (r.ok) {
-        // NOTE: supabase-js builders are thenable but have no .catch —
-        // wrap in try/catch instead (a .catch on the builder throws).
         let d = null;
         try { d = await supabaseClient.rpc('queue_refund_request', {
           p_match_id: matchUuid, p_wallet: wallet.toLowerCase().trim()
@@ -83,7 +81,7 @@ function ensureRefundQueuedInBackground(matchUuid, wallet) {
         if (d && d.data && d.data.success === true) { clearInterval(t); return; }
       }
     } catch (e) { /* keep retrying */ }
-  }, 5000);
+  }, 2000); // Fast retry every 2 seconds
 }
 
 const supabaseClient = createClient(SB_URL, SB_KEY);  
@@ -1205,6 +1203,45 @@ function showNeonToast(message, type = 'info') {
   }
 }
 
+// Neon cancel popup — shows when opponent cancels and player has paid.
+// Full-screen overlay with reassuring message about refund safety.
+function showNeonCancelPopup(feeAmount) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed; inset:0; z-index:999998; display:flex; align-items:center; justify-content:center; background:rgba(5,0,0,0.85); backdrop-filter:blur(8px); animation:fadeIn 0.3s ease;';
+
+    const card = document.createElement('div');
+    card.style.cssText = 'background:rgba(17,17,32,0.98); border:2px solid var(--gold); border-radius:20px; padding:28px 24px; max-width:340px; width:90%; text-align:center; box-shadow:0 0 40px rgba(255,179,0,0.3), 0 0 80px rgba(255,179,0,0.1); animation:popIn 0.4s cubic-bezier(0.175,0.885,0.32,1.275);';
+
+    card.innerHTML = `
+      <div style="width:60px; height:60px; margin:0 auto 16px; border-radius:50%; background:linear-gradient(135deg, rgba(255,179,0,0.2), rgba(255,95,109,0.15)); border:2px solid var(--gold); display:flex; align-items:center; justify-content:center; font-size:28px; box-shadow:0 0 20px rgba(255,179,0,0.4);">⚡</div>
+      <h3 style="font-family:'Space Grotesk',sans-serif; color:var(--gold); font-size:18px; margin:0 0 12px; text-shadow:0 0 12px rgba(255,179,0,0.4);">Opponent Left</h3>
+      <p style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--bone); line-height:1.6; margin:0 0 8px;">Your opponent cancelled the match.</p>
+      <div style="background:rgba(41,217,194,0.08); border:1px solid rgba(41,217,194,0.3); border-radius:10px; padding:12px; margin:12px 0;">
+        <p style="font-family:'Space Grotesk',sans-serif; font-size:13px; color:var(--photon); font-weight:700; margin:0 0 4px;">Your funds are SAFE</p>
+        <p style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--slate); margin:0;">${feeAmount} WLD refund is being processed</p>
+        <p style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--photon); margin:4px 0 0;">Refund arrives within ~1 minute</p>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:16px;">
+        <button id="cancel-popup-ok" style="flex:1; background:linear-gradient(135deg,var(--iris),#4c3fc9); color:var(--bone); border:none; border-radius:10px; padding:12px; font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:13px; cursor:pointer; transition:transform 0.15s;">GOT IT</button>
+      </div>
+    `;
+
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    const cleanup = () => {
+      overlay.style.opacity = '0';
+      overlay.style.transition = 'opacity 0.3s';
+      setTimeout(() => overlay.remove(), 300);
+      resolve();
+    };
+
+    card.querySelector('#cancel-popup-ok').addEventListener('click', cleanup);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(); });
+  });
+}
+
 // Neon confirmation modal — replaces every native confirm() with styled UI.
 // Returns a Promise<boolean>.
 function neonConfirm(message) {
@@ -1502,7 +1539,6 @@ async function performWalletAuth(silent = false){
         const { data: chk } = await supabaseClient.from('matches').select('status').eq('id', matchId).single();
         if (chk && chk.status === 'cancelled') {
           // Match was cancelled while we were paying — queue refund immediately
-          showNeonToast('Match cancelled. Processing refund...', 'warning');
           try {
             await supabaseClient.rpc('queue_refund_request', {
               p_match_id: matchId, p_wallet: myAddress.toLowerCase().trim()
@@ -1510,6 +1546,7 @@ async function performWalletAuth(silent = false){
           } catch (e) {}
           ensureRefundQueuedInBackground(matchId, myAddress.toLowerCase().trim());
           resetToHome();
+          await showNeonCancelPopup(selectedFee);
           return;
         }
       } catch(e) {}
@@ -1686,19 +1723,21 @@ async function cancelMatchmaking(showAlert = true) {
     if (bookingRetryTimer) { clearInterval(bookingRetryTimer); bookingRetryTimer = null; }
 
     if (hasPaid && matchId && myAddress) {
-      // We paid but opponent cancelled — queue refund
-      showNeonToast('Match cancelled by opponent. Processing refund...', 'warning');
+      // We paid but opponent cancelled — queue refund IMMEDIATELY
       try {
         await supabaseClient.rpc('queue_refund_request', {
           p_match_id: matchId, p_wallet: myAddress.toLowerCase().trim()
         });
       } catch (e) {}
-      // Also try on-chain verification + refund in background
+      // Fast background retry — every 2 seconds instead of 5
       ensureRefundQueuedInBackground(matchId, myAddress.toLowerCase().trim());
+      resetToHome();
+      // Show neon popup AFTER going home (so it overlays cleanly)
+      await showNeonCancelPopup(selectedFee);
     } else {
       showNeonToast('Match cancelled.', 'info');
+      resetToHome();
     }
-    resetToHome();
     return;
   }
 
