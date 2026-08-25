@@ -1115,28 +1115,19 @@ window.submitAdminReply = async function(ticketId) {
 // LIVE STATS: fetch withdrawal requests, agent messages, total matches, online players
 async function fetchLiveStats() {
   try {
-    // 1. Withdrawal requests count
-    const { data: withdrawData } = await supabaseClient.from('withdraw_requests').select('id, status', { count: 'exact' });
-    if (withdrawData) {
-      const total = withdrawData.length;
-      const pending = withdrawData.filter(r => r.status === 'pending').length;
-      const el = $('stat-withdraw-requests');
-      if (el) el.innerText = total + (pending > 0 ? ` (${pending} pending)` : '');
+    // PRIVACY (guideline: data minimization): counts come from a single
+    // aggregate RPC — never from raw withdraw/ticket rows, which would
+    // expose other users' wallet addresses and amounts to everyone.
+    const { data: stats } = await supabaseClient.rpc('get_public_stats');
+    if (stats) {
+      const wEl = $('stat-withdraw-requests');
+      if (wEl) wEl.innerText = stats.withdrawTotal + (stats.withdrawPending > 0 ? ` (${stats.withdrawPending} pending)` : '');
+      const tEl = $('stat-agent-messages');
+      if (tEl) tEl.innerText = stats.ticketsTotal + (stats.ticketsOpen > 0 ? ` (${stats.ticketsOpen} open)` : '');
+      const mEl = $('stat-total-matches');
+      if (mEl) mEl.innerText = stats.matchesTotal || 0;
     }
-
-    // 2. Agent messages / support tickets count
-    const { data: ticketData } = await supabaseClient.from('support_tickets').select('id, status', { count: 'exact' });
-    if (ticketData) {
-      const total = ticketData.length;
-      const pending = ticketData.filter(t => t.status === 'pending' || t.status === 'open').length;
-      const el = $('stat-agent-messages');
-      if (el) el.innerText = total + (pending > 0 ? ` (${pending} open)` : '');
-    }
-
-    // 3. Total matches played
-    const { count: matchCount } = await supabaseClient.from('matches').select('id', { count: 'exact', head: true });
-    const matchEl = $('stat-total-matches');
-    if (matchEl) matchEl.innerText = matchCount || 0;    // 4. Online players (from chat presence)
+    // Online players (from chat presence)
     const onlineEl = $('stat-online-players');
     if (onlineEl) {
       const onlineCountElem = $('online-count');
@@ -2706,7 +2697,7 @@ function botShowTxInstructions() {
     (addr ? `<button onclick="navigator.clipboard.writeText('${addr}'); this.textContent='✅ Copied!';" style="margin-top:5px; background:rgba(41,217,194,0.15); border:1px solid rgba(41,217,194,0.5); color:var(--photon); font-size:10px; padding:5px 10px; border-radius:6px; cursor:pointer;">📋 Copy my address</button>` : '') +
     '</div>' +
     '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(255,179,0,0.25); border-radius:8px; background:rgba(255,179,0,0.05); font-size:10.5px; line-height:1.55;">' +
-    '<b style="color:var(--gold);">Step 2</b> — Open the official World Chain explorer:<br/>' +
+    '<b style="color:var(--gold);">Step 2</b> — Open a World Chain block explorer:<br/>' +
     '<a href="https://worldscan.org/" target="_blank" rel="noopener" style="color:var(--photon); font-weight:700; font-size:11px;">🌐 worldscan.org</a> ' +
     '<span style="color:var(--slate);">(or search \'Worldscan\' on Google)</span>' +
     '</div>' +
