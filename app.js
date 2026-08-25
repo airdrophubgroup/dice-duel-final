@@ -1632,8 +1632,14 @@ function showPaymentCountdown(seconds = 6) {
       setTimeout(() => overlay.remove(), 300);
     };
 
-    // Expose resolve for external payment success
-    window._resolvePaymentCountdown = (result) => { cleanup(); resolve(result); };
+    // Internal resolve — NOT exposed globally to prevent console bypass
+    let _resolved = false;
+    const safeResolve = (result) => { if (!_resolved) { _resolved = true; cleanup(); resolve(result); } };
+    // Store internally (not on window) for payment success callback
+    const countdownId = 'countdown_' + Date.now();
+    overlay.dataset.countdownId = countdownId;
+    if (!window._paymentCountdowns) window._paymentCountdowns = {};
+    window._paymentCountdowns[countdownId] = safeResolve;
   });
 }
 
@@ -1923,7 +1929,11 @@ async function performWalletAuth(silent = false){
       ]);
       if (payRes && payRes.finalPayload && payRes.finalPayload.status === 'success') {
         paymentSuccessful = true;
-        if (window._resolvePaymentCountdown) window._resolvePaymentCountdown('success');
+        // Resolve countdown via internal function (not global)
+        const cdOverlay = document.getElementById('payment-countdown-overlay');
+        if (cdOverlay && window._paymentCountdowns && window._paymentCountdowns[cdOverlay.dataset.countdownId]) {
+          window._paymentCountdowns[cdOverlay.dataset.countdownId]('success');
+        }
         showPaymentConfirmedPopup(selectedFee);
       } else {
         paymentSuccessful = false;
@@ -1954,7 +1964,11 @@ async function performWalletAuth(silent = false){
 
       if (recoveredPayment) {
         paymentSuccessful = true;
-        if (window._resolvePaymentCountdown) window._resolvePaymentCountdown('success');
+        // Resolve countdown via internal function
+        const cdOverlay2 = document.getElementById('payment-countdown-overlay');
+        if (cdOverlay2 && window._paymentCountdowns && window._paymentCountdowns[cdOverlay2.dataset.countdownId]) {
+          window._paymentCountdowns[cdOverlay2.dataset.countdownId]('success');
+        }
         showPaymentConfirmedPopup(selectedFee);
         showNeonToast('Payment confirmed on-chain', 'success');
       } else {
