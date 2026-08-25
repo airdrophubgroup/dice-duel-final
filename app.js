@@ -473,11 +473,7 @@ async function fetchRealWldBalance(walletAddress) {
 async function fetchUserBalanceAndLeaderboard(wallet) {  
   if (!wallet) return;  
   if (wallet.toLowerCase() === ADMIN_WALLET.toLowerCase()) {  
-    $('admin-panel').style.display = 'block';  
-    $('admin-cheaters-panel').style.display = 'block';  
-    $('admin-tickets-panel').style.display = 'block';  
-    $('admin-alerts-panel').style.display = 'block';  
-    if ($('admin-agent-panel')) $('admin-agent-panel').style.display = 'block';  
+    document.querySelectorAll('.admin-panel-hidden').forEach(el => el.classList.remove('admin-panel-hidden'));
     if ($('admin-history-nav-btn')) $('admin-history-nav-btn').style.display = 'inline-block';  
     fetchAdminWithdrawRequests();  
     fetchAdminCheaters();  
@@ -3106,8 +3102,7 @@ window.submitBotTxHash = async function() {
       return;
     }
     if (myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) {
-      document.querySelectorAll('.admin-panel-hidden').forEach(el => { el.style.display = 'none'; });
-      // Also hide admin-only nav buttons
+      document.querySelectorAll('.admin-panel-hidden').forEach(el => el.classList.add('admin-panel-hidden'));
       document.querySelectorAll('.admin-only').forEach(el => { el.style.display = 'none'; });
     }
   }, 1000);
@@ -3222,14 +3217,16 @@ window.showTabScreen = function() {
 // Show admin panels only for admin wallet
 function updateAdminVisibility() {
   const isAdmin = typeof myAddress !== 'undefined' && myAddress && myAddress.toLowerCase() === ADMIN_WALLET.toLowerCase();
+  // Toggle the GUARD CLASS itself, not inline display — the stylesheet
+  // hides these elements with display:none !important, which beats any
+  // inline style. Only removing the class can reveal them.
   if (isAdmin) {
-    // SHOW admin elements only for admin wallet
-    document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
-    document.querySelectorAll('.admin-panel-hidden').forEach(el => el.style.display = 'block');
+    document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'inline-block');
+    document.querySelectorAll('.admin-panel-hidden').forEach(el => el.classList.remove('admin-panel-hidden'));
   } else {
     // HIDE admin elements for everyone else (defense in depth)
     document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
-    document.querySelectorAll('.admin-panel-hidden').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.admin-panel-hidden').forEach(el => el.classList.add('admin-panel-hidden'));
   }
 }
 // Run after wallet is detected
