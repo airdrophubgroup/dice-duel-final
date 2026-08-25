@@ -489,6 +489,8 @@ details[open] .accord-arrow{ transform:rotate(180deg); }
 .chat-header{ display:flex; justify-content:space-between; align-items:center; font-family:'Space Grotesk',sans-serif; font-weight:700; color:var(--photon); font-size:13px; margin-bottom:10px; border-bottom:1px solid rgba(41,217,194,0.15); padding-bottom:8px; }
 .chat-online-dot{ width:8px; height:8px; border-radius:50%; background:#4ade80; box-shadow:0 0 8px #4ade80, 0 0 16px rgba(74,222,128,0.4); animation:onlinePulse 2s ease-in-out infinite; margin-right:6px; display:inline-block; }
 @keyframes onlinePulse{ 0%,100%{ opacity:1; transform:scale(1); } 50%{ opacity:0.7; transform:scale(1.15); } }
+@keyframes countdownPulse{ 0%,100%{ transform:scale(1); box-shadow:0 0 25px rgba(255,95,109,0.5); } 50%{ transform:scale(1.08); box-shadow:0 0 35px rgba(255,95,109,0.7); } }
+@keyframes popIn{ from{ opacity:0; transform:scale(0.8); } to{ opacity:1; transform:scale(1); } }
 .chat-close-btn{ background:none; border:none; color:var(--slate); font-size:16px; cursor:pointer; transition:color .2s; }
 .chat-close-btn:hover{ color:var(--bone); }
 .chat-messages{ flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-right:4px; text-align:left; margin-bottom:10px; }

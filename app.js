@@ -1581,6 +1581,62 @@ function showNeonToast(message, type = 'info') {
 
 // Neon cancel popup — shows when opponent cancels and player has paid.
 // Full-screen overlay with reassuring message about refund safety.
+// PAYMENT COUNTDOWN: 6-second timer with neon warning
+function showPaymentCountdown(seconds = 6) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.id = 'payment-countdown-overlay';
+    overlay.style.cssText = 'position:fixed; inset:0; z-index:999997; display:flex; align-items:center; justify-content:center; background:rgba(5,0,0,0.9); backdrop-filter:blur(10px); animation:fadeIn 0.3s ease;';
+
+    const card = document.createElement('div');
+    card.style.cssText = 'background:rgba(17,17,32,0.98); border:2px solid var(--signal); border-radius:20px; padding:28px 24px; max-width:340px; width:90%; text-align:center; box-shadow:0 0 40px rgba(255,95,109,0.3), 0 0 80px rgba(255,95,109,0.1); animation:popIn 0.4s cubic-bezier(0.175,0.885,0.32,1.275);';
+
+    let timeLeft = seconds;
+    card.innerHTML = `
+      <div style="width:70px; height:70px; margin:0 auto 16px; border-radius:50%; background:linear-gradient(135deg, rgba(255,95,109,0.2), rgba(255,179,0,0.15)); border:3px solid var(--signal); display:flex; align-items:center; justify-content:center; font-size:32px; font-weight:900; color:var(--signal); font-family:'JetBrains Mono',monospace; box-shadow:0 0 25px rgba(255,95,109,0.5); animation:countdownPulse 1s ease-in-out infinite;" id="countdown-number">${timeLeft}</div>
+      <h3 style="font-family:'Space Grotesk',sans-serif; color:var(--signal); font-size:16px; margin:0 0 8px; text-shadow:0 0 12px rgba(255,95,109,0.4);">⚡ PAY NOW OR MATCH CANCELS</h3>
+      <p style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--bone); line-height:1.6; margin:0 0 12px;">Complete payment in World App within <span style="color:var(--signal); font-weight:700;" id="countdown-seconds">${timeLeft}s</span></p>
+      <div style="background:rgba(255,95,109,0.08); border:1px solid rgba(255,95,109,0.3); border-radius:10px; padding:10px; margin:0 0 8px;">
+        <p style="font-family:'Space Grotesk',sans-serif; font-size:11px; color:var(--signal); font-weight:600; margin:0;">If payment not received → Match auto-cancels</p>
+        <p style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--slate); margin:4px 0 0;">Opponent is waiting for your payment</p>
+      </div>
+      <div id="countdown-status" style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--photon); margin-top:8px;">Waiting for payment...</div>
+    `;
+
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    const timer = setInterval(() => {
+      timeLeft--;
+      const numEl = document.getElementById('countdown-number');
+      const secEl = document.getElementById('countdown-seconds');
+      if (numEl) numEl.textContent = timeLeft;
+      if (secEl) secEl.textContent = timeLeft + 's';
+      if (timeLeft <= 3) {
+        if (numEl) { numEl.style.color = '#ff0040'; numEl.style.textShadow = '0 0 20px #ff0040'; }
+        card.style.borderColor = '#ff0040';
+        card.style.boxShadow = '0 0 50px rgba(255,0,64,0.5)';
+      }
+      if (timeLeft <= 0) {
+        clearInterval(timer);
+        const statusEl = document.getElementById('countdown-status');
+        if (statusEl) { statusEl.textContent = '❌ TIME UP — Match cancelled'; statusEl.style.color = 'var(--signal)'; }
+        setTimeout(() => { cleanup(); resolve('timeout'); }, 1000);
+      }
+    }, 1000);
+
+    const cleanup = () => {
+      clearInterval(timer);
+      overlay.style.opacity = '0';
+      overlay.style.transition = 'opacity 0.3s';
+      setTimeout(() => overlay.remove(), 300);
+    };
+
+    // Expose resolve for external payment success
+    window._resolvePaymentCountdown = (result) => { cleanup(); resolve(result); };
+  });
+}
+
 function showNeonCancelPopup(feeAmount) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
@@ -1843,13 +1899,17 @@ async function performWalletAuth(silent = false){
 
   // ============================================
   // Payment + search — called ONLY after opponent is found
+  // 6-SECOND PAYMENT TIMEOUT: both players must pay within 6 seconds
   // ============================================
   async function performPaymentAndStartSearch() {
-    $('wait-status').innerText = `Confirm payment in World App...`;
+    $('wait-status').innerText = `⚡ Pay within 6 seconds or match cancels!`;
 
     const paymentReference = 'ref_' + randomAlphaNumeric(16);
     let paymentSuccessful = false;
     let payRes;
+
+    // Start 6-second countdown AND payment simultaneously
+    const countdownPromise = showPaymentCountdown(6);
 
     try {
       payRes = await Promise.race([
@@ -1859,16 +1919,30 @@ async function performWalletAuth(silent = false){
           tokens: [{ symbol: Tokens.WLD, token_amount: tokenToDecimals(selectedFee, Tokens.WLD).toString() }],
           description: `Duel entry fee: ${selectedFee} WLD`,
         }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('payment_response_timeout')), 120000)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('payment_timeout')), 120000)),
       ]);
       if (payRes && payRes.finalPayload && payRes.finalPayload.status === 'success') {
         paymentSuccessful = true;
+        if (window._resolvePaymentCountdown) window._resolvePaymentCountdown('success');
         showPaymentConfirmedPopup(selectedFee);
       } else {
         paymentSuccessful = false;
       }
     } catch (err) {
       paymentSuccessful = false;
+    }
+
+    // Check if countdown timed out while we were processing
+    const countdownResult = await countdownPromise;
+    if (countdownResult === 'timeout' && !paymentSuccessful) {
+      // 6 seconds up, payment not received — cancel match
+      showNeonToast('⏰ Payment timeout — Match cancelled', 'error');
+      if (matchId && myAddress) {
+        ensureRefundQueuedInBackground(matchId, myAddress.toLowerCase().trim());
+      }
+      try { await supabaseClient.rpc('secure_leave_waiting_match', { p_match_id: matchId, p_wallet: myAddress }); } catch(e) {}
+      resetToHome();
+      return;
     }
 
     if (!paymentSuccessful) {
@@ -1880,6 +1954,7 @@ async function performWalletAuth(silent = false){
 
       if (recoveredPayment) {
         paymentSuccessful = true;
+        if (window._resolvePaymentCountdown) window._resolvePaymentCountdown('success');
         showPaymentConfirmedPopup(selectedFee);
         showNeonToast('Payment confirmed on-chain', 'success');
       } else {
