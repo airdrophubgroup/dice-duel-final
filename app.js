@@ -470,8 +470,44 @@ async function fetchRealWldBalance(walletAddress) {
   return null;  
 }  
 
+// HOME TAB: show the signed-in user their own TNV withdrawal request
+// statuses (pending / approved / rejected). Only the user's OWN rows —
+// never anyone else's (privacy: data minimization guideline).
+async function refreshHomeWithdrawStatus() {
+  const container = $('home-withdraw-status');
+  if (!container) return;
+  if (!myAddress) {
+    container.innerHTML = `<div style="text-align:center;color:var(--slate);font-size:10px;padding:6px 0;">Sign in to see your withdrawal requests</div>`;
+    return;
+  }
+  try {
+    const { data } = await supabaseClient
+      .from('withdraw_requests')
+      .select('amount, status, created_at')
+      .eq('wallet_address', myAddress)
+      .order('created_at', { ascending: false })
+      .limit(3);
+    if (!data || data.length === 0) {
+      container.innerHTML = `<div style="text-align:center;color:var(--slate);font-size:10px;padding:6px 0;">No withdrawal requests yet \u2014 min 5,000 TNV to withdraw</div>`;
+      return;
+    }
+    container.innerHTML = data.map(r => {
+      const cls = r.status === 'approved' ? 'wd-approved' : r.status === 'rejected' ? 'wd-rejected' : 'wd-pending';
+      const dateStr = r.created_at ? new Date(r.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
+      return `<div class="home-wd-row">` +
+        `<span><span class="home-wd-amount">${Number(r.amount).toLocaleString()} TNV</span><span class="home-wd-date">${dateStr}</span></span>` +
+        `<span class="home-wd-badge ${cls}">${String(r.status).toUpperCase()}</span>` +
+        `</div>`;
+    }).join('');
+  } catch (e) {
+    container.innerHTML = `<div style="text-align:center;color:var(--slate);font-size:10px;padding:6px 0;">Could not load requests</div>`;
+  }
+}
+window.refreshHomeWithdrawStatus = refreshHomeWithdrawStatus;
+
 async function fetchUserBalanceAndLeaderboard(wallet) {  
   if (!wallet) return;  
+  refreshHomeWithdrawStatus();
   if (wallet.toLowerCase() === ADMIN_WALLET.toLowerCase()) {  
     document.querySelectorAll('.admin-panel-hidden').forEach(el => el.classList.remove('admin-panel-hidden'));
     if ($('admin-history-nav-btn')) $('admin-history-nav-btn').style.display = 'inline-block';  
@@ -1726,10 +1762,11 @@ function selectFee(amount, element){
   document.querySelectorAll('.fee-chip').forEach(chip => chip.classList.remove('active'));
   if (element) element.classList.add('active');
   $('start-btn').innerText = `PLAY NOW (${selectedFee} WLD)`;
-  // Update fee subtitle
-  const tnvRewards = {0.1:5,0.2:10,0.5:15,1:25,2:50,5:125,10:250,20:500,30:750,40:1000,50:1250};
+  // Update fee subtitle — show the WLD the user WINS on this tier
+  // (must mirror calculatePayout() exactly)
+  const winPayouts = {0.1:'0.17',0.2:'0.34',0.5:'0.80',1:'1.60',2:'3.20',5:'8.80',10:'17.8',20:'36',30:'54',40:'72',50:'90'};
   const sub = $('play-fee-sub');
-  if (sub) sub.innerHTML = `Fee: <b>${selectedFee} WLD</b> \u00b7 Pay only after opponent found`;
+  if (sub) sub.innerHTML = `Win: <b style="color:#4ade80;">+${winPayouts[selectedFee] || (selectedFee * 1.6).toFixed(2)} WLD</b> \u00b7 Pay only after opponent found`;
 }  
 
 function setupChannel() {  
@@ -1917,8 +1954,8 @@ async function startSyncCountdown(){
 
   setTimeout(() => {  
     $('waiting-overlay').style.display = 'none';  
-    if (typeof showGameScreen === 'function') showGameScreen();  
-    else { $('game-screen').style.display = 'block'; }  
+    if (typeof showGameScreen === 'function') showGameScreen();
+    else { document.body.classList.add('game-live'); $('game-screen').style.display = 'block'; }  
     $('target-dot').classList.remove('connected');  
 
     myTurnsLeft = 15;  
@@ -3196,6 +3233,7 @@ window.closeSupportModal = function() {
 // ============ SHOW/HIDE GAME SCREEN (on game start/end) ============
 window.showGameScreen = function() {
   // Hide all tab panels and show game screen
+  document.body.classList.add('game-live'); // render <main> only while a game runs
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('game-screen').style.display = 'block';
   document.getElementById('tab-bar').style.display = 'none';
@@ -3204,6 +3242,7 @@ window.showGameScreen = function() {
 
 window.showTabScreen = function() {
   // Hide game screen and show default tab (home)
+  document.body.classList.remove('game-live'); // empty <main> must not eat half the screen
   document.getElementById('game-screen').style.display = 'none';
   document.getElementById('tab-bar').style.display = 'flex';
   document.querySelector('header.topbar').style.display = 'block';
