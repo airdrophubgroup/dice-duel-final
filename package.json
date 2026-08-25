@@ -2,12 +2,18 @@
   "name": "dice-duel",
   "version": "1.0.0",
   "type": "module",
+  "scripts": {
+    "build": "echo 'Static site - no build needed'",
+    "start": "npx serve -l 8080"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.2",
     "@worldcoin/minikit-js": "^2.0.3",
     "dotenv": "^16.4.5",
     "ethers": "^6.17.0",
-    "express": "^5.2.1",
     "viem": "^2.55.13"
   }
 }

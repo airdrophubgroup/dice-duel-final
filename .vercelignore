@@ -1,0 +1,22 @@
+# Supabase CLI local state
+supabase/.temp/
+supabase/.branches/
+
+# Freebuff tool state
+.freebuff/
+
+# VS Code
+.vscode/
+
+# Continue AI
+.continue/
+
+# Git
+.git/
+.gitignore
+
+# Publish drafts
+publish/
+
+# README
+README.md

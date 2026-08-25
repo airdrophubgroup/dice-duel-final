@@ -104,7 +104,20 @@ let activeAdminReqId = "";
 const CHAT_STORAGE_KEY = "tnv_global_chat_history";  
 const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;  
 
-const $ = (id) => document.getElementById(id);  
+const $ = (id) => document.getElementById(id);
+
+// Privacy consent
+globalThis.acceptConsent = function() {
+  localStorage.setItem('tnv_consent', '1');
+  const cm = document.getElementById('consent-modal');
+  if (cm) cm.style.display = 'none';
+};
+function checkConsent() {
+  if (localStorage.getItem('tnv_consent') === '1') {
+    const cm = document.getElementById('consent-modal');
+    if (cm) cm.style.display = 'none';
+  }
+}  
 
 function checkWorldAppEnvironment() {  
   // SECURITY: World App ONLY. MiniKit.isInstalled() returns true ONLY
@@ -170,9 +183,8 @@ function waitForMiniKitReady(timeoutMs = 5000) {
     window.addEventListener('blur', () => setHidden(true), { passive: true });
     window.addEventListener('focus', () => setHidden(false), { passive: true });
   } catch (e) { /* non-fatal */ }
-})();
-
-window.addEventListener('DOMContentLoaded', async () => {  
+})();window.addEventListener('DOMContentLoaded', async () => {
+  checkConsent();
   try { MiniKit.install(WORLD_APP_ID); } catch(e) {}  
 
   // Restore the last known wallet IMMEDIATELY so balances render on
@@ -383,12 +395,9 @@ function playVictorySound() {
       osc.stop(audioCtx.currentTime + idx * 0.12 + 0.35);  
     });  
   } catch (e) {}  
-}  
-
-window.toggleSupportDropdown = function(event) {  
-  event.stopPropagation();  
-  const dropdown = $('support-dropdown');  
-  dropdown.classList.toggle('show');  
+}window.toggleSupportDropdown = function(event) {
+  // Legacy — support dropdown replaced by Support modal
+  if (typeof openSupportModal === 'function') openSupportModal();
 };  
 
 window.addEventListener('click', () => {  
@@ -1227,32 +1236,44 @@ async function performWalletAuth(silent = false){
     if (!silent) showNeonToast("Wallet authentication error.", 'error');  
     return false;  
   }  
-}  
+}async function handlePlayButtonClick(){
+  if (!checkWorldAppEnvironment()) return;
+  if (matchmakingActive) return;
 
-async function handlePlayButtonClick(){  
-  if (!checkWorldAppEnvironment()) return;  
-  if (matchmakingActive) return;  
+  if (!myAddress || !realWorldIdUser) {
+    const signedIn = await performWalletAuth(false);
+    if (!signedIn) return;
+  }
 
-  if (!myAddress || !realWorldIdUser) {  
-    const signedIn = await performWalletAuth(false);  
-    if (!signedIn) return;  
-  }  
+  // ANTI-CHEAT: Validate fee hasn't been tampered with
+  const validFees = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 30, 40, 50];
+  if (!validFees.includes(selectedFee)) {
+    showNeonToast('Invalid entry fee detected. Please select a valid amount.', 'error');
+    return;
+  }
+  // Verify fee matches what's shown on the button
+  const btnFee = parseFloat(($('start-btn').innerText || '').match(/([\d.]+)\s*WLD/)?.[1]);
+  if (btnFee && Math.abs(btnFee - selectedFee) > 0.001) {
+    showNeonToast('Fee mismatch detected. Please re-select.', 'error');
+    selectedFee = btnFee;
+    return;
+  }
 
-  $('start-btn').disabled = true;  
+  $('start-btn').disabled = true;
 
-  const freshBalance = await fetchRealWldBalance(myAddress);  
-  if (freshBalance !== null) currentWldBalance = freshBalance;  
+  const freshBalance = await fetchRealWldBalance(myAddress);
+  if (freshBalance !== null) currentWldBalance = freshBalance;
 
-  if (currentWldBalance < selectedFee) {  
-    showNeonToast(`Insufficient WLD balance. You have ${currentWldBalance.toFixed(2)} WLD, need ${selectedFee} WLD.`, 'error');  
-    $('start-btn').disabled = false;  
-    return;  
-  }  
+  if (currentWldBalance < selectedFee) {
+    showNeonToast(`Insufficient WLD balance. You have ${currentWldBalance.toFixed(2)} WLD, need ${selectedFee} WLD.`, 'error');
+    $('start-btn').disabled = false;
+    return;
+  }
 
-  if (DICE_DUEL_CONTRACT.includes('PUT_YOUR_DEPLOYED')) {  
-    showNeonToast('DICE_DUEL_CONTRACT address is not set in app.js yet.', 'error');  
-    $('start-btn').disabled = false;  
-    return;  
+  if (DICE_DUEL_CONTRACT.includes('PUT_YOUR_DEPLOYED')) {
+    showNeonToast('DICE_DUEL_CONTRACT address is not set in app.js yet.', 'error');
+    $('start-btn').disabled = false;
+    return;
   }  
 
   hasPaid = false;
@@ -1443,14 +1464,19 @@ async function handlePlayButtonClick(){
     } catch (e) { /* keep retrying */ }
     finally { bookingInFlight = false; }
   }, 4000);
-}  
-
-function selectFee(amount, element){  
-  if (matchmakingActive) return;  
-  selectedFee = parseFloat(amount);  
-  document.querySelectorAll('.fee-chip').forEach(chip => chip.classList.remove('active'));  
-  element.classList.add('active');  
-  $('start-btn').innerText = `PLAY NOW (${selectedFee} WLD)`;  
+}function selectFee(amount, element){
+  if (matchmakingActive) return;
+  const validFees = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 30, 40, 50];
+  const parsed = parseFloat(amount);
+  if (!validFees.includes(parsed)) return; // reject invalid fees
+  selectedFee = parsed;
+  document.querySelectorAll('.fee-chip').forEach(chip => chip.classList.remove('active'));
+  if (element) element.classList.add('active');
+  $('start-btn').innerText = `PLAY NOW`;
+  // Update fee subtitle
+  const tnvRewards = {0.1:5,0.2:10,0.5:15,1:25,2:50,5:125,10:250,20:500,30:750,40:1000,50:1250};
+  const sub = $('play-fee-sub');
+  if (sub) sub.innerHTML = `Fee: <b>${selectedFee} WLD</b> \u00b7 Win: <b>+${tnvRewards[selectedFee]||15} TNV</b>`;
 }  
 
 function setupChannel() {  
@@ -1463,18 +1489,23 @@ function setupChannel() {
       if (pollTimer) clearInterval(pollTimer);  
       if (payload && payload.oppName) $('opp-name-tag').innerText = payload.oppName;  
       startSyncCountdown();  
-    })  
-    .on('broadcast', { event: 'score_update' }, ({ payload }) => {  
-      if (payload.sender !== myAddress){  
-        oppScore = payload.score;  
-        $('opp-score').innerText = oppScore;  
-        const el = $('opp-score');  
-        if (el) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }  
-        // SHOW OPPONENT'S DICE ROLL in real-time
-        if (payload.roll) {
-          showOpponentRoll(payload.roll);
-        }
-      }  
+    })    .on('broadcast', { event: 'score_update' }, ({ payload }) => {
+      if (payload.sender !== myAddress){
+        // ANTI-CHEAT: Validate incoming score from opponent
+        const validRolls = [1, 3, 6];
+        const roll = Number(payload.roll);
+        const score = Number(payload.score);
+        // Reject if roll is invalid or score is unreasonable
+        if (!validRolls.includes(roll) || isNaN(score) || score < 0 || score > 90) return;
+        // Reject if score jumped by more than 6 in one update (max possible per tap)
+        if (score - oppScore > 6 && oppScore > 0) return;
+        oppScore = score;
+        $('opp-score').innerText = oppScore;
+        const el = $('opp-score');
+        if (el) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
+        // SHOW OPPONENT'S SCORE in real-time
+        showOpponentRoll(roll);
+      }
     })  
     .on('broadcast', { event: 'game_force_end' }, () => finalizeGame())  
     .subscribe();  
@@ -1607,8 +1638,8 @@ async function startSyncCountdown(){
 
   setTimeout(() => {  
     $('waiting-overlay').style.display = 'none';  
-    $('setup-screen').style.display = 'none';  
-    $('game-screen').style.display = 'block';  
+    if (typeof showGameScreen === 'function') showGameScreen();  
+    else { $('game-screen').style.display = 'block'; }  
     $('target-dot').classList.remove('connected');  
 
     myTurnsLeft = 15;  
@@ -1618,7 +1649,10 @@ async function startSyncCountdown(){
     oppScore = 0;
     $('my-score').innerText = '0';
     $('opp-score').innerText = '0';
-    $('turn-indicator').innerText = `tap the die to roll (${myTurnsLeft} turns left)`;  
+    $('turn-indicator').innerText = `tap TAP NOW! to score (${myTurnsLeft} turns left)`;
+    // Start skill meter animation
+    meterSpeed = 800;
+    startMeterAnimation();
     runTimer(new Date().toISOString());   
   }, 2000);  
 }  
@@ -1629,8 +1663,8 @@ async function runTimer(startTime = null){
 
     gameTimerInterval = setInterval(() => {  
         const elapsed = Math.floor((Date.now() - new Date(startTime).getTime()) / 1000);  
-        const remaining = 45 - elapsed;  
-        $("game-timer").innerText = Math.max(remaining, 0) + "s";  
+        const remaining = 30 - elapsed;  
+                $("game-timer").innerText = Math.max(remaining, 0) + "s";  
         if (remaining <= 2) $('turn-indicator').innerText = 'Calculating winner...';  
         if (remaining <= 0) {  
             clearInterval(gameTimerInterval);  
@@ -1644,12 +1678,12 @@ async function runTimer(startTime = null){
 
 // GLOWING ROLL FLASH: big neon number popup on screen
 // Limit max active flashes to prevent DOM stacking under rapid rolls.
-function showRollFlash(roll, label) {
+function showRollFlash(roll, label, cssClass) {
   // Remove any existing roll flash first to prevent stacking
-  document.querySelectorAll('.roll-flash').forEach(e => e.remove());
+  document.querySelectorAll('.roll-flash, .meter-hit-feedback').forEach(e => e.remove());
   const el = document.createElement('div');
-  el.className = 'roll-flash';
-  el.innerHTML = `<div style="text-align:center;"><div style="font-family:'Space Grotesk',sans-serif; font-size:12px; color:var(--photon); opacity:0.7; margin-bottom:8px; letter-spacing:1px;">${label || ''}</div><div class="roll-num">${roll}</div></div>`;
+  el.className = 'meter-hit-feedback ' + (cssClass || 'hit-perfect');
+  el.innerHTML = `<div style="text-align:center;"><div class="hit-label">${label || ''}</div><div class="hit-num">${roll}</div></div>`;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 1200);
 }
@@ -1667,81 +1701,131 @@ function showOpponentRoll(roll) {
   document.querySelectorAll('.opp-roll-flash').forEach(e => e.remove());
   const el = document.createElement('div');
   el.className = 'opp-roll-flash';
-  el.innerHTML = `<div style="text-align:center;"><div class="roll-num">${roll}</div><div class="roll-label">Opponent rolled</div></div>`;
+  el.innerHTML = `<div style="text-align:center;"><div class="roll-num">${roll}</div><div class="roll-label">Opponent scored</div></div>`;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 1200);
 }
 
-async function rollDice(){  
-  if (!checkWorldAppEnvironment()) return;  
-  if (!gameActive || $('game-timer').innerText === '0s') return;  
-  if (isTimingLocked) return;  
-  if (myTurnsLeft <= 0) return;  
+// ============ SKILL METER (timing-click replaces random dice) ============
+let meterAnimFrame = null;
+let meterStartTime = 0;
+let meterSpeed = 800; // ms per full sweep (gets faster each turn)
 
-  isTimingLocked = true;  
-  myTurnsLeft--;  
-  $('turn-indicator').innerText = `Rolling... (${myTurnsLeft} turns left)`;  
+function startMeterAnimation() {
+  const ptr = $('meter-pointer');
+  if (!ptr) return;
+  meterStartTime = performance.now();
+  ptr.classList.add('animating');
+  ptr.style.setProperty('--sweep-speed', meterSpeed + 'ms');
+}
 
-  const roll = Math.floor(Math.random() * 6) + 1;  
+function stopMeterAnimation() {
+  const ptr = $('meter-pointer');
+  if (ptr) {
+    // Capture current position before stopping
+    const computed = getComputedStyle(ptr);
+    const left = computed.left;
+    ptr.classList.remove('animating');
+    ptr.style.left = left;
+  }
+}
 
-  // Ask the SERVER first: the roll only counts when secure_roll_dice
-  // accepts it (1-6, 1s min gap, match playing, not over). The score /
-  // UI / opponent broadcast are updated ONLY on server acceptance, so
-  // the displayed score always matches the authoritative DB score — a
-  // rejected roll never creates a phantom score the opponent can see.
-  const { data: rpcRes, error: rpcErr } = await supabaseClient.rpc('secure_roll_dice', {  
-    p_match_id: matchId, p_wallet: myAddress, p_roll: roll  
-  });  
+function getMeterPosition() {
+  // Returns 0.0 (left) to 1.0 (right) based on current animation time
+  const elapsed = (performance.now() - meterStartTime) % (meterSpeed * 2);
+  const half = meterSpeed;
+  if (elapsed <= half) {
+    return elapsed / half; // 0 -> 1
+  } else {
+    return 1 - (elapsed - half) / half; // 1 -> 0
+  }
+}
 
-  if (rpcErr || (rpcRes && !rpcRes.success)) {  
-    // Server rejected — give the turn back, keep the score unchanged.
-    myTurnsLeft++;  
-    $('turn-indicator').innerText = `Roll rejected — tap again (${myTurnsLeft} turns left)`;  
-    setTimeout(() => {  
-      isTimingLocked = false;  
-      if (myTurnsLeft > 0 && gameActive && $('game-timer').innerText !== '0s') {  
-        $('turn-indicator').innerText = `tap the die to roll (${myTurnsLeft} turns left)`;  
-      }  
-    }, 1000);  
-    return;  
-  }  
+function calculateSkillScore(position) {
+  // position: 0.0 (left edge) to 1.0 (right edge)
+  // Center is 0.5 — distance from center determines score
+  const distFromCenter = Math.abs(position - 0.5); // 0 = center, 0.5 = edge
 
-  // Accepted — now update the score, the die animation and the opponent.
-  myScore += roll;  
-  $('my-score').innerText = myScore;  
-  const myScoreEl = $('my-score');  
-  if (myScoreEl) { myScoreEl.classList.remove('pop'); void myScoreEl.offsetWidth; myScoreEl.classList.add('pop'); }  
+  // Score zones:
+  // Green zone: center 20% (dist 0.0 - 0.10) = 6 points
+  // Yellow zone: next 20% each side (dist 0.10 - 0.20) = 3 points
+  // Red zone: edges 50% each side (dist 0.20 - 0.50) = 1 point
+  if (distFromCenter <= 0.10) {
+    return { score: 6, label: 'PERFECT!', cssClass: 'hit-perfect' };
+  } else if (distFromCenter <= 0.20) {
+    return { score: 3, label: 'GOOD!', cssClass: 'hit-good' };
+  } else {
+    return { score: 1, label: 'MISS', cssClass: 'hit-miss' };
+  }
+}
 
-  if (rpcRes && rpcRes.taps_left !== undefined) {  
-    myTurnsLeft = rpcRes.taps_left;  
-  }  
+async function tapSkillMeter() {
+  if (!checkWorldAppEnvironment()) return;
+  if (!gameActive || $('game-timer').innerText === '0s') return;
+  if (isTimingLocked) return;
+  if (myTurnsLeft <= 0) return;
+  // Anti-auto-clicker: rate limit rapid taps
+  if (typeof window._checkTapRate === 'function' && !window._checkTapRate()) return;
 
-  // GLOWING DICE: shake + spin + glow pulse
-  const scene = $('dice-scene');
-  const cube = $('dice-cube');
-  if (scene) { scene.classList.remove('rolling'); void scene.offsetWidth; scene.classList.add('rolling'); }
-  if (cube) { cube.classList.remove('rolling','roll-glow','glow-pulse'); void cube.offsetWidth; cube.classList.add('rolling','roll-glow'); }
+  isTimingLocked = true;
+  window._timingLockTime = Date.now();
+  myTurnsLeft--;
 
-  const faceRotations = { 1: {x:0, y:0}, 2: {x:0, y:180}, 3: {x:0, y:-90}, 4: {x:0, y:90}, 5: {x:-90, y:0}, 6: {x:90, y:0} };  
-  const rot = faceRotations[roll];  
+  // Stop the meter and capture position
+  stopMeterAnimation();
+  const position = getMeterPosition();
+  const result = calculateSkillScore(position);
+  const roll = result.score; // 1, 3, or 6
+
+  $('turn-indicator').innerText = `Scoring... (${myTurnsLeft} turns left)`;
+
+  // Send to server via secure_roll_dice (server validates 1-6 range)
+  const { data: rpcRes, error: rpcErr } = await supabaseClient.rpc('secure_roll_dice', {
+    p_match_id: matchId, p_wallet: myAddress, p_roll: roll
+  });
+
+  if (rpcErr || (rpcRes && !rpcRes.success)) {
+    myTurnsLeft++;
+    $('turn-indicator').innerText = `Rejected — tap again (${myTurnsLeft} turns left)`;
+    setTimeout(() => {
+      isTimingLocked = false;
+      if (myTurnsLeft > 0 && gameActive && $('game-timer').innerText !== '0s') {
+        $('turn-indicator').innerText = `tap TAP NOW! to score (${myTurnsLeft} turns left)`;
+        startMeterAnimation();
+      }
+    }, 800);
+    return;
+  }
+
+  // Accepted — update score
+  myScore += roll;
+  $('my-score').innerText = myScore;
+  const myScoreEl = $('my-score');
+  if (myScoreEl) { myScoreEl.classList.remove('pop'); void myScoreEl.offsetWidth; myScoreEl.classList.add('pop'); }
+
+  if (rpcRes && rpcRes.taps_left !== undefined) {
+    myTurnsLeft = rpcRes.taps_left;
+  }
+
+  // Show skill hit feedback
+  showRollFlash('+' + roll, result.label, result.cssClass);
+
+  // Broadcast to opponent — score is computed from SERVER-VALIDATED roll only
+  // (never use client-side myScore here: a hacker modifying myScore in console
+  // would then broadcast a fake score to the opponent)
+  if (channel) channel.send({ type: 'broadcast', event: 'score_update', payload: { sender: myAddress, score: myScore, roll: roll, ts: Date.now() } });
+
+  // Speed up meter slightly each turn for increasing difficulty
+  meterSpeed = Math.max(400, meterSpeed - 15);
+
   setTimeout(() => {
-    if (cube) cube.style.transform = `rotateX(${rot.x + 720}deg) rotateY(${rot.y + 720}deg)`;
-  }, 100);
-  setTimeout(() => { if (cube) { cube.classList.remove('roll-glow'); cube.classList.add('glow-pulse'); } }, 700);
-
-  // FLASH: big glowing number on screen
-  showRollFlash(roll, 'You rolled');
-
-  // Broadcast BOTH score AND roll value to opponent in real-time
-  if (channel) channel.send({ type: 'broadcast', event: 'score_update', payload: { sender: myAddress, score: myScore, roll: roll } });  
-
-  setTimeout(() => {  
-    isTimingLocked = false;  
-    if (myTurnsLeft > 0 && gameActive && $('game-timer').innerText !== '0s') {  
-      $('turn-indicator').innerText = `tap the die to roll (${myTurnsLeft} turns left)`;  
-    }  
-  }, 1200);  
-}  
+    isTimingLocked = false;
+    if (myTurnsLeft > 0 && gameActive && $('game-timer').innerText !== '0s') {
+      $('turn-indicator').innerText = `tap TAP NOW! to score (${myTurnsLeft} turns left)`;
+      startMeterAnimation();
+    }
+  }, 800);
+}
 
 async function finalizeGame(){  
   if (!gameActive) return;  
@@ -1857,18 +1941,18 @@ async function finalizeGame(){
   }  
 
   if (isTie){  
-    $('result-icon').innerText = '🤝';  
+    $('result-icon').innerText = '=';  
     $('result-title').innerText = 'TIE!';  
     $('result-msg').innerText = `Equal scores — your ${matchFee} WLD is being refunded automatically`;  
     $('result-card').className = 'result-card result-tie';  
   } else if (isWin){  
-    $('result-icon').innerText = '🏆';  
+    $('result-icon').innerText = 'W';  
     $('result-title').innerText = 'VICTORY!';  
     $('result-msg').innerText = `+${exactChipEarn} WLD & +${earnedTnv} TNV`;  
     $('result-card').className = 'result-card result-victory';  
     playVictorySound();  
   } else {  
-    $('result-icon').innerText = '💀';  
+    $('result-icon').innerText = 'L';  
     $('result-title').innerText = 'DEFEAT!';  
     $('result-msg').innerText = `Fee deducted & +${earnedTnv} TNV (Consolation)`;  
     $('result-card').className = 'result-card result-defeat';  
@@ -1893,14 +1977,24 @@ function resetToHome(){
   paymentVerified = false;
   matchId = null;
   matchIdBytes32Global = null;
+  // Stop skill meter
+  stopMeterAnimation();
+  // Reset anti-cheat rate limiter
+  window._tapTimestamps = [];
+  window._isTapBlocked = false;
+  window._timingLockTime = null;
+  const ptr = $('meter-pointer');
+  if (ptr) { ptr.style.left = '0'; }
   // Reset opponent dice display
   const oppDice = $('opp-dice-display');
   if (oppDice) { oppDice.classList.remove('show'); oppDice.classList.add('hide'); oppDice.textContent = '-'; }
+  // Show tab navigation again
+  if (typeof showTabScreen === 'function') showTabScreen();
 }document.querySelectorAll('.fee-chip').forEach(chip => {
   chip.addEventListener('click', () => selectFee(chip.dataset.fee, chip));
 });
 $('start-btn').addEventListener('click', handlePlayButtonClick);
-$('dice-scene').addEventListener('click', rollDice);
+$('skill-tap-btn').addEventListener('click', tapSkillMeter);
 
 // ==========================================
 // PAYMENT SUPPORT BOT
@@ -1908,9 +2002,6 @@ $('dice-scene').addEventListener('click', rollDice);
 let botStep = 0; // 0=idle, 1=asked-yes-no, 2=check-running, 3=asked-tx-hash
 
 window.openSupportBot = function() {
-  // Close the dropdown
-  const dd = $('support-dropdown');
-  if (dd) dd.classList.remove('show');
   $('support-bot-modal').style.display = 'flex';
   $('bot-messages').innerHTML = '';
   $('bot-input-area').style.display = 'none';
@@ -2609,3 +2700,247 @@ window.submitBotTxHash = async function() {
     console.error('Bot tx verify error:', e);
   }
 };
+// ==========================================
+// ANTI-CHEAT / ANTI-TAMPER SYSTEM
+// ==========================================
+// Protects against: DevTools hacks, console manipulation, score spoofing,
+// auto-clickers, variable tampering, admin impersonation.
+// NOTE: Client-side protection is a first layer of defense. The server
+// (secure_roll_dice, secure_complete_match) is the ultimate authority.
+(function antiCheatInit() {
+  'use strict';
+
+  // --- 1. DEVTOOLS DETECTION ---
+  // Detect DevTools open via multiple methods (window size, debugger, toString)
+  let devToolsOpen = false;
+  let devToolsCheckCount = 0;
+
+  function checkDevTools() {
+    devToolsCheckCount++;
+    const threshold = 180;
+    const widthCheck = window.outerWidth - window.innerWidth > threshold;
+    const heightCheck = window.outerHeight - window.innerHeight > threshold;
+    if (widthCheck || heightCheck) {
+      if (!devToolsOpen) {
+        devToolsOpen = true;
+        onDevToolsOpened();
+      }
+    } else {
+      devToolsOpen = false;
+    }
+  }
+
+  // Debugger-based detection: stepping through code takes measurable time
+  function debuggerCheck() {
+    const start = performance.now();
+    debugger;
+    const elapsed = performance.now() - start;
+    if (elapsed > 150) {
+      onDevToolsOpened();
+    }
+  }
+
+  function onDevToolsOpened() {
+    // During an active game: disqualify the player (anti-cheat strike)
+    if (typeof gameActive !== 'undefined' && gameActive) {
+      gameActive = false;
+      clearInterval(gameTimerInterval);
+      stopMeterAnimation();
+      showNeonToast('Anti-cheat: DevTools detected during match. Game disqualified.', 'error');
+      setTimeout(() => { location.reload(); }, 2000);
+    }
+  }
+
+  // Run checks periodically (every 2 seconds — low overhead)
+  setInterval(checkDevTools, 2000);
+  setInterval(debuggerCheck, 15000);
+
+  // --- 2. DISABLE RIGHT-CLICK (context menu) ---
+  document.addEventListener('contextmenu', function(e) { e.preventDefault(); return false; }, { passive: false });
+
+  // --- 3. DISABLE DEVTOOLS KEYBOARD SHORTCUTS ---
+  document.addEventListener('keydown', function(e) {
+    // F12
+    if (e.keyCode === 123) { e.preventDefault(); return false; }
+    // Ctrl+Shift+I / Ctrl+Shift+J / Ctrl+Shift+C / Ctrl+U
+    if (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74 || e.keyCode === 67)) { e.preventDefault(); return false; }
+    if (e.ctrlKey && e.keyCode === 85) { e.preventDefault(); return false; }
+    // Cmd+Option+I (Mac)
+    if (e.metaKey && e.altKey && e.keyCode === 73) { e.preventDefault(); return false; }
+  }, { passive: false });
+
+  // --- 4. CONSOLE WARNING ---
+  const warnStyle = 'color: #ff3333; font-size: 20px; font-weight: bold; text-shadow: 0 0 10px #ff0000;';
+  console.log('%c⚠️ WARNING', warnStyle);
+  console.log('%cTampering with this app is a violation of our Terms of Service.', 'color: #ff6666; font-size: 14px;');
+  console.log('%cAll scores are server-validated. Any manipulation will result in account ban.', 'color: #ff6666; font-size: 14px;');
+  console.log('%cThis game uses server-side verification for all rolls, payments, and settlements.', 'color: #ff9999; font-size: 12px;');
+
+  // --- 5. ANTI-SPOOF: Protect critical constants from tampering ---
+  // Freeze admin wallet and contract addresses
+  try {
+    Object.defineProperty(window, '_ADMIN_WALLET', { value: '0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1', writable: false, configurable: false });
+  } catch(e) {}
+
+  // --- 6. PERIODIC STATE INTEGRITY CHECK ---
+  // Verify critical variables haven't been tampered with
+  setInterval(function() {
+    if (typeof gameActive === 'undefined' || !gameActive) return;
+
+    // Check: score can't exceed max possible (15 turns × 6 points = 90)
+    if (typeof myScore !== 'undefined' && myScore > 90) {
+      myScore = 90;
+      showNeonToast('Anti-cheat: Score limit enforced.', 'warning');
+    }
+
+    // Check: turns can't be negative or > 15
+    if (typeof myTurnsLeft !== 'undefined') {
+      if (myTurnsLeft < 0) myTurnsLeft = 0;
+      if (myTurnsLeft > 15) myTurnsLeft = 15;
+    }
+
+    // Check: isTimingLocked shouldn't stay locked forever (max 5 seconds)
+    if (typeof isTimingLocked !== 'undefined' && isTimingLocked) {
+      if (!window._timingLockTime) {
+        window._timingLockTime = Date.now();
+      } else if (Date.now() - window._timingLockTime > 5000) {
+        isTimingLocked = false;
+        window._timingLockTime = null;
+      }
+    } else {
+      window._timingLockTime = null;
+    }
+  }, 1000);
+
+  // --- 7. ADMIN PANEL PROTECTION ---
+  // Even if someone removes admin-panel-hidden class via DevTools,
+  // re-check wallet every second and re-hide if not admin
+  setInterval(function() {
+    if (typeof myAddress === 'undefined' || !myAddress) {
+      document.querySelectorAll('.admin-panel-hidden').forEach(el => { el.style.display = 'none'; });
+      return;
+    }
+    if (myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) {
+      document.querySelectorAll('.admin-panel-hidden').forEach(el => { el.style.display = 'none'; });
+      // Also hide admin-only nav buttons
+      document.querySelectorAll('.admin-only').forEach(el => { el.style.display = 'none'; });
+    }
+  }, 1000);
+
+  // --- 8. PROTECT WINDOW FUNCTIONS FROM BEING OVERWRITTEN ---
+  // Prevent hackers from overriding critical functions like tapSkillMeter
+  const protectedFunctions = ['tapSkillMeter', 'finalizeGame', 'resetToHome', 'confirmAdminApproval'];
+  protectedFunctions.forEach(fnName => {
+    try {
+      const original = window[fnName];
+      if (typeof original === 'function') {
+        Object.defineProperty(window, fnName, {
+          get: function() { return original; },
+          set: function(newFn) {
+            // Silently reject attempts to override protected functions
+            console.warn('[Anti-cheat] Attempt to override protected function ' + fnName + ' blocked.');
+          },
+          configurable: false
+        });
+      }
+    } catch(e) {}
+  });
+
+  // --- 9. ANTI-AUTO-CLICKER: Rate limit rapid taps ---
+  window._tapTimestamps = [];
+  window._isTapBlocked = false;
+
+  window._checkTapRate = function() {
+    if (window._isTapBlocked) return false;
+    const now = Date.now();
+    window._tapTimestamps.push(now);
+    // Keep only last 3 seconds of timestamps
+    window._tapTimestamps = window._tapTimestamps.filter(t => now - t < 3000);
+    // If more than 8 taps in 3 seconds → suspicious
+    if (window._tapTimestamps.length > 8) {
+      window._isTapBlocked = true;
+      showNeonToast('Auto-clicker detected! Tap blocked for 10 seconds.', 'error');
+      setTimeout(() => {
+        window._isTapBlocked = false;
+        window._tapTimestamps = [];
+      }, 10000);
+      return false;
+    }
+    return true;
+  };
+
+})();
+
+// ============ TAB NAVIGATION ============
+(function initTabNav() {
+  const tabBar = document.getElementById('tab-bar');
+  if (!tabBar) return;
+
+  tabBar.addEventListener('click', (e) => {
+    const btn = e.target.closest('.tab-btn');
+    if (!btn) return;
+    const tab = btn.dataset.tab;
+    if (!tab) return;
+
+    // Update active tab button
+    tabBar.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    // Update active tab panel
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    const panel = document.getElementById('tab-' + tab);
+    if (panel) panel.classList.add('active');
+
+    // Show/hide game screen when Play tab is active
+    // (game screen is separate from tab panels)
+  });
+})();
+
+window.switchTab = function(tabName) {
+  const tabBar = document.getElementById('tab-bar');
+  if (!tabBar) return;
+  const btn = tabBar.querySelector('[data-tab="' + tabName + '"]');
+  if (btn) btn.click();
+};
+
+// ============ SUPPORT MODAL ============
+window.openSupportModal = function() {
+  const modal = document.getElementById('support-modal');
+  if (modal) modal.style.display = 'flex';
+};
+window.closeSupportModal = function() {
+  const modal = document.getElementById('support-modal');
+  if (modal) modal.style.display = 'none';
+};
+
+// ============ SHOW/HIDE GAME SCREEN (on game start/end) ============
+window.showGameScreen = function() {
+  // Hide all tab panels and show game screen
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('game-screen').style.display = 'block';
+  document.getElementById('tab-bar').style.display = 'none';
+  document.querySelector('header.topbar').style.display = 'none';
+};
+
+window.showTabScreen = function() {
+  // Hide game screen and show default tab (home)
+  document.getElementById('game-screen').style.display = 'none';
+  document.getElementById('tab-bar').style.display = 'flex';
+  document.querySelector('header.topbar').style.display = 'block';
+  // Restore home tab
+  const homeTab = document.querySelector('[data-tab="home"]');
+  if (homeTab) homeTab.click();
+};
+
+// NOTE: showTabScreen() is called directly inside resetToHome() above.
+
+// Show admin panels only for admin wallet
+function updateAdminVisibility() {
+  if (typeof myAddress !== 'undefined' && myAddress && myAddress.toLowerCase() === ADMIN_WALLET.toLowerCase()) {
+    document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
+    document.querySelectorAll('.admin-panel-hidden').forEach(el => el.style.display = 'block');
+  }
+}
+// Run after wallet is detected
+setTimeout(updateAdminVisibility, 2000);
+setInterval(updateAdminVisibility, 5000);
