@@ -2021,11 +2021,12 @@ async function startSyncCountdown(){
     else { document.body.classList.add('game-live'); $('game-screen').style.display = 'block'; }  
     $('target-dot').classList.remove('connected');  
 
-    myTurnsLeft = 15;  
+    myTurnsLeft = 15;
     // Fresh game — reset scores so a second match in the same session
     // never carries over the previous game's totals.
     myScore = 0;
     oppScore = 0;
+    window._gameStartTime = Date.now(); // Track for burst mechanic
     $('my-score').innerText = '0';
     $('opp-score').innerText = '0';
     $('turn-indicator').innerText = `tap TAP NOW! to score (${myTurnsLeft} turns left)`;
@@ -2138,14 +2139,28 @@ function calculateSkillScore(position) {
   }
 }
 
+function getBurstAllowance() {
+  // Calculate how many catch-up taps the user has earned by being idle.
+  // expected = floor(elapsed_seconds / 2) — how many taps they SHOULD have used.
+  // burst = expected - taps_already_used (capped at remaining taps).
+  if (!window._gameStartTime) return 0;
+  const elapsed = (Date.now() - window._gameStartTime) / 1000;
+  const tapsUsed = 15 - myTurnsLeft;
+  const expected = Math.min(Math.floor(elapsed / 2), 15);
+  return Math.max(0, expected - tapsUsed);
+}
+
 async function tapSkillMeter() {
   if (!checkWorldAppEnvironment()) return;
   if (!gameActive || $('game-timer').innerText === '0s') return;
   if (isTimingLocked) return;
   if (myTurnsLeft <= 0) return;
-  // Anti-auto-clicker: rate limit rapid taps
-  // Enforce 2-second minimum gap between taps (matches server rate limit)
-  if (typeof window._lastTapTime === 'number') {
+
+  // BURST MECHANIC: calculate if user has catch-up taps available
+  const burstAvailable = getBurstAllowance();
+
+  // Enforce 2-second gap ONLY when no burst is available
+  if (burstAvailable <= 0 && typeof window._lastTapTime === 'number') {
     const elapsed = Date.now() - window._lastTapTime;
     if (elapsed < 2000) {
       const waitMs = 2000 - elapsed;
@@ -2210,7 +2225,13 @@ async function tapSkillMeter() {
   setTimeout(() => {
     isTimingLocked = false;
     if (myTurnsLeft > 0 && gameActive && $('game-timer').innerText !== '0s') {
-      $('turn-indicator').innerText = `tap TAP NOW! to score (${myTurnsLeft} turns left)`;
+      // Show burst status if player has catch-up taps available
+      const burst = getBurstAllowance();
+      if (burst > 0) {
+        $('turn-indicator').innerText = `⚡ BURST! ${burst} fast taps available (${myTurnsLeft} left)`;
+      } else {
+        $('turn-indicator').innerText = `tap TAP NOW! to score (${myTurnsLeft} turns left)`;
+      }
       startMeterAnimation();
     }
   }, 800);

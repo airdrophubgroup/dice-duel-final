@@ -156,6 +156,9 @@ DECLARE
   current_score bigint;
   last_roll timestamptz;
   max_taps constant int := 15;
+  v_elapsed numeric := 0;
+  v_expected int := 0;
+  v_burst int := 0;
 BEGIN
   IF p_roll IS NULL OR p_roll < 1 OR p_roll > 6 THEN
     RETURN json_build_object('success', false, 'error', 'Invalid roll (must be 1-6)');
@@ -188,8 +191,20 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Max turns exceeded');
   END IF;
 
-  IF last_roll IS NOT NULL AND now() - last_roll < interval '2 seconds' THEN
-    RETURN json_build_object('success', false, 'error', 'Roll too fast — wait 2 seconds between taps');
+  -- BURST MECHANIC: if the player skipped taps (e.g. didn't tap for 6s),
+  -- they get 'burst allowance' — extra taps they can use faster.
+  -- expected_taps = how many taps they SHOULD have used by now (1 per 2s)
+  -- burst_allowance = expected_taps - actual_taps (capped at remaining taps)
+  -- If burst_allowance > 0, skip the 2s cooldown.
+  IF m.start_time IS NOT NULL THEN
+    v_elapsed := EXTRACT(EPOCH FROM (now() - m.start_time));
+    v_expected := LEAST(floor(v_elapsed / 2.0)::int, max_taps);
+    v_burst := GREATEST(0, v_expected - current_taps);
+  END IF;
+
+  -- Only enforce 2s cooldown when NO burst allowance is available
+  IF v_burst <= 0 AND last_roll IS NOT NULL AND now() - last_roll < interval '2 seconds' THEN
+    RETURN json_build_object('success', false, 'error', 'Roll too fast — wait 2 seconds between taps', 'burst_available', v_burst);
   END IF;
 
   IF is_p1 THEN
@@ -206,7 +221,7 @@ BEGIN
     WHERE id = p_match_id;
   END IF;
 
-  RETURN json_build_object('success', true, 'new_score', current_score + p_roll, 'taps_left', max_taps - (current_taps + 1));
+  RETURN json_build_object('success', true, 'new_score', current_score + p_roll, 'taps_left', max_taps - (current_taps + 1), 'burst_remaining', GREATEST(0, v_burst - 1));
 END;
 $$;
 
