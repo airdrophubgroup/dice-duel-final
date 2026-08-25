@@ -82,7 +82,7 @@ SECURITY YOU CAN TRUST
 - Payments are verified on-chain -- never trust a client-side claim
 - Refunds are automatic and verified before any payout
 - Anti-cheat: server-validated, tap lock, 15-turn cap
-- Only the official World App can open this mini app
+- Only World App can open this mini app
 
 TNV REWARDS
 TNV is building toward Mainnet, Swap and a rewards store -- gift
@@ -133,10 +133,10 @@ skill duel, game, wld, win, rewards, tnv, arena, battle, 1v1, multiplayer, timin
 
 ## What reviewers check (World App guidelines)
 
-- App opens and works inside the official World App webview ✅
+- App opens and works inside World App webview
 - Wallet sign-in works (MiniKit walletAuth) ✅
 - Usernames shown, not raw addresses ✅
-- No "official" wording, no World logo in branding ✅
+- No 'official' wording, no World logo in branding
 - No token pre-sales, no paid membership tiers ✅ (none)
 - Skill-based timing mechanic (not chance/RNG) ✅
 - Mobile-first, compact UI, no long scroll ✅
