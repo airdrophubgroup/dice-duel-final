@@ -215,10 +215,23 @@
   </div>
 
   <div id="admin-earnings-modal" class="custom-modal" onclick="if(event.target===this)closeAdminEarningsModal()">
-    <div class="modal-card" style="max-width:450px;width:92%;">
-      <div class="modal-header-row"><h3 style="margin:0;color:var(--gold);">Admin Revenue</h3><button class="chat-close-btn" onclick="closeAdminEarningsModal()">✕</button></div>
-      <div id="admin-earnings-list" class="modal-scroll-list"><div style="text-align:center;color:var(--slate);">Loading...</div></div>
-      <button class="btn btn-ghost" style="margin-top:14px;width:100%;" onclick="closeAdminEarningsModal()">CLOSE</button>
+    <div class="modal-card" style="max-width:450px;width:92%;max-height:85vh;display:flex;flex-direction:column;">
+      <div class="modal-header-row"><h3 style="margin:0;color:var(--gold);">Admin Dashboard</h3><button class="chat-close-btn" onclick="closeAdminEarningsModal()">✕</button></div>
+      <div class="modal-scroll-list" style="flex:1;overflow-y:auto;">
+        <!-- Admin Tabs -->
+        <div style="display:flex;gap:4px;margin-bottom:10px;">
+          <button class="admin-tab-btn active" onclick="switchAdminTab('revenue')" id="admin-tab-revenue" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--void-2);color:var(--photon);font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">Revenue</button>
+          <button class="admin-tab-btn" onclick="switchAdminTab('withdrawals')" id="admin-tab-withdrawals" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--void);color:var(--slate);font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">Withdrawals</button>
+          <button class="admin-tab-btn" onclick="switchAdminTab('tickets')" id="admin-tab-tickets" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--void);color:var(--slate);font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">Tickets</button>
+        </div>
+        <!-- Revenue Tab -->
+        <div id="admin-panel-revenue"><div id="admin-earnings-list"><div style="text-align:center;color:var(--slate);">Loading revenue...</div></div></div>
+        <!-- Withdrawals Tab -->
+        <div id="admin-panel-withdrawals" style="display:none;"><div id="admin-withdrawals-list"><div style="text-align:center;color:var(--slate);">Loading withdrawals...</div></div></div>
+        <!-- Tickets Tab -->
+        <div id="admin-panel-tickets" style="display:none;"><div id="admin-tickets-list"><div style="text-align:center;color:var(--slate);">Loading tickets...</div></div></div>
+      </div>
+      <button class="btn btn-ghost" style="margin-top:10px;width:100%;" onclick="closeAdminEarningsModal()">CLOSE</button>
     </div>
   </div>
 

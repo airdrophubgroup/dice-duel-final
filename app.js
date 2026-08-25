@@ -949,7 +949,154 @@ window.openAdminEarningsModal = async function() {
   } catch(e) {}  
 };  
 
-window.closeAdminEarningsModal = function() { $('admin-earnings-modal').style.display = 'none'; };async function fetchLeaderboard() {
+window.closeAdminEarningsModal = function() { $('admin-earnings-modal').style.display = 'none'; };
+
+// Admin Dashboard Tab Switching
+window.switchAdminTab = function(tab) {
+  // Update tab buttons
+  document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+    btn.classList.remove('active');
+    btn.style.background = 'var(--void)';
+    btn.style.color = 'var(--slate)';
+  });
+  const activeBtn = $('admin-tab-' + tab);
+  if (activeBtn) {
+    activeBtn.classList.add('active');
+    activeBtn.style.background = 'var(--void-2)';
+    activeBtn.style.color = 'var(--photon)';
+  }
+  // Show/hide panels
+  $('admin-panel-revenue').style.display = tab === 'revenue' ? 'block' : 'none';
+  $('admin-panel-withdrawals').style.display = tab === 'withdrawals' ? 'block' : 'none';
+  $('admin-panel-tickets').style.display = tab === 'tickets' ? 'block' : 'none';
+  // Load data for the tab
+  if (tab === 'withdrawals') loadAdminWithdrawals();
+  if (tab === 'tickets') loadAdminTickets();
+};
+
+// Load TNV Withdrawal Requests for admin
+async function loadAdminWithdrawals() {
+  const container = $('admin-withdrawals-list');
+  if (!container) return;
+  container.innerHTML = `<div style="text-align:center;color:var(--slate);">Loading...</div>`;
+  try {
+    const { data, error } = await supabaseClient.from('withdraw_requests').select('*').order('created_at', { ascending: false });
+    if (error || !data || data.length === 0) {
+      container.innerHTML = `<div style="text-align:center;color:var(--slate);font-size:12px;">No withdrawal requests yet</div>`;
+      return;
+    }
+    const pending = data.filter(r => r.status === 'pending').length;
+    const approved = data.filter(r => r.status === 'approved').length;
+    let html = `<div style="display:flex;gap:8px;margin-bottom:10px;">
+      <div style="flex:1;background:rgba(255,179,0,0.1);border:1px solid rgba(255,179,0,0.3);border-radius:8px;padding:8px;text-align:center;">
+        <div style="font-size:18px;font-weight:700;color:var(--gold);">${pending}</div>
+        <div style="font-size:9px;color:var(--slate);">Pending</div>
+      </div>
+      <div style="flex:1;background:rgba(41,217,194,0.1);border:1px solid rgba(41,217,194,0.3);border-radius:8px;padding:8px;text-align:center;">
+        <div style="font-size:18px;font-weight:700;color:var(--photon);">${approved}</div>
+        <div style="font-size:9px;color:var(--slate);">Approved</div>
+      </div>
+      <div style="flex:1;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center;">
+        <div style="font-size:18px;font-weight:700;color:var(--bone);">${data.length}</div>
+        <div style="font-size:9px;color:var(--slate);">Total</div>
+      </div>
+    </div>`;
+    data.forEach(req => {
+      const shortAddr = (req.wallet_address || '').slice(0, 6) + '...' + (req.wallet_address || '').slice(-4);
+      const st = (req.status || 'pending').toUpperCase();
+      const stColor = req.status === 'approved' ? 'var(--photon)' : req.status === 'pending' ? 'var(--gold)' : 'var(--signal)';
+      const time = req.created_at ? new Date(req.created_at).toLocaleString() : '';
+      html += `<div style="background:rgba(255,255,255,0.03);padding:8px;border-radius:8px;margin-bottom:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--photon);">${shortAddr}</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--gold);">${req.amount} TNV</span>
+          <span style="font-size:9px;font-weight:700;color:${stColor};">${st}</span>
+        </div>
+        <div style="font-size:9px;color:var(--slate);margin-top:4px;">${time}</div>
+      </div>`;
+    });
+    container.innerHTML = html;
+  } catch (e) {
+    container.innerHTML = `<div style="text-align:center;color:var(--signal);">Error loading</div>`;
+  }
+}
+
+// Load Agent Tickets for admin
+async function loadAdminTickets() {
+  const container = $('admin-tickets-list');
+  if (!container) return;
+  container.innerHTML = `<div style="text-align:center;color:var(--slate);">Loading...</div>`;
+  try {
+    const { data } = await supabaseClient.rpc('admin_get_tickets', { p_admin_wallet: myAddress });
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      container.innerHTML = `<div style="text-align:center;color:var(--slate);font-size:12px;">No tickets yet</div>`;
+      return;
+    }
+    const pending = data.filter(t => t.status === 'pending' || t.status === 'open').length;
+    const replied = data.filter(t => t.status === 'replied').length;
+    let html = `<div style="display:flex;gap:8px;margin-bottom:10px;">
+      <div style="flex:1;background:rgba(255,179,0,0.1);border:1px solid rgba(255,179,0,0.3);border-radius:8px;padding:8px;text-align:center;">
+        <div style="font-size:18px;font-weight:700;color:var(--gold);">${pending}</div>
+        <div style="font-size:9px;color:var(--slate);">Pending</div>
+      </div>
+      <div style="flex:1;background:rgba(41,217,194,0.1);border:1px solid rgba(41,217,194,0.3);border-radius:8px;padding:8px;text-align:center;">
+        <div style="font-size:18px;font-weight:700;color:var(--photon);">${replied}</div>
+        <div style="font-size:9px;color:var(--slate);">Replied</div>
+      </div>
+      <div style="flex:1;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center;">
+        <div style="font-size:18px;font-weight:700;color:var(--bone);">${data.length}</div>
+        <div style="font-size:9px;color:var(--slate);">Total</div>
+      </div>
+    </div>`;
+    data.forEach(t => {
+      const shortAddr = (t.user_wallet || '').slice(0, 6) + '...' + (t.user_wallet || '').slice(-4);
+      const st = (t.status || 'pending').toLowerCase();
+      const stClass = st === 'replied' ? 'replied' : 'pending';
+      const time = t.created_at ? new Date(t.created_at).toLocaleString() : '';
+      const verified = t.verified && typeof t.verified === 'object' ? t.verified : {};
+      const issue = verified.issue || '';
+      const issueLabel = issue === 'norefund' ? 'Paid but no refund' : issue === 'noconnect' ? 'Match never connected' : 'Other issue';
+      html += `<div class="admin-ticket-item">
+        <div class="admin-ticket-header">
+          <span class="admin-ticket-user">${escapeHtml(t.user_username || shortAddr)}</span>
+          <span class="admin-ticket-status ${stClass}">${st.toUpperCase()}</span>
+        </div>
+        <div class="admin-ticket-summary">${escapeHtml(t.summary || issueLabel)}</div>
+        <div class="admin-ticket-time">${time}</div>
+        ${t.admin_reply ? `<div style="margin-top:6px;padding:6px;background:rgba(41,217,194,0.08);border:1px solid rgba(41,217,194,0.2);border-radius:6px;font-size:10px;color:var(--photon);">Your reply: ${escapeHtml(t.admin_reply)}</div>` : ''}
+        ${st === 'pending' ? `<div style="margin-top:6px;"><input class="admin-reply-input" id="reply-${t.id}" placeholder="Type your reply..." /><button class="admin-reply-btn" onclick="submitAdminReply('${t.id}')">SEND REPLY</button></div>` : ''}
+      </div>`;
+    });
+    container.innerHTML = html;
+  } catch (e) {
+    container.innerHTML = `<div style="text-align:center;color:var(--signal);">Error loading</div>`;
+  }
+}
+
+// Submit admin reply to ticket
+window.submitAdminReply = async function(ticketId) {
+  const input = $('reply-' + ticketId);
+  if (!input || !input.value.trim()) {
+    showNeonToast('Please type a reply!', 'warning');
+    return;
+  }
+  const reply = input.value.trim();
+  try {
+    const { data } = await supabaseClient.rpc('admin_reply_ticket', {
+      p_ticket_id: ticketId,
+      p_admin_wallet: myAddress,
+      p_reply: reply
+    });
+    if (data && data.success) {
+      showNeonToast('Reply sent!', 'success');
+      loadAdminTickets(); // Refresh
+    } else {
+      showNeonToast('Failed: ' + (data?.error || 'unknown'), 'error');
+    }
+  } catch (e) {
+    showNeonToast('Error sending reply', 'error');
+  }
+};async function fetchLeaderboard() {
   try {
     const { data } = await supabaseClient.from('user_rewards').select('wallet_address, tnv_balance').order('tnv_balance', { ascending: false }).limit(10);
     const lbContainer = $('lb-container');
