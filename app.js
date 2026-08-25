@@ -3044,9 +3044,15 @@ window.showTabScreen = function() {
 
 // Show admin panels only for admin wallet
 function updateAdminVisibility() {
-  if (typeof myAddress !== 'undefined' && myAddress && myAddress.toLowerCase() === ADMIN_WALLET.toLowerCase()) {
+  const isAdmin = typeof myAddress !== 'undefined' && myAddress && myAddress.toLowerCase() === ADMIN_WALLET.toLowerCase();
+  if (isAdmin) {
+    // SHOW admin elements only for admin wallet
     document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
     document.querySelectorAll('.admin-panel-hidden').forEach(el => el.style.display = 'block');
+  } else {
+    // HIDE admin elements for everyone else (defense in depth)
+    document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.admin-panel-hidden').forEach(el => el.style.display = 'none');
   }
 }
 // Run after wallet is detected
