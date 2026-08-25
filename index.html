@@ -90,6 +90,7 @@
       <button class="more-tile" onclick="openSupportModal()"><span class="more-tile-icon">🆘</span><span class="more-tile-label">Support</span></button>
       <button class="more-tile" onclick="window.open('https://t.me/TNVTEAMWLD','_blank')"><span class="more-tile-icon">💬</span><span class="more-tile-label">Telegram</span></button>
       <button class="more-tile" onclick="openTnvWinningsModal()"><span class="more-tile-icon">💰</span><span class="more-tile-label">TNV Winnings</span></button>
+      <button class="more-tile" onclick="openAirdropsModal()"><span class="more-tile-icon">🪂</span><span class="more-tile-label">Airdrops</span></button>
       <button class="more-tile more-tile-soon" onclick="showNeonToast('Swap feature coming soon!', 'info')"><span class="more-tile-icon">🔄</span><span class="more-tile-label">Swap</span><span class="soon-badge">SOON</span></button>
       <button class="more-tile more-tile-soon" onclick="showNeonToast('Marketplace coming soon!', 'info')"><span class="more-tile-icon">🛒</span><span class="more-tile-label">Market</span><span class="soon-badge">SOON</span></button>
       <button id="admin-history-nav-btn" class="more-tile admin-only" style="display:none;" onclick="openAdminEarningsModal()"><span class="more-tile-icon">🛡️</span><span class="more-tile-label">Admin</span></button>
@@ -304,6 +305,82 @@
       </div>
       <div style="font-size:9px;color:var(--slate);text-align:center;margin-top:8px;font-family:'JetBrains Mono',monospace;">Tie = 0 TNV &middot; Minimum 5,000 TNV to withdraw</div>
       <button class="btn" style="width:100%;margin-top:10px;font-size:11px;padding:10px;" onclick="closeTnvWinningsModal()">GOT IT</button>
+    </div>
+  </div>
+  <div id="airdrops-modal" class="custom-modal" onclick="if(event.target===this)closeAirdropsModal()">
+    <div class="custom-modal-inner">
+      <div class="custom-modal-header">
+        <span class="custom-modal-title">🪂 Verified Airdrops</span>
+        <button class="custom-modal-close" onclick="closeAirdropsModal()">✕</button>
+      </div>
+      <div style="font-size:10px;color:var(--slate);text-align:center;margin-bottom:10px;">Official verified airdrops for TNV community</div>
+      <div id="airdrops-list" style="display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto;">
+        <div class="airdrop-card">
+          <div class="airdrop-header">
+            <span class="airdrop-icon">🎮</span>
+            <div class="airdrop-info">
+              <div class="airdrop-name">TNV Duel Arena Season 1</div>
+              <div class="airdrop-status airdrop-active">ACTIVE</div>
+            </div>
+          </div>
+          <div class="airdrop-details">
+            <div class="airdrop-detail"><span class="detail-label">Reward:</span><span class="detail-value">5,000 TNV</span></div>
+            <div class="airdrop-detail"><span class="detail-label">Requirement:</span><span class="detail-value">Win 10 matches</span></div>
+            <div class="airdrop-detail"><span class="detail-label">Ends:</span><span class="detail-value">30 Sep 2026</span></div>
+          </div>
+          <div class="airdrop-progress">
+            <div class="progress-bar"><div class="progress-fill" style="width:65%"></div></div>
+            <span class="progress-text">65% completed</span>
+          </div>
+        </div>
+        <div class="airdrop-card">
+          <div class="airdrop-header">
+            <span class="airdrop-icon">🏆</span>
+            <div class="airdrop-info">
+              <div class="airdrop-name">Top Player Bonus</div>
+              <div class="airdrop-status airdrop-active">ACTIVE</div>
+            </div>
+          </div>
+          <div class="airdrop-details">
+            <div class="airdrop-detail"><span class="detail-label">Reward:</span><span class="detail-value">10,000 TNV</span></div>
+            <div class="airdrop-detail"><span class="detail-label">Requirement:</span><span class="detail-value">Top 10 leaderboard</span></div>
+            <div class="airdrop-detail"><span class="detail-label">Ends:</span><span class="detail-value">31 Dec 2026</span></div>
+          </div>
+          <div class="airdrop-progress">
+            <div class="progress-bar"><div class="progress-fill" style="width:30%"></div></div>
+            <span class="progress-text">30% completed</span>
+          </div>
+        </div>
+        <div class="airdrop-card">
+          <div class="airdrop-header">
+            <span class="airdrop-icon">🎯</span>
+            <div class="airdrop-info">
+              <div class="airdrop-name">Perfect Score Challenge</div>
+              <div class="airdrop-status airdrop-upcoming">UPCOMING</div>
+            </div>
+          </div>
+          <div class="airdrop-details">
+            <div class="airdrop-detail"><span class="detail-label">Reward:</span><span class="detail-value">2,500 TNV</span></div>
+            <div class="airdrop-detail"><span class="detail-label">Requirement:</span><span class="detail-value">3 perfect rolls in a row</span></div>
+            <div class="airdrop-detail"><span class="detail-label">Starts:</span><span class="detail-value">1 Oct 2026</span></div>
+          </div>
+        </div>
+        <div class="airdrop-card">
+          <div class="airdrop-header">
+            <span class="airdrop-icon">🤝</span>
+            <div class="airdrop-info">
+              <div class="airdrop-name">Referral Bonus</div>
+              <div class="airdrop-status airdrop-active">ACTIVE</div>
+            </div>
+          </div>
+          <div class="airdrop-details">
+            <div class="airdrop-detail"><span class="detail-label">Reward:</span><span class="detail-value">500 TNV per friend</span></div>
+            <div class="airdrop-detail"><span class="detail-label">Requirement:</span><span class="detail-value">Friend plays 5 matches</span></div>
+            <div class="airdrop-detail"><span class="detail-label">Limit:</span><span class="detail-value">10 referrals</span></div>
+          </div>
+        </div>
+      </div>
+      <button class="btn" style="width:100%;margin-top:12px;font-size:11px;padding:10px;" onclick="closeAirdropsModal()">GOT IT</button>
     </div>
   </div>
   <div id="blocked-screen">

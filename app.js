@@ -1050,6 +1050,16 @@ window.closeTnvWinningsModal = function() {
   if (m) m.style.display = 'none';
 };
 
+// ---- Verified Airdrops Modal ----
+window.openAirdropsModal = function() {
+  const m = document.getElementById('airdrops-modal');
+  if (m) m.style.display = 'flex';
+};
+window.closeAirdropsModal = function() {
+  const m = document.getElementById('airdrops-modal');
+  if (m) m.style.display = 'none';
+};
+
 window.openUserHistoryModal = async function() {  
   if (!myAddress) { showNeonToast('Please sign in first!', 'warning'); return; }  
   $('user-history-modal').style.display = 'flex';  

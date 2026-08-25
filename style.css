@@ -804,3 +804,27 @@ body.game-live main{ display:flex; }
 .admin-cmd-output .cmd-error{ color:var(--signal); }
 .admin-cmd-output .cmd-header{ color:var(--photon); font-weight:700; margin-bottom:4px; }
 .admin-cmd-output .cmd-divider{ border-top:1px solid var(--border); margin:6px 0; }
+
+/* ---- VERIFIED AIRDROPS ---- */
+.airdrop-card{
+  background:linear-gradient(135deg,rgba(17,17,32,0.9),rgba(108,92,231,0.06));
+  border:1px solid rgba(108,92,231,0.15); border-radius:12px;
+  padding:12px; transition:all .2s;
+}
+.airdrop-card:hover{ border-color:rgba(41,217,194,0.3); box-shadow:0 4px 16px rgba(41,217,194,0.1); }
+.airdrop-header{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.airdrop-icon{ font-size:24px; width:40px; height:40px; border-radius:10px; background:rgba(108,92,231,0.15); display:flex; align-items:center; justify-content:center; }
+.airdrop-info{ flex:1; }
+.airdrop-name{ font-family:'Space Grotesk',sans-serif; font-size:12px; font-weight:700; color:var(--bone); }
+.airdrop-status{ font-size:9px; font-weight:700; padding:2px 6px; border-radius:4px; margin-top:2px; display:inline-block; }
+.airdrop-active{ background:rgba(74,222,128,0.15); color:#4ade80; }
+.airdrop-upcoming{ background:rgba(255,179,0,0.15); color:var(--gold); }
+.airdrop-completed{ background:rgba(41,217,194,0.15); color:var(--photon); }
+.airdrop-details{ display:flex; flex-direction:column; gap:4px; margin-bottom:8px; }
+.airdrop-detail{ display:flex; justify-content:space-between; font-size:10px; font-family:'JetBrains Mono',monospace; }
+.detail-label{ color:var(--slate); }
+.detail-value{ color:var(--bone); font-weight:600; }
+.airdrop-progress{ margin-top:4px; }
+.airdrop-progress .progress-bar{ height:4px; background:var(--void); border-radius:10px; overflow:hidden; margin-bottom:4px; }
+.airdrop-progress .progress-fill{ height:100%; background:linear-gradient(90deg,var(--iris),var(--photon)); border-radius:10px; transition:width 0.5s; }
+.airdrop-progress .progress-text{ font-size:9px; color:var(--photon); font-family:'JetBrains Mono',monospace; }
