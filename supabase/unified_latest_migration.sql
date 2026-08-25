@@ -40,6 +40,22 @@ BEGIN
     RETURNING * INTO v_match;
     RETURN NEXT v_match;
   ELSE
+    -- CONCURRENCY GUARD: if this wallet ALREADY has a live match
+    -- (waiting/matched/playing), return it instead of inserting a
+    -- duplicate row. Without this, rapid taps or 100 simultaneous
+    -- users flood the waiting pool with stale duplicates.
+    SELECT * INTO v_match
+    FROM public.matches
+    WHERE status IN ('waiting', 'matched', 'playing', 'searching')
+      AND lower(trim(p1_address)) = v_clean_address
+      AND created_at > now() - interval '5 minutes'
+    ORDER BY created_at DESC
+    LIMIT 1;
+    IF found THEN
+      RETURN NEXT v_match;
+      RETURN;
+    END IF;
+
     INSERT INTO public.matches (
       p1_address, p1_username, fee, status, match_id,
       p1_paid, p2_paid, game_started, p1_score, p2_score

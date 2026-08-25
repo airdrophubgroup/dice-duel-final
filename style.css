@@ -89,7 +89,9 @@ h1.brand{
 
 /* ---- TAB PANELS ---- */
 .tab-panel{ display:none; flex:1; flex-direction:column; gap:6px; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain; padding-bottom:4px; min-height:0; }
-.tab-panel.active{ display:flex; }
+.tab-panel.active{ display:flex; animation:tabIn .22s ease-out; }
+/* Lightweight GPU-only entry so tab switches feel smooth without jank */
+@keyframes tabIn{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:translateY(0); } }
 
 /* ---- BOTTOM TAB BAR ---- */
 .tab-bar{

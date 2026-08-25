@@ -481,13 +481,11 @@ async function refreshHomeWithdrawStatus() {
     return;
   }
   try {
-    const { data } = await supabaseClient
-      .from('withdraw_requests')
-      .select('amount, status, created_at')
-      .eq('wallet_address', myAddress)
-      .order('created_at', { ascending: false })
-      .limit(3);
-    if (!data || data.length === 0) {
+    // withdraw_requests has a DENY ALL RLS policy — direct reads return
+    // empty. Use the SECURITY DEFINER RPC that returns only OWN rows.
+    const res = await supabaseClient.rpc('get_my_withdraw_requests', { p_wallet: myAddress });
+    const data = res && res.data && res.data.requests ? res.data.requests : null;
+    if (!res.data || res.data.success === false || !data || data.length === 0) {
       container.innerHTML = `<div style="text-align:center;color:var(--slate);font-size:10px;padding:6px 0;">No withdrawal requests yet \u2014 min 5,000 TNV to withdraw</div>`;
       return;
     }
@@ -585,7 +583,10 @@ function renderBalances() {
 async function fetchAdminWithdrawRequests() {  
   try {  
     // Show ALL withdrawal requests (no limit) — how many came, that many show.
-    const { data, error } = await supabaseClient.from('withdraw_requests').select('*').order('created_at', { ascending: false });  
+    // DENY ALL RLS blocks direct reads — admin RPC instead.
+    const res = await supabaseClient.rpc('admin_get_withdraw_requests', { p_admin_wallet: myAddress });
+    const data = (res.data && res.data.requests) || [];
+    const error = res.error || (res.data && res.data.success === false ? res.data : null); 
     const container = $('admin-req-container');  
     if (!container) return;  
     if (error || !data || data.length === 0) {  
@@ -914,7 +915,9 @@ window.openUserWithdrawalsModal = async function() {
   const container = $('user-withdrawals-list');  
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading requests...</div>`;  
   try {  
-    const { data } = await supabaseClient.from('withdraw_requests').select('*').eq('wallet_address', myAddress).order('created_at', { ascending: false });  
+    // DENY ALL RLS — read own rows via the secure RPC.
+    const res = await supabaseClient.rpc('get_my_withdraw_requests', { p_wallet: myAddress });
+    const data = (res.data && res.data.requests) || [];
     if (!data || data.length === 0) { container.innerHTML = `<div style="text-align:center; color:var(--slate);">No requests found.</div>`; return; }  
     let html = '';  
     data.forEach(req => {  
@@ -1012,7 +1015,10 @@ async function loadAdminWithdrawals() {
   if (!container) return;
   container.innerHTML = `<div style="text-align:center;color:var(--slate);">Loading...</div>`;
   try {
-    const { data, error } = await supabaseClient.from('withdraw_requests').select('*').order('created_at', { ascending: false });
+    // DENY ALL RLS — admin RPC returns all requests.
+    const res = await supabaseClient.rpc('admin_get_withdraw_requests', { p_admin_wallet: myAddress });
+    const data = (res.data && res.data.requests) || [];
+    const error = res.error || (res.data && res.data.success === false ? res.data.error : null);
     if (error || !data || data.length === 0) {
       container.innerHTML = `<div style="text-align:center;color:var(--slate);font-size:12px;">No withdrawal requests yet</div>`;
       return;
