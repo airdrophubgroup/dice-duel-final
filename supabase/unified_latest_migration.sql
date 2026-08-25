@@ -270,7 +270,18 @@ BEGIN
         winner_username = v_winner_username,
         payout_amount = v_payout,
         tie = (v_winner_address = 'tie')
-    WHERE id = p_match_id AND status = 'playing';
+    WHERE id = p_match_id AND status IN ('playing', 'matched');
+
+    -- ADMIN FEE: record house revenue per completed match.
+    -- Actual cut = pot (2×fee) minus winner payout. Only non-tie matches
+    -- generate revenue. The FOUND guard ensures only the first player's
+    -- call inserts (both players call secure_complete_match) — never
+    -- duplicated. Wallet matches ADMIN_WALLET in app.js.
+    IF FOUND AND v_winner_address <> 'tie' THEN
+      INSERT INTO match_history (wallet_address, action_type, amount, description, created_at)
+      VALUES ('0x8c5b20653abcb87f6b3a7cb469d8623e94bfb6a1', 'ADMIN_FEE',
+              ROUND(2 * v_fee - v_payout, 2), 'House fee ' || v_fee || ' WLD duel', now());
+    END IF;
   END IF;
 
   SELECT * INTO v_match FROM matches WHERE id = p_match_id;
