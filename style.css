@@ -777,3 +777,28 @@ body.game-live main{ display:flex; }
 .tnv-w-entry{ color:var(--bone); font-family:'JetBrains Mono',monospace; font-weight:700; }
 .tnv-w-win{ color:#4ade80; font-family:'JetBrains Mono',monospace; font-weight:700; }
 .tnv-w-lose{ color:var(--gold); font-family:'JetBrains Mono',monospace; font-weight:600; }
+
+/* ---- ADMIN COMMAND CENTER ---- */
+.admin-cmd-grid{ display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:8px 0; }
+.admin-cmd-btn{
+  display:flex; flex-direction:column; align-items:center; gap:4px;
+  padding:10px 6px; background:linear-gradient(135deg,rgba(17,17,32,0.9),rgba(108,92,231,0.08));
+  border:1px solid rgba(108,92,231,0.15); border-radius:10px; color:var(--bone);
+  font-family:'Space Grotesk',sans-serif; font-weight:600; cursor:pointer;
+  transition:all .2s; font-size:10px;
+}
+.admin-cmd-btn:hover{ border-color:var(--photon); box-shadow:0 2px 12px rgba(41,217,194,0.15); transform:translateY(-1px); }
+.admin-cmd-btn:active{ transform:scale(0.96); }
+.cmd-icon{ font-size:18px; }
+.cmd-label{ letter-spacing:0.3px; }
+.admin-cmd-output{
+  background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px;
+  padding:10px; font-family:'JetBrains Mono',monospace; font-size:11px;
+  color:var(--bone); max-height:300px; overflow-y:auto; line-height:1.6;
+  white-space:pre-wrap; word-break:break-word;
+}
+.admin-cmd-output .cmd-success{ color:#4ade80; }
+.admin-cmd-output .cmd-warn{ color:var(--gold); }
+.admin-cmd-output .cmd-error{ color:var(--signal); }
+.admin-cmd-output .cmd-header{ color:var(--photon); font-weight:700; margin-bottom:4px; }
+.admin-cmd-output .cmd-divider{ border-top:1px solid var(--border); margin:6px 0; }

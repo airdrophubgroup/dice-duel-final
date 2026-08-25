@@ -339,7 +339,24 @@
   <div id="admin-cheaters-panel" class="admin-panel-hidden"><div class="admin-header"><span>AUTO-CLICKER LOG</span></div><div class="admin-list" id="admin-cheaters-container"><div style="font-size:11px;color:var(--slate);text-align:center;">None</div></div></div>
   <div id="admin-tickets-panel" class="admin-panel-hidden"><div class="admin-header"><span>TICKETS</span></div><div class="admin-list" id="admin-tickets-container"><div style="font-size:11px;color:var(--slate);text-align:center;">Loading...</div></div></div>
   <div id="admin-alerts-panel" class="admin-panel-hidden"><div class="admin-header"><span>SECURITY ALERTS</span></div><div class="admin-list" id="admin-alerts-container"><div style="font-size:11px;color:var(--slate);text-align:center;">Loading...</div></div></div>
-  <div id="admin-agent-panel" class="admin-panel-hidden"><div class="admin-header"><span>AGENT CONSOLE</span></div><div style="display:flex;gap:6px;margin:6px 0 8px;"><input type="text" id="agent-command-input" class="chat-input" placeholder="Task..." style="flex:1;font-size:11.5px;" maxlength="5000" /><button class="chat-send-btn" onclick="sendAgentCommand()" style="font-size:11px;padding:0 12px;">SEND</button></div><div class="admin-list" id="admin-agent-commands"><div style="font-size:11px;color:var(--slate);text-align:center;">None</div></div></div>
+  <div id="admin-agent-panel" class="admin-panel-hidden">
+    <div class="admin-header"><span>⚡ ADMIN COMMAND CENTER</span></div>
+    <div class="admin-cmd-grid">
+      <button class="admin-cmd-btn" onclick="runAdminCmd('check-tickets')"><span class="cmd-icon">🎫</span><span class="cmd-label">Check Tickets</span></button>
+      <button class="admin-cmd-btn" onclick="runAdminCmd('check-withdrawals')"><span class="cmd-icon">💸</span><span class="cmd-label">Withdrawals</span></button>
+      <button class="admin-cmd-btn" onclick="runAdminCmd('check-refunds')"><span class="cmd-icon">🔄</span><span class="cmd-label">Stuck Refunds</span></button>
+      <button class="admin-cmd-btn" onclick="runAdminCmd('check-bugs')"><span class="cmd-icon">🐛</span><span class="cmd-label">Bug Check</span></button>
+      <button class="admin-cmd-btn" onclick="runAdminCmd('check-players')"><span class="cmd-icon">👥</span><span class="cmd-label">Active Players</span></button>
+      <button class="admin-cmd-btn" onclick="runAdminCmd('check-revenue')"><span class="cmd-icon">💰</span><span class="cmd-label">Revenue</span></button>
+      <button class="admin-cmd-btn" onclick="runAdminCmd('check-cheaters')"><span class="cmd-icon">🛡️</span><span class="cmd-label">Cheaters</span></button>
+      <button class="admin-cmd-btn" onclick="runAdminCmd('check-all')"><span class="cmd-icon">📊</span><span class="cmd-label">Full Report</span></button>
+    </div>
+    <div id="admin-cmd-result" style="display:none; margin-top:8px;">
+      <div class="admin-cmd-output" id="admin-cmd-output"></div>
+    </div>
+    <div style="margin-top:8px; display:flex; gap:6px;"><input type="text" id="agent-command-input" class="chat-input" placeholder="Custom command..." style="flex:1;font-size:11.5px;" maxlength="5000" /><button class="chat-send-btn" onclick="sendAgentCommand()" style="font-size:11px;padding:0 12px;">SEND</button></div>
+    <div class="admin-list" id="admin-agent-commands" style="margin-top:8px;"><div style="font-size:11px;color:var(--slate);text-align:center;">Custom commands</div></div>
+  </div>
 
   <div id="consent-modal" class="custom-modal" style="display:flex;">
     <div class="modal-card" style="max-width:340px;">

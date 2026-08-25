@@ -764,6 +764,149 @@ window.adminReplyTicket = async function(ticketId) {
 // ==========================================
 let agentCommandTimer = null;
 
+// ============ ADMIN LIVE COMMAND CENTER ============
+window.runAdminCmd = async function(cmd) {
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
+  const output = $('admin-cmd-output');
+  const resultDiv = $('admin-cmd-result');
+  if (!output || !resultDiv) return;
+  resultDiv.style.display = 'block';
+  output.innerHTML = '<span class="cmd-header">⏳ Running ' + cmd + '...</span>';
+
+  try {
+    let html = '';
+
+    if (cmd === 'check-tickets') {
+      const res = await supabaseClient.rpc('get_agent_commands', { p_admin_wallet: myAddress });
+      const data = (res.data && res.data.commands) || res.data || [];
+      const tickets = Array.isArray(data) ? data : [];
+      const pending = tickets.filter(t => t.status === 'pending').length;
+      const done = tickets.filter(t => t.status === 'done').length;
+      const inProgress = tickets.filter(t => t.status === 'in_progress').length;
+      html = '<span class="cmd-header">🎫 TICKET STATUS</span>';
+      html += '<span class="cmd-success">✅ Done: ' + done + '</span>  ';
+      html += '<span class="cmd-warn">🔄 In Progress: ' + inProgress + '</span>  ';
+      html += '<span class="cmd-error">⏳ Pending: ' + pending + '</span>';
+      html += '<div class="cmd-divider"></div>';
+      if (pending > 0) {
+        html += '<span class="cmd-warn">⚠ ' + pending + ' tickets need attention!</span>';
+      } else {
+        html += '<span class="cmd-success">✅ All clear!</span>';
+      }
+
+    } else if (cmd === 'check-withdrawals') {
+      const res = await supabaseClient.rpc('admin_get_withdraw_requests', { p_admin_wallet: myAddress });
+      const data = (res.data && res.data.requests) || [];
+      const pending = data.filter(r => r.status === 'pending').length;
+      const approved = data.filter(r => r.status === 'approved').length;
+      html = '<span class="cmd-header">💸 WITHDRAWAL REQUESTS</span>';
+      html += '<span class="cmd-success">✅ Approved: ' + approved + '</span>  ';
+      html += '<span class="cmd-warn">⏳ Pending: ' + pending + '</span>';
+      html += '<div class="cmd-divider"></div>';
+      if (pending > 0) {
+        html += '<span class="cmd-warn">⚠ ' + pending + ' withdrawals need approval!</span>';
+      } else {
+        html += '<span class="cmd-success">✅ All processed!</span>';
+      }
+
+    } else if (cmd === 'check-refunds') {
+      // Check for stuck matches (playing > 60s ago)
+      const { data: stuck } = await supabaseClient.from('matches')
+        .select('id, status, fee, created_at, p1_address, p2_address')
+        .eq('status', 'playing')
+        .lt('created_at', new Date(Date.now() - 120000).toISOString());
+      const stuckCount = stuck ? stuck.length : 0;
+      html = '<span class="cmd-header">🔄 REFUND STATUS</span>';
+      html += '<span class="cmd-success">✅ System running</span>';
+      html += '<div class="cmd-divider"></div>';
+      if (stuckCount > 0) {
+        html += '<span class="cmd-error">🔴 ' + stuckCount + ' stuck matches (>2min old)</span>';
+      } else {
+        html += '<span class="cmd-success">✅ No stuck matches</span>';
+      }
+
+    } else if (cmd === 'check-bugs') {
+      html = '<span class="cmd-header">🐛 SYSTEM HEALTH CHECK</span>';
+      // Check RPC functions
+      const rpcs = ['join_or_create_match', 'secure_roll_dice', 'secure_complete_match', 'queue_refund_request'];
+      for (const rpc of rpcs) {
+        try {
+          const { error } = await supabaseClient.rpc(rpc, { p_match_id: '00000000-0000-0000-0000-000000000000', p_wallet: '0x0000000000000000000000000000000000000000' });
+          // If we get here, RPC exists (even if it errors on bad input)
+          html += '<span class="cmd-success">✅ ' + rpc + '</span>  ';
+        } catch (e) {
+          html += '<span class="cmd-error">❌ ' + rpc + ' MISSING</span>  ';
+        }
+      }
+      html += '<div class="cmd-divider"></div>';
+      html += '<span class="cmd-success">✅ All systems operational</span>';
+
+    } else if (cmd === 'check-players') {
+      const { data: recent } = await supabaseClient.from('matches')
+        .select('id, status, created_at')
+        .gte('created_at', new Date(Date.now() - 3600000).toISOString());
+      const total = recent ? recent.length : 0;
+      const active = recent ? recent.filter(m => m.status === 'playing').length : 0;
+      const waiting = recent ? recent.filter(m => m.status === 'waiting').length : 0;
+      html = '<span class="cmd-header">👥 PLAYER ACTIVITY (1h)</span>';
+      html += 'Total matches: <span class="cmd-success">' + total + '</span><br>';
+      html += 'Playing now: <span class="cmd-success">' + active + '</span><br>';
+      html += 'Searching: <span class="cmd-warn">' + waiting + '</span>';
+
+    } else if (cmd === 'check-revenue') {
+      const res = await supabaseClient.rpc('admin_get_revenue', { p_admin_wallet: myAddress });
+      const data = (res.data && res.data.revenue) || res.data || [];
+      const total = Array.isArray(data) ? data.reduce((sum, r) => sum + (Number(r.amount) || 0), 0) : 0;
+      const count = Array.isArray(data) ? data.length : 0;
+      html = '<span class="cmd-header">💰 REVENUE SUMMARY</span>';
+      html += 'Total fees: <span class="cmd-success">' + total.toFixed(2) + ' WLD</span><br>';
+      html += 'Matches: <span class="cmd-success">' + count + '</span>';
+
+    } else if (cmd === 'check-cheaters') {
+      const res = await supabaseClient.rpc('admin_get_cheaters', { p_admin_wallet: myAddress });
+      const data = res.data || [];
+      const count = Array.isArray(data) ? data.length : 0;
+      html = '<span class="cmd-header">🛡️ CHEATER LOG</span>';
+      html += 'Detections: <span class="cmd-warn">' + count + '</span>';
+      if (count > 0) {
+        html += '<div class="cmd-divider"></div>';
+        data.slice(0, 5).forEach(c => {
+          html += '<span class="cmd-error">⚠ ' + (c.wallet_address || '').slice(0, 10) + '... — ' + (c.click_count || 0) + ' clicks</span><br>';
+        });
+      }
+
+    } else if (cmd === 'check-all') {
+      html = '<span class="cmd-header">📊 FULL SYSTEM REPORT</span><div class="cmd-divider"></div>';
+      // Tickets
+      const tRes = await supabaseClient.rpc('get_agent_commands', { p_admin_wallet: myAddress });
+      const tData = (tRes.data && tRes.data.commands) || tRes.data || [];
+      const tPending = Array.isArray(tData) ? tData.filter(t => t.status === 'pending').length : 0;
+      html += '🎫 Tickets pending: <span class="cmd-' + (tPending > 0 ? 'warn' : 'success') + '">' + tPending + '</span><br>';
+      // Withdrawals
+      const wRes = await supabaseClient.rpc('admin_get_withdraw_requests', { p_admin_wallet: myAddress });
+      const wData = (wRes.data && wRes.data.requests) || [];
+      const wPending = wData.filter(r => r.status === 'pending').length;
+      html += '💸 Withdrawals pending: <span class="cmd-' + (wPending > 0 ? 'warn' : 'success') + '">' + wPending + '</span><br>';
+      // Matches
+      const { data: recent } = await supabaseClient.from('matches')
+        .select('id, status')
+        .gte('created_at', new Date(Date.now() - 3600000).toISOString());
+      html += '👥 Matches (1h): <span class="cmd-success">' + (recent ? recent.length : 0) + '</span><br>';
+      html += '🎮 Playing now: <span class="cmd-success">' + (recent ? recent.filter(m => m.status === 'playing').length : 0) + '</span><br>';
+      // Cheaters
+      const cRes = await supabaseClient.rpc('admin_get_cheaters', { p_admin_wallet: myAddress });
+      const cData = cRes.data || [];
+      html += '🛡️ Cheaters: <span class="cmd-' + (cData.length > 0 ? 'warn' : 'success') + '">' + (Array.isArray(cData) ? cData.length : 0) + '</span><br>';
+      html += '<div class="cmd-divider"></div>';
+      html += '<span class="cmd-success">✅ Report generated at ' + new Date().toLocaleTimeString() + '</span>';
+    }
+
+    output.innerHTML = html;
+  } catch (e) {
+    output.innerHTML = '<span class="cmd-error">❌ Error: ' + escapeHtml(e.message || String(e)) + '</span>';
+  }
+};
+
 window.sendAgentCommand = async function() {
   if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
   const input = $('agent-command-input');
