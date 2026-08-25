@@ -19,3 +19,4 @@ supabase/.branches/
 
 # Freebuff desktop tool state (may contain conversation data)
 .freebuff/
+.continue/
