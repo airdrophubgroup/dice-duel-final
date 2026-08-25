@@ -195,7 +195,7 @@
 
   <div id="chat-modal" class="custom-modal" onclick="if(event.target===this)closeChatModal()">
     <div class="modal-card chat-card">
-      <div class="chat-header"><span>Community Chat</span><span style="font-size:10px;color:var(--slate);font-family:'JetBrains Mono',monospace;">Online: <span id="online-count" style="color:var(--photon);">1</span></span><button class="chat-close-btn" onclick="closeChatModal()">✕</button></div>
+      <div class="chat-header"><span>Community Chat</span><span style="font-size:10px;color:var(--slate);font-family:'JetBrains Mono',monospace;display:flex;align-items:center;gap:4px;"><span class="chat-online-dot"></span>Online: <span id="online-count" style="color:#4ade80;font-weight:700;">1</span></span><button class="chat-close-btn" onclick="closeChatModal()">✕</button></div>
       <div id="chat-messages-container" class="chat-messages"><div style="text-align:center;color:var(--slate);font-size:11px;">Messages expire in 24h.</div></div>
       <div class="chat-input-area"><input type="text" id="chat-input-field" class="chat-input" placeholder="Type a message..." maxlength="150" /><button class="chat-send-btn" onclick="sendChatMessage()">Send</button></div>
     </div>
