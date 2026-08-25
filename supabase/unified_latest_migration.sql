@@ -288,9 +288,16 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'match not found');
   END IF;
 
-  IF v_row.status NOT IN ('waiting', 'matched', 'searching') THEN
+  IF v_row.status NOT IN ('waiting', 'matched', 'searching', 'cancelled') THEN
     RETURN json_build_object('success', false, 'error', 'match not in payable state: ' || coalesce(v_row.status, 'null'));
   END IF;
+  -- NOTE: 'cancelled' is intentionally ACCEPTED here. A player whose
+  -- on-chain payment was already broadcast must still get it verified
+  -- after the opponent cancels — otherwise their fee is stranded with
+  -- no way to ever queue a refund (real fund-loss scenario). A cancelled
+  -- match can never be played (secure_start_match only accepts
+  -- 'matched'), so a late verification can only ever lead to a refund
+  -- of the player's OWN verified payment.
 
   IF lower(coalesce(v_row.p1_address, '')) = v_wallet THEN
     v_is_p1 := true;
