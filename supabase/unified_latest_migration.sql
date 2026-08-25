@@ -166,7 +166,7 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Match not active');
   END IF;
 
-  IF m.start_time IS NOT NULL AND now() > m.start_time + interval '60 seconds' THEN
+  IF m.start_time IS NOT NULL AND now() > m.start_time + interval '35 seconds' THEN
     RETURN json_build_object('success', false, 'error', 'Round time expired');
   END IF;
 
@@ -188,8 +188,8 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Max turns exceeded');
   END IF;
 
-  IF last_roll IS NOT NULL AND now() - last_roll < interval '1 second' THEN
-    RETURN json_build_object('success', false, 'error', 'Roll too fast');
+  IF last_roll IS NOT NULL AND now() - last_roll < interval '2 seconds' THEN
+    RETURN json_build_object('success', false, 'error', 'Roll too fast — wait 2 seconds between taps');
   END IF;
 
   IF is_p1 THEN

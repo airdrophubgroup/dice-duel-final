@@ -227,6 +227,52 @@ function waitForMiniKitReady(timeoutMs = 5000) {
     waitingOverlay.appendChild(cancelBtn);  
   }  
 
+  // RECONNECTION: if user was in a game when app was cut, try to rejoin
+  const savedMatchId = localStorage.getItem('currentMatchId');
+  const savedIsP1 = localStorage.getItem('isP1');
+  if (savedMatchId && myAddress) {
+    try {
+      const { data: m } = await supabaseClient
+        .from('matches').select('id, status, start_time, p1_score, p2_score, p1_taps_used, p2_taps_used, fee')
+        .eq('id', savedMatchId).single();
+      if (m && m.status === 'playing' && m.start_time) {
+        const elapsed = Math.floor((Date.now() - new Date(m.start_time).getTime()) / 1000);
+        const remaining = 30 - elapsed;
+        if (remaining > 0) {
+          // Match still active — reconnect!
+          matchId = savedMatchId;
+          isP1 = savedIsP1 === 'true';
+          const myTaps = isP1 ? (m.p1_taps_used || 0) : (m.p2_taps_used || 0);
+          const myScoreFromDb = isP1 ? (m.p1_score || 0) : (m.p2_score || 0);
+          myTurnsLeft = 15 - myTaps;
+          myScore = myScoreFromDb;
+          selectedFee = Number(m.fee || 0.5);
+          showGameScreen();
+          $('my-score').innerText = myScore;
+          $('opp-score').innerText = isP1 ? (m.p2_score || 0) : (m.p1_score || 0);
+          $('turn-indicator').innerText = `Reconnected! ${myTurnsLeft} taps left`;
+          $('game-timer').innerText = remaining + 's';
+          gameActive = true;
+          matchmakingActive = true;
+          setupChannel();
+          meterSpeed = 800;
+          startMeterAnimation();
+          runTimer(m.start_time);
+          showNeonToast(`Reconnected! ${remaining}s remaining, ${myTurnsLeft} taps left`, 'success');
+        } else {
+          // Match expired — finalize it
+          matchId = savedMatchId;
+          isP1 = savedIsP1 === 'true';
+          finalizeGame();
+        }
+      } else if (m && (m.status === 'completed' || m.status === 'cancelled')) {
+        // Match already done — clear stale localStorage
+        localStorage.removeItem('currentMatchId');
+        localStorage.removeItem('isP1');
+      }
+    } catch (e) { /* match not found or DB error — proceed normally */ }
+  }
+
   if (typeof initGlobalChat === 'function') initGlobalChat();  
   fetchLeaderboard();  
 });  
@@ -2098,6 +2144,16 @@ async function tapSkillMeter() {
   if (isTimingLocked) return;
   if (myTurnsLeft <= 0) return;
   // Anti-auto-clicker: rate limit rapid taps
+  // Enforce 2-second minimum gap between taps (matches server rate limit)
+  if (typeof window._lastTapTime === 'number') {
+    const elapsed = Date.now() - window._lastTapTime;
+    if (elapsed < 2000) {
+      const waitMs = 2000 - elapsed;
+      showNeonToast(`Wait ${(waitMs / 1000).toFixed(1)}s between taps`, 'warning');
+      return;
+    }
+  }
+  window._lastTapTime = Date.now();
   if (typeof window._checkTapRate === 'function' && !window._checkTapRate()) return;
 
   isTimingLocked = true;
