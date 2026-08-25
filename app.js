@@ -1502,7 +1502,7 @@ function selectFee(amount, element){
   selectedFee = parsed;
   document.querySelectorAll('.fee-chip').forEach(chip => chip.classList.remove('active'));
   if (element) element.classList.add('active');
-  $('start-btn').innerText = `PLAY NOW`;
+  $('start-btn').innerText = `PLAY NOW (${selectedFee} WLD)`;
   // Update fee subtitle
   const tnvRewards = {0.1:5,0.2:10,0.5:15,1:25,2:50,5:125,10:250,20:500,30:750,40:1000,50:1250};
   const sub = $('play-fee-sub');
@@ -1550,14 +1550,11 @@ async function cancelMatchmaking(showAlert = true) {
   const targetMatchId = matchId;
   const targetWallet = myAddress ? myAddress.toLowerCase().trim() : '';
 
-  // ALWAYS attempt the refund on cancel. queue_refund_request is the
-  // source of truth: it only queues a refund for a PAID participant of
-  // this match (server-side), so a fake/test payment is rejected there
-  // and a real payment is never missed due to client-side flag races
-  // (hasPaid/paymentVerified). The cron resolver completes the refund
-  // within a minute even if the app is closed by then.
+  // NEW FLOW: User may cancel before paying (during opponent search).
+  // Only attempt refund if user actually paid (hasPaid = true).
+  // If user hasn't paid yet, there's nothing to refund — just leave.
   let refundQueued = false;
-  if (targetMatchId && targetWallet) {
+  if (targetMatchId && targetWallet && hasPaid) {
     try {
       const { data, error } = await supabaseClient.rpc('queue_refund_request', {
         p_match_id: targetMatchId, p_wallet: targetWallet
@@ -2020,7 +2017,9 @@ function resetToHome(){
   if (oppDice) { oppDice.classList.remove('show'); oppDice.classList.add('hide'); oppDice.textContent = '-'; }
   // Show tab navigation again
   if (typeof showTabScreen === 'function') showTabScreen();
-}document.querySelectorAll('.fee-chip').forEach(chip => {
+}
+
+document.querySelectorAll('.fee-chip').forEach(chip => {
   chip.addEventListener('click', () => selectFee(chip.dataset.fee, chip));
 });
 $('start-btn').addEventListener('click', handlePlayButtonClick);
