@@ -122,10 +122,11 @@ function checkWorldAppEnvironment() {
   // inside the official World App — so the old `|| window.ethereum`
   // fallback is removed: it let ANY injected wallet (MetaMask, Trust,
   // Rainbow, normal browser extensions) open the app. Now only the
-  // World App's own bridge passes.
-  let miniOk = false;  
-  try { miniOk = typeof MiniKit !== 'undefined' && typeof MiniKit.isInstalled === 'function' && MiniKit.isInstalled(); } catch (e) {}  
-  const isWorldApp = miniOk;  
+  // World App's own bridge passes.  let miniOk = false;
+  try { miniOk = typeof MiniKit !== 'undefined' && typeof MiniKit.isInstalled === 'function' && MiniKit.isInstalled(); } catch (e) {}
+  // DEVELOPER BYPASS: allow preview outside World App on localhost only.
+  const isLocalPreview = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  const isWorldApp = miniOk || isLocalPreview;
   if (!isWorldApp) {  
     document.body.innerHTML = `  
       <div style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#050000; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:999999; font-family:sans-serif; text-align:center; padding:20px;">  
@@ -849,6 +850,16 @@ window.confirmAdminApproval = async function() {
   closeAdminModal();  
   fetchAdminWithdrawRequests();  
 };  
+
+// ---- TNV Winnings Modal ----
+window.openTnvWinningsModal = function() {
+  const m = document.getElementById('tnv-winnings-modal');
+  if (m) m.style.display = 'flex';
+};
+window.closeTnvWinningsModal = function() {
+  const m = document.getElementById('tnv-winnings-modal');
+  if (m) m.style.display = 'none';
+};
 
 window.openUserHistoryModal = async function() {  
   if (!myAddress) { showNeonToast('Please sign in first!', 'warning'); return; }  

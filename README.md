@@ -26,6 +26,9 @@
 | 🤝 Agent airdrophubgroup — human support tickets | ✅ Live |
 | 🛡️ Auto security monitor — bug checks every 5 min | ✅ Live |
 | 💎 TNV Ecosystem — Mainnet, Swap, Store, Tournaments | 🔜 Soon |
+| 💰 TNV Winnings view (all 11 bet tiers) | ✅ Live |
+| 🛡️ Admin Dashboard (Revenue · Withdrawals · Tickets) | ✅ Live |
+| ⏱️ 32s match timer (2s connect + 30s play) | ✅ Live |
 
 ---
 
@@ -123,6 +126,37 @@ Floating on the home screen: **Gift Cards · Electronics · Video Games · Toys 
 - **Hosting** — connect the repository to Vercel; pushing to `main` auto-deploys. Environment variables: operator key, Supabase URL, Supabase anon key.
 - **Refund resolver** — the cron-driven refund processor runs as a Supabase Edge Function (invoked every minute) with its own secrets.
 - **Auto monitor** — scheduled directly in the database (every 5 minutes); no extra setup needed after the initial script runs.
+
+---
+
+## 📋 Recent Changes (August 2025)
+
+### 🔧 Security & Bug Fixes
+- **RLS withdraw fix** — `withdraw_requests` table had DENY ALL RLS; replaced 4 direct client reads with secure SECURITY DEFINER RPCs (`get_my_withdraw_requests`, `admin_get_withdraw_requests`). Home tab now shows withdrawal status.
+- **Cancelled-match refund fix** — `record_verified_payment` now accepts the `cancelled` state so late-verified payments can queue refunds (prevents stranded funds).
+- **Self-spam guard** — `join_or_create_match` prevents one wallet from flooding the waiting pool with duplicate rows.
+- **Admin panel visibility** — CSS `!important` guard class now toggled via classList (not inline styles), so admin panels actually show for the admin.
+- **Bottom-half blank screen fix** — empty `<main>` with `flex:1` consumed half the viewport; now hidden unless `body.game-active`.
+
+### ✨ New Features
+- **TNV Winnings** — More tab tile shows all 11 bet tiers with Win/Lose TNV rewards.
+- **Admin Dashboard** — 3-tab modal: Revenue (daily ledger), Withdrawals (all requests with approve), Tickets (agent support replies).
+- **Home Withdrawal Status** — see your pending/approved withdrawal requests directly on the Home tab.
+- **Play Tab Green Win Amount** — each fee chip displays the exact WLD winner payout in green (+0.17 to +90).
+- **Live Stats Card** — real-time Withdraw Requests, Agent Messages, Total Matches, Online Players (privacy-safe aggregate RPC).
+- **Tab Switch Animation** — lightweight 22ms slide-fade for smoother tab transitions.
+- **Cache-Control Headers** — Vercel serves index.html/app.js/style.css with `max-age=0` so updates are never stale.
+
+### 🧪 Regression Tests
+- **`test/payout-tiers.test.cjs`** — 23 automated checks: all 11 bet tiers cross-verified (client ↔ API ↔ SQL), tie rules, TNV win/lose rewards. Run: `node test/payout-tiers.test.cjs`
+
+### 📦 SQL Migrations to Run
+1. `supabase/unified_latest_migration.sql` — core functions (matchmaking, game, settlement, refunds)
+2. `supabase/missing_withdraw_admin_functions.sql` — withdrawal submit/approve + admin block
+3. `supabase/withdraw_read_rpcs.sql` — user/admin withdrawal reads
+4. `supabase/public_stats_rpc.sql` — privacy-safe live stats aggregate
+
+All use `CREATE OR REPLACE` — safe to re-run.
 
 ---
 

@@ -732,3 +732,12 @@ body.game-live main{ display:flex; }
 .hit-good .hit-label{ color:var(--gold); }
 .hit-miss .hit-num{ color:var(--signal); }
 .hit-miss .hit-label{ color:var(--signal); }
+
+/* ---- TNV WINNINGS MODAL ---- */
+.tnv-winnings-table{ width:100%; font-size:11px; }
+.tnv-w-row{ display:flex; justify-content:space-between; padding:7px 10px; border-bottom:1px solid var(--border); }
+.tnv-w-row:last-child{ border-bottom:none; }
+.tnv-w-header{ font-size:9px; color:var(--slate); font-weight:600; text-transform:uppercase; letter-spacing:.5px; }
+.tnv-w-entry{ color:var(--bone); font-family:'JetBrains Mono',monospace; font-weight:700; }
+.tnv-w-win{ color:#4ade80; font-family:'JetBrains Mono',monospace; font-weight:700; }
+.tnv-w-lose{ color:var(--gold); font-family:'JetBrains Mono',monospace; font-weight:600; }
