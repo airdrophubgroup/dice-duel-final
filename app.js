@@ -356,10 +356,30 @@ function loadAndCleanChatHistory() {
     localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(history));  
 
     const container = $('chat-messages-container');  
-    container.innerHTML = `<div style="text-align:center; color:var(--slate); font-size:11px;">Messages are saved for 24 hours. Chat freely!</div>`;  
-    history.forEach(item => {  
-      renderChatMessageUI(item.sender, item.message, item.address, item.timestamp);  
-    });  
+    container.innerHTML = '';  
+    // Show welcome banner if no chat history
+    if (history.length === 0) {
+      const welcome = document.createElement('div');
+      welcome.className = 'chat-welcome-banner';
+      welcome.innerHTML = `
+        <div class="chat-welcome-icon">🎲</div>
+        <div class="chat-welcome-title">Welcome to TNV Arena Chat!</div>
+        <div class="chat-welcome-sub">Connect with players, share tips, and celebrate wins together.</div>
+        <div class="chat-welcome-rules">
+          <div class="chat-welcome-rule">✅ Be respectful to everyone</div>
+          <div class="chat-welcome-rule">🚫 No spam or self-promotion</div>
+          <div class="chat-welcome-rule">🎯 Keep it game-related</div>
+          <div class="chat-welcome-rule">💬 Have fun and good luck!</div>
+        </div>
+        <div class="chat-welcome-tip">💡 Tip: Messages expire after 24 hours</div>
+      `;
+      container.appendChild(welcome);
+    } else {
+      container.innerHTML = `<div style="text-align:center; color:var(--slate); font-size:11px;">Messages are saved for 24 hours. Chat freely!</div>`;  
+      history.forEach(item => {  
+        renderChatMessageUI(item.sender, item.message, item.address, item.timestamp);  
+      });
+    }  
   } catch (e) {}  
 }  
 
@@ -402,7 +422,30 @@ function renderChatMessageUI(sender, message, senderAddress, timestamp) {
 
 window.openChatModal = function() {  
   $('chat-modal').style.display = 'flex';  
+  // Show welcome message if chat is empty (no user messages yet)
   const container = $('chat-messages-container');  
+  const hasUserMsgs = container.querySelector('.chat-msg-item');  
+  if (!hasUserMsgs) {
+    // Remove the default placeholder if present
+    const placeholder = container.querySelector('[style*="text-align:center"]');
+    if (placeholder) placeholder.remove();
+    // Welcome banner
+    const welcome = document.createElement('div');
+    welcome.className = 'chat-welcome-banner';
+    welcome.innerHTML = `
+      <div class="chat-welcome-icon">🎲</div>
+      <div class="chat-welcome-title">Welcome to TNV Arena Chat!</div>
+      <div class="chat-welcome-sub">Connect with players, share tips, and celebrate wins together.</div>
+      <div class="chat-welcome-rules">
+        <div class="chat-welcome-rule">✅ Be respectful to everyone</div>
+        <div class="chat-welcome-rule">🚫 No spam or self-promotion</div>
+        <div class="chat-welcome-rule">🎯 Keep it game-related</div>
+        <div class="chat-welcome-rule">💬 Have fun and good luck!</div>
+      </div>
+      <div class="chat-welcome-tip">💡 Tip: Messages expire after 24 hours</div>
+    `;
+    container.appendChild(welcome);
+  }
   container.scrollTop = container.scrollHeight;  
 };  
 
