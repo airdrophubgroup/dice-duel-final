@@ -240,12 +240,15 @@ DECLARE
   v_winner_address text;
   v_winner_username text;
   v_payout numeric;
+  v_fee numeric;
 BEGIN
   SELECT * INTO v_match FROM matches WHERE id = p_match_id FOR UPDATE;
   IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'error', 'not_found'); END IF;
   IF v_match.p1_address IS DISTINCT FROM v_wallet AND v_match.p2_address IS DISTINCT FROM v_wallet THEN
     RETURN jsonb_build_object('success', false, 'error', 'not_a_participant');
   END IF;
+
+  v_fee := COALESCE(v_match.fee, 0.5);
 
   IF v_match.status = 'playing' THEN
     IF v_match.p1_score > v_match.p2_score THEN
