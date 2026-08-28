@@ -26,6 +26,7 @@
 | 🤝 Agent airdrophubgroup — human support tickets | ✅ Live |
 | 🛡️ Auto security monitor — bug checks every 5 min | ✅ Live |
 | 💎 TNV Ecosystem — Mainnet, Swap, Store, Tournaments | 🔜 Soon |
+| 🪂 Verified Airdrops (Coming Soon) | 🔜 Soon |
 | 💰 TNV Winnings view (all 11 bet tiers) | ✅ Live |
 | 🛡️ Admin Dashboard (Revenue · Withdrawals · Tickets) | ✅ Live |
 | ⏱️ 32s match timer (2s connect + 30s play) | ✅ Live |
