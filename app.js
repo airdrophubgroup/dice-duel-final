@@ -118,24 +118,42 @@ function checkConsent() {
 }  
 
 function checkWorldAppEnvironment() {  
-  // SECURITY: World App ONLY. MiniKit.isInstalled() returns true ONLY
-  // inside the official World App — so the old `|| window.ethereum`
-  // fallback is removed: it let ANY injected wallet (MetaMask, Trust,
-  // Rainbow, normal browser extensions) open the app. Now only the
-  // World App's own bridge passes.  let miniOk = false;
+  // SECURITY: World App ONLY. Multiple detection layers.
+  // MiniKit.isInstalled() returns true ONLY inside the official World App.
+  let miniOk = false;
   try { miniOk = typeof MiniKit !== 'undefined' && typeof MiniKit.isInstalled === 'function' && MiniKit.isInstalled(); } catch (e) {}
-  // DEVELOPER BYPASS: allow preview outside World App on localhost only.
-  const isLocalPreview = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-  const isWorldApp = miniOk || isLocalPreview;
-  if (!isWorldApp) {  
+
+  // DETECTION LAYER 2: Check for World App WebView characteristics
+  const ua = navigator.userAgent || '';
+  const isWorldAppUA = /WorldApp|WorldCoin/i.test(ua);
+  
+  // DETECTION LAYER 3: Check for MiniKit SDK presence
+  const hasMiniKit = typeof MiniKit !== 'undefined';
+  
+  // DETECTION LAYER 4: Check for World App bridge objects
+  const hasWorldBridge = typeof window.worldAppAddress !== 'undefined' || 
+                          typeof window.worldAppReady !== 'undefined';
+
+  // FINAL VERDICT: Must pass MiniKit check OR (UA + bridge + SDK)
+  const isWorldApp = miniOk || (isWorldAppUA && hasMiniKit && hasWorldBridge);
+  
+  // DEVELOPER MODE: Only allow localhost with explicit ?dev=true parameter
+  // This prevents casual browser access while allowing dev testing
+  const isDevMode = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') && 
+                     location.search.includes('dev=true');
+  
+  const canRun = isWorldApp || isDevMode;
+  
+  if (!canRun) {  
     document.body.innerHTML = `  
-      <div style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#050000; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:999999; font-family:sans-serif; text-align:center; padding:20px;">  
+      <div style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#050000; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:999999; font-family:'Space Grotesk',sans-serif; text-align:center; padding:20px;">  
         <div style="background:rgba(255, 0, 0, 0.08); border:2px solid #ff3333; padding:30px; border-radius:20px; box-shadow: 0 0 30px rgba(255, 0, 0, 0.4); max-width:400px;">  
-          <h1 style="color:#ff3333; font-size:24px; margin-bottom:15px; text-shadow: 0 0 10px rgba(255,51,51,0.5);">⚠️ ACCESS DENIED</h1>  
-          <p style="color:#ffffff; font-size:16px; line-height:1.5; margin-bottom:20px;">This mini app can only be accessed and used inside <b>World App</b>.</p>  
+          <h1 style="color:#ff3333; font-size:24px; margin-bottom:15px; text-shadow: 0 0 10px rgba(255,51,51,0.5);">\u26A0\uFE0F ACCESS DENIED</h1>  
+          <p style="color:#ffffff; font-size:16px; line-height:1.5; margin-bottom:20px;">This mini app can only be accessed inside <b>World App</b>.</p>  
           <div style="background:#ff3333; color:#000; font-weight:bold; padding:12px 20px; border-radius:10px; font-size:15px; box-shadow: 0 0 15px #ff3333;">  
             Please open inside World App  
           </div>  
+          <p style="color:#666; font-size:11px; margin-top:15px;">Unauthorized access attempts are logged.</p>  
         </div>  
       </div>  
     `;  
@@ -3562,6 +3580,22 @@ window.submitBotTxHash = async function() {
   console.log('%cTampering with this app is a violation of our Terms of Service.', 'color: #ff6666; font-size: 14px;');
   console.log('%cAll scores are server-validated. Any manipulation will result in account ban.', 'color: #ff6666; font-size: 14px;');
   console.log('%cThis game uses server-side verification for all rolls, payments, and settlements.', 'color: #ff9999; font-size: 12px;');
+
+  // --- 4b. WORLD APP RUNTIME CHECK: Periodically verify still in World App ---
+  setInterval(function() {
+    try {
+      const stillInWorldApp = typeof MiniKit !== 'undefined' && 
+                               typeof MiniKit.isInstalled === 'function' && 
+                               MiniKit.isInstalled();
+      if (!stillInWorldApp) {
+        // If somehow not in World App anymore, kill the session
+        document.body.innerHTML = '<div style="position:fixed;inset:0;background:#050000;display:flex;align-items:center;justify-content:center;z-index:999999;font-family:sans-serif;color:#ff3333;font-size:18px;text-align:center;">\u26A0\uFE0F Session ended.<br>Please reopen in World App.</div>';
+        clearInterval(gameTimerInterval);
+        clearInterval(pollTimer);
+        if (channel) channel.unsubscribe();
+      }
+    } catch (e) {}
+  }, 10000);
 
   // --- 5. ANTI-SPOOF: Protect critical constants from tampering ---
   // Freeze admin wallet and contract addresses
