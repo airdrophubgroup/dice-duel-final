@@ -64,7 +64,7 @@ header.topbar{
   text-align:center; margin-bottom:16px; margin-top:4px;
   background:rgba(17,17,32,0.6); backdrop-filter:blur(16px);
   border:1px solid rgba(41,217,194,0.12); border-radius:16px;
-  padding:12px 16px; position:relative;
+  padding:24px 24px 24px 24px; position:relative;
   box-shadow:0 4px 24px rgba(108,92,231,0.08), inset 0 1px 0 rgba(255,255,255,0.04);
 }
 .topbar-row{ display:flex; justify-content:space-between; align-items:center; }
@@ -97,7 +97,7 @@ h1.brand{
 }
 
 /* ---- TAB PANELS ---- */
-.tab-panel{ display:none; flex:1; flex-direction:column; gap:16px; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain; padding-bottom:4px; min-height:0; }
+.tab-panel{ display:none; flex:1; flex-direction:column; gap:32px; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain; padding-bottom:32px; min-height:0; }
 .tab-panel.active{ display:flex; animation:tabIn .22s ease-out; }
 /* Lightweight GPU-only entry so tab switches feel smooth without jank */
 @keyframes tabIn{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:translateY(0); } }
@@ -107,7 +107,7 @@ h1.brand{
   position:fixed; bottom:0; left:50%; transform:translateX(-50%);
   width:100%; max-width:480px; z-index:100;
   display:flex; justify-content:space-around; align-items:center;
-  padding:10px 0 calc(12px + var(--safe-b));
+  padding:12px 0 calc(12px + var(--safe-b));
   background:rgba(11,11,20,0.92); border-top:1px solid rgba(41,217,194,0.12);
   backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
   box-shadow:0 -4px 24px rgba(0,0,0,0.4), 0 -1px 0 rgba(108,92,231,0.1);
@@ -132,7 +132,7 @@ h1.brand{
 .home-card{
   background:linear-gradient(135deg,rgba(17,17,32,0.8),rgba(108,92,231,0.06));
   border:1px solid rgba(108,92,231,0.15); border-radius:var(--radius);
-  padding:20px; display:flex; flex-direction:column; gap:16px;
+  padding:24px; display:flex; flex-direction:column; gap:32px;
   animation:fadeSlideIn 0.4s ease-out;
   box-shadow:0 4px 20px rgba(108,92,231,0.08), inset 0 1px 0 rgba(255,255,255,0.04);
 }
@@ -246,11 +246,11 @@ details[open] .accord-arrow{ transform:rotate(180deg); }
 
 /* ---- MORE TAB GRID ---- */
 .more-grid{
-  display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;
+  display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;
 }
 .more-tile{
   display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:6px; padding:16px 8px; background:linear-gradient(135deg,rgba(17,17,32,0.9),rgba(108,92,231,0.06));
+  gap:6px; padding:24px 16px; background:linear-gradient(135deg,rgba(17,17,32,0.9),rgba(108,92,231,0.06));
   border:1px solid rgba(108,92,231,0.12); border-radius:14px; color:var(--bone);
   font-family:'Space Grotesk',sans-serif; font-weight:600; cursor:pointer;
   transition:all .25s ease; position:relative; overflow:hidden;
@@ -325,7 +325,7 @@ details[open] .accord-arrow{ transform:rotate(180deg); }
 .fee-chip{
   background:linear-gradient(135deg,rgba(17,17,32,0.9),rgba(108,92,231,0.08));
   border:1px solid rgba(108,92,231,0.15); color:var(--bone);
-  padding:10px 12px; border-radius:14px; font-family:'Space Grotesk',sans-serif; font-weight:600;
+  padding:12px 16px; border-radius:14px; font-family:'Space Grotesk',sans-serif; font-weight:600;
   font-size:13px; cursor:pointer; transition:all .2s ease;
   display:flex; flex-direction:column; align-items:center; gap:2px; min-width:54px; flex-shrink:0;
   box-shadow:0 2px 8px rgba(0,0,0,0.2);
