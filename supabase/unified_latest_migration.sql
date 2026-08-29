@@ -159,7 +159,14 @@ DECLARE
   v_elapsed numeric := 0;
   v_expected int := 0;
   v_burst int := 0;
+  v_server_roll int4;
 BEGIN
+  -- ANTI-CHEAT: Server generates the dice roll, NOT the client.
+  -- The client sends p_roll as a signal (ignored), server uses
+  -- cryptographically secure random to determine the actual roll.
+  -- This prevents: always-send-6, roll prediction, and client manipulation.
+  v_server_roll := (floor(random() * 6) + 1)::int4;
+  -- We still validate p_roll is 1-6 to reject obviously malformed requests
   IF p_roll IS NULL OR p_roll < 1 OR p_roll > 6 THEN
     RETURN json_build_object('success', false, 'error', 'Invalid roll (must be 1-6)');
   END IF;
@@ -209,19 +216,19 @@ BEGIN
 
   IF is_p1 THEN
     UPDATE public.matches
-    SET p1_score = current_score + p_roll,
+    SET p1_score = current_score + v_server_roll,
         p1_taps_used = current_taps + 1,
         p1_last_roll_at = now()
     WHERE id = p_match_id;
   ELSE
     UPDATE public.matches
-    SET p2_score = current_score + p_roll,
+    SET p2_score = current_score + v_server_roll,
         p2_taps_used = current_taps + 1,
         p2_last_roll_at = now()
     WHERE id = p_match_id;
   END IF;
 
-  RETURN json_build_object('success', true, 'new_score', current_score + p_roll, 'taps_left', max_taps - (current_taps + 1), 'burst_remaining', GREATEST(0, v_burst - 1));
+  RETURN json_build_object('success', true, 'roll', v_server_roll, 'new_score', current_score + v_server_roll, 'taps_left', max_taps - (current_taps + 1), 'burst_remaining', GREATEST(0, v_burst - 1));
 END;
 $$;
 

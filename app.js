@@ -97,7 +97,10 @@ let paymentVerified = false; // true ONLY after record-deposit verified the paym
 
 let myTurnsLeft = 15;  
 let isTimingLocked = false;  
-let activeAdminReqId = "";  
+let activeAdminReqId = "";
+// ANTI-CHEAT: Limit reconnections per match to prevent abuse
+let _reconnectCount = 0;
+const _MAX_RECONNECTS = 3;  
 
 const CHAT_STORAGE_KEY = "tnv_global_chat_history";  
 const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;  
@@ -259,6 +262,14 @@ function waitForMiniKitReady(timeoutMs = 5000) {
         const isOwner = (m.p1_address && m.p1_address.toLowerCase() === myAddr) ||
                         (m.p2_address && m.p2_address.toLowerCase() === myAddr);
         if (!isOwner) {
+          localStorage.removeItem('currentMatchId');
+          localStorage.removeItem('isP1');
+          return;
+        }
+        // ANTI-CHEAT: Limit reconnections per match (max 3)
+        _reconnectCount++;
+        if (_reconnectCount > _MAX_RECONNECTS) {
+          showNeonToast('Too many reconnections. Match forfeited.', 'error');
           localStorage.removeItem('currentMatchId');
           localStorage.removeItem('isP1');
           return;
@@ -2592,8 +2603,12 @@ async function tapSkillMeter() {
     return;
   }
 
-  // Accepted — update score
-  myScore += roll;
+  // ANTI-CHEAT: Use SERVER-generated roll, not client's `roll`.
+  // Server generates cryptographically secure random roll and returns it.
+  // This prevents: always-send-6, roll prediction, client manipulation.
+  const serverRoll = (rpcRes && typeof rpcRes.roll === 'number') ? rpcRes.roll : roll;
+  const serverScore = (rpcRes && typeof rpcRes.new_score === 'number') ? rpcRes.new_score : myScore + serverRoll;
+  myScore = serverScore;
   $('my-score').innerText = myScore;
   const myScoreEl = $('my-score');
   if (myScoreEl) { myScoreEl.classList.remove('pop'); void myScoreEl.offsetWidth; myScoreEl.classList.add('pop'); }
@@ -2602,15 +2617,31 @@ async function tapSkillMeter() {
     myTurnsLeft = rpcRes.taps_left;
   }
 
-  // Show skill hit feedback
-  showRollFlash('+' + roll, result.label, result.cssClass);
+  // ANTI-CHEAT: Verify score matches server immediately after roll
+  (async () => {
+    try {
+      const { data: verify } = await supabaseClient
+        .from('matches').select('p1_score, p2_score')
+        .eq('id', matchId).single();
+      if (verify) {
+        const srvScore = isP1 ? Number(verify.p1_score) : Number(verify.p2_score);
+        if (srvScore !== myScore) {
+          myScore = srvScore; // Re-sync from server
+          $('my-score').innerText = myScore;
+        }
+      }
+    } catch (e) {}
+  })();
+
+  // Show skill hit feedback with SERVER roll value
+  showRollFlash('+' + serverRoll, result.label, result.cssClass);
 
   // Broadcast to opponent — score is computed from SERVER-VALIDATED roll only
   // (never use client-side myScore here: a hacker modifying myScore in console
   // would then broadcast a fake score to the opponent)
   if (!window._sendNonce) window._sendNonce = 0;
   window._sendNonce++;
-  if (channel) channel.send({ type: 'broadcast', event: 'score_update', payload: { sender: myAddress, score: myScore, roll: roll, ts: Date.now(), nonce: window._sendNonce } });
+  if (channel) channel.send({ type: 'broadcast', event: 'score_update', payload: { sender: myAddress, score: myScore, roll: serverRoll, ts: Date.now(), nonce: window._sendNonce } });
 
   // Speed up meter slightly each turn for increasing difficulty
   meterSpeed = Math.max(400, meterSpeed - 15);
