@@ -1,0 +1,47 @@
+# ============================================================
+# Supabase Keep-Alive — Prevent Free Tier Pause
+# ============================================================
+# Runs every 5 days at 00:00 UTC
+# Pings the Supabase REST API to keep the project active
+# Free tier pauses after 7 days of inactivity — this runs every 5
+# ============================================================
+
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    # Every 5 days at midnight UTC
+    - cron: '0 0 */5 * *'
+  workflow_dispatch:  # Allow manual trigger from GitHub UI
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase Database
+        run: |
+          echo "🏓 Pinging Supabase to keep it alive..."
+          echo "Timestamp: $(date -u)"
+          
+          # Ping the REST API — any table works, we just need a response
+          # This counts as "activity" and resets the 7-day pause timer
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/matches?select=id&limit=1")
+          
+          if [ "$RESPONSE" = "200" ]; then
+            echo "✅ Supabase is alive! HTTP $RESPONSE"
+          else
+            echo "⚠️ Unexpected response: HTTP $RESPONSE"
+            echo "Will retry on next scheduled run"
+          fi
+
+      - name: Ping Supabase Auth (extra activity)
+        run: |
+          # Also hit the auth endpoint for extra activity signal
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            "${{ secrets.SUPABASE_URL }}/auth/v1/health")
+          
+          echo "Auth endpoint: HTTP $RESPONSE"

@@ -260,12 +260,14 @@ BEGIN
       v_payout := 0;
     END IF;
 
-    v_payout := CASE COALESCE(v_match.fee, 0.5)
-      WHEN 0.1 THEN 0.17 WHEN 0.2 THEN 0.34 WHEN 0.5 THEN 0.80 WHEN 1 THEN 1.60
-      WHEN 2 THEN 3.20 WHEN 5 THEN 8.80 WHEN 10 THEN 17.8 WHEN 20 THEN 36.0
-      WHEN 30 THEN 54.0 WHEN 40 THEN 72.0 WHEN 50 THEN 90.0
-      ELSE ROUND(COALESCE(v_match.fee, 0.5) * 1.6, 2)
-    END;
+    IF v_winner_address <> 'tie' THEN
+      v_payout := CASE COALESCE(v_match.fee, 0.5)
+        WHEN 0.1 THEN 0.17 WHEN 0.2 THEN 0.34 WHEN 0.5 THEN 0.80 WHEN 1 THEN 1.60
+        WHEN 2 THEN 3.20 WHEN 5 THEN 8.80 WHEN 10 THEN 17.8 WHEN 20 THEN 36.0
+        WHEN 30 THEN 54.0 WHEN 40 THEN 72.0 WHEN 50 THEN 90.0
+        ELSE ROUND(COALESCE(v_match.fee, 0.5) * 1.6, 2)
+      END;
+    END IF;
 
     UPDATE matches
     SET status = 'completed',
@@ -452,6 +454,11 @@ BEGIN
 
   v_is_win := (CASE WHEN v_is_p1 THEN v_match.p1_score ELSE v_match.p2_score END)
             > (CASE WHEN v_is_p1 THEN v_match.p2_score ELSE v_match.p1_score END);
+
+  -- Tie: both players refunded, no TNV awarded to anyone
+  IF v_match.p1_score = v_match.p2_score THEN
+    RETURN jsonb_build_object('success', false, 'error', 'tie_no_tnv');
+  END IF;
 
   v_tnv_base := CASE COALESCE(v_match.fee, 0.5)
     WHEN 0.1 THEN 5 WHEN 0.2 THEN 10 WHEN 0.5 THEN 15 WHEN 1 THEN 25

@@ -2130,7 +2130,7 @@ function setupChannel() {
     })    .on('broadcast', { event: 'score_update' }, ({ payload }) => {
       if (payload.sender !== myAddress){
         // ANTI-CHEAT: Validate incoming score from opponent
-        const validRolls = [1, 3, 6];
+        const validRolls = [1, 2, 3, 4, 5, 6];
         const roll = Number(payload.roll);
         const score = Number(payload.score);
         // Reject if roll is invalid or score is unreasonable
