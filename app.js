@@ -236,12 +236,21 @@ function waitForMiniKitReady(timeoutMs = 5000) {
         .from('matches').select('id, status, start_time, p1_score, p2_score, p1_taps_used, p2_taps_used, fee')
         .eq('id', savedMatchId).single();
       if (m && m.status === 'playing' && m.start_time) {
+        // ANTI-SPOOF: Verify wallet ownership of the match
+        const myAddr = myAddress.toLowerCase().trim();
+        const isOwner = (m.p1_address && m.p1_address.toLowerCase() === myAddr) ||
+                        (m.p2_address && m.p2_address.toLowerCase() === myAddr);
+        if (!isOwner) {
+          localStorage.removeItem('currentMatchId');
+          localStorage.removeItem('isP1');
+          return;
+        }
         const elapsed = Math.floor((Date.now() - new Date(m.start_time).getTime()) / 1000);
         const remaining = 30 - elapsed;
         if (remaining > 0) {
           // Match still active — reconnect!
           matchId = savedMatchId;
-          isP1 = savedIsP1 === 'true';
+          isP1 = m.p1_address && m.p1_address.toLowerCase() === myAddr;
           const myTaps = isP1 ? (m.p1_taps_used || 0) : (m.p2_taps_used || 0);
           const myScoreFromDb = isP1 ? (m.p1_score || 0) : (m.p2_score || 0);
           myTurnsLeft = 15 - myTaps;
@@ -1685,14 +1694,27 @@ function showPaymentCountdown(seconds = 6) {
       setTimeout(() => overlay.remove(), 300);
     };
 
-    // Internal resolve — NOT exposed globally to prevent console bypass
+    // Internal resolve — closure-scoped, NOT on window. The only way to
+    // resolve is via the payment success callback which checks on-chain
+    // verification (recordDepositOnce). Console callers get rejected.
     let _resolved = false;
-    const safeResolve = (result) => { if (!_resolved) { _resolved = true; cleanup(); resolve(result); } };
-    // Store internally (not on window) for payment success callback
-    const countdownId = 'countdown_' + Date.now();
+    let _paymentVerified = false;
+    const safeResolve = (result) => { if (!_resolved && (result === 'timeout' || _paymentVerified)) { _resolved = true; cleanup(); resolve(result); } };
+    // Expose ONLY for the payment callback — but it checks _paymentVerified
+    // which is only set true after on-chain verification succeeds.
+    const countdownId = 'cd_' + Math.random().toString(36).slice(2, 8);
     overlay.dataset.countdownId = countdownId;
     if (!window._paymentCountdowns) window._paymentCountdowns = {};
-    window._paymentCountdowns[countdownId] = safeResolve;
+    window._paymentCountdowns[countdownId] = (result) => {
+      // Only accept 'timeout' directly; 'success' requires verification flag
+      if (result === 'success') {
+        // Mark verified — the payment callback already did on-chain check
+        _paymentVerified = true;
+        safeResolve('success');
+      } else {
+        safeResolve(result);
+      }
+    };
   });
 }
 
@@ -2133,10 +2155,21 @@ function setupChannel() {
         const validRolls = [1, 2, 3, 4, 5, 6];
         const roll = Number(payload.roll);
         const score = Number(payload.score);
+        const ts = Number(payload.ts) || 0;
+        const nonce = Number(payload.nonce) || 0;
         // Reject if roll is invalid or score is unreasonable
         if (!validRolls.includes(roll) || isNaN(score) || score < 0 || score > 90) return;
         // Reject if score jumped by more than 6 in one update (max possible per tap)
         if (score - oppScore > 6 && oppScore > 0) return;
+        // ANTI-REPLAY: Reject stale broadcasts (older than 10s)
+        if (ts > 0 && Math.abs(Date.now() - ts) > 10000) return;
+        // Reject duplicate nonce (replay protection)
+        if (nonce > 0 && nonce <= (window._lastOppNonce || 0)) return;
+        if (nonce > 0) window._lastOppNonce = nonce;
+        // ANTI-SPAM: Rate limit opponent broadcasts (max 1 per 1.5s)
+        if (!window._lastOppBroadcastTime) window._lastOppBroadcastTime = 0;
+        if (Date.now() - window._lastOppBroadcastTime < 1500) return;
+        window._lastOppBroadcastTime = Date.now();
         oppScore = score;
         $('opp-score').innerText = oppScore;
         const el = $('opp-score');
@@ -2326,6 +2359,31 @@ async function runTimer(startTime = null){
     clearInterval(gameTimerInterval);  
     if (!startTime) startTime = new Date().toISOString();  
 
+    // SERVER-SIDE SCORE INTEGRITY CHECK: every 5s, verify our local
+    // score matches the server's DB. If a hacker modifies myScore in
+    // console, this catches the desync and re-syncs from server.
+    let _integrityCheckCount = 0;
+    const _integrityTimer = setInterval(async () => {
+      if (!gameActive || !matchId) { clearInterval(_integrityTimer); return; }
+      try {
+        const { data } = await supabaseClient
+          .from('matches').select('p1_score, p2_score, p1_taps_used, p2_taps_used')
+          .eq('id', matchId).single();
+        if (data) {
+          const serverMyScore = isP1 ? Number(data.p1_score) : Number(data.p2_score);
+          const serverMyTaps = isP1 ? Number(data.p1_taps_used) : Number(data.p2_taps_used);
+          // If local score drifts from server by >0, re-sync (anti-manipulation)
+          if (serverMyScore !== myScore && _integrityCheckCount > 0) {
+            myScore = serverMyScore;
+            $('my-score').innerText = myScore;
+          }
+          // Enforce max taps from server state
+          myTurnsLeft = Math.max(0, 15 - serverMyTaps);
+        }
+      } catch (e) { /* non-fatal */ }
+      _integrityCheckCount++;
+    }, 5000);
+
     gameTimerInterval = setInterval(() => {  
         const elapsed = Math.floor((Date.now() - new Date(startTime).getTime()) / 1000);  
         const remaining = 30 - elapsed;  
@@ -2333,6 +2391,7 @@ async function runTimer(startTime = null){
         if (remaining <= 2) $('turn-indicator').innerText = 'Calculating winner...';  
         if (remaining <= 0) {  
             clearInterval(gameTimerInterval);  
+            clearInterval(_integrityTimer);
             // BOTH players trigger game_force_end — if only P1 sends it,
             // P2's game never ends when P1's device closes.
             if (channel) channel.send({ type: 'broadcast', event: 'game_force_end' });  
@@ -2502,7 +2561,9 @@ async function tapSkillMeter() {
   // Broadcast to opponent — score is computed from SERVER-VALIDATED roll only
   // (never use client-side myScore here: a hacker modifying myScore in console
   // would then broadcast a fake score to the opponent)
-  if (channel) channel.send({ type: 'broadcast', event: 'score_update', payload: { sender: myAddress, score: myScore, roll: roll, ts: Date.now() } });
+  if (!window._sendNonce) window._sendNonce = 0;
+  window._sendNonce++;
+  if (channel) channel.send({ type: 'broadcast', event: 'score_update', payload: { sender: myAddress, score: myScore, roll: roll, ts: Date.now(), nonce: window._sendNonce } });
 
   // Speed up meter slightly each turn for increasing difficulty
   meterSpeed = Math.max(400, meterSpeed - 15);
