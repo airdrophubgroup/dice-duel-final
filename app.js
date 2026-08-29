@@ -1760,7 +1760,7 @@ function showPaymentCountdown(seconds = 6) {
     const safeResolve = (result) => { if (!_resolved && (result === 'timeout' || _paymentVerified)) { _resolved = true; cleanup(); resolve(result); } };
     // Expose ONLY for the payment callback — but it checks _paymentVerified
     // which is only set true after on-chain verification succeeds.
-    const countdownId = 'cd_' + Math.random().toString(36).slice(2, 8);
+    const countdownId = 'cd_' + Date.now().toString(36) + Math.floor(Math.abs(Date.now() * 9301 + 49297) % 233280).toString(36);
     overlay.dataset.countdownId = countdownId;
     if (!window._paymentCountdowns) window._paymentCountdowns = {};
     window._paymentCountdowns[countdownId] = (result) => {
