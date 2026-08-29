@@ -301,11 +301,11 @@ function initGlobalChat() {
       if (payload && payload.message) {  
         saveAndAppendChatMessage(payload.sender, payload.message, payload.address, payload.timestamp);  
       }  
-    })  
-    .on('broadcast', { event: 'live_bet_alert' }, ({ payload }) => {  
-      if (!matchmakingActive && !gameActive && payload && payload.address !== myAddress) {  
-        showLiveBetNotification(payload.username, payload.fee);  
-      }  
+    })    .on('broadcast', { event: 'live_bet_alert' }, ({ payload }) => {
+      if (!matchmakingActive && !gameActive && payload && payload.address !== myAddress) {
+        // ANTI-INJECTION: Sanitize broadcast data before display
+        showLiveBetNotification(sanitizeInput(payload.username, 30), sanitizeInput(String(payload.fee), 10));
+      }
     })  
     .on('presence', { event: 'sync' }, () => {  
       const state = globalChatChannel.presenceState();  
@@ -325,6 +325,33 @@ function escapeHtml(str) {
   div.textContent = str == null ? '' : String(str);  
   return div.innerHTML;  
 }  
+
+// INPUT SANITIZER: strips dangerous characters and limits length.
+// Use on ALL user input before sending to broadcast/storage.
+function sanitizeInput(str, maxLen = 150) {
+  if (!str) return '';
+  let s = String(str).trim();
+  // Strip null bytes, control characters (except newline/tab)
+  s = s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  // Strip HTML tags
+  s = s.replace(/<[^>]*>/g, '');
+  // Strip javascript: protocol
+  s = s.replace(/javascript:/gi, '');
+  // Strip data: protocol (blocks data URI XSS)
+  s = s.replace(/data:/gi, '');
+  // Strip vbscript: protocol
+  s = s.replace(/vbscript:/gi, '');
+  // Strip on* event handlers
+  s = s.replace(/on\w+\s*=/gi, '');
+  // Strip expression() (CSS injection)
+  s = s.replace(/expression\s*\(/gi, '');
+  // Strip url() (CSS injection)
+  s = s.replace(/url\s*\(/gi, '');
+  // Limit length
+  if (s.length > maxLen) s = s.slice(0, maxLen);
+  return s;
+}
+
 
 function showLiveBetNotification(username, fee) {  
   let existingContainer = document.getElementById('live-bet-ticker-container');  
@@ -462,10 +489,12 @@ window.closeChatModal = function() { $('chat-modal').style.display = 'none'; };
 
 window.sendChatMessage = function() {  
   const input = $('chat-input-field');  
-  const msg = input.value.trim();  
-  if (!msg) return;  
-
-  let senderName = myUsername || '@Guest';  
+  const raw = input.value.trim();  
+  if (!raw) return;  
+  // ANTI-INJECTION: Sanitize message before broadcast
+  const msg = sanitizeInput(raw, 150);
+  if (!msg) return; // empty after sanitization
+  let senderName = sanitizeInput(myUsername || '@Guest', 30);  
   globalChatChannel.send({  
     type: 'broadcast',  
     event: 'new_chat_msg',  
@@ -962,7 +991,7 @@ window.runAdminCmd = async function(cmd) {
 window.sendAgentCommand = async function() {
   if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
   const input = $('agent-command-input');
-  const cmd = (input?.value || '').trim();
+  const cmd = sanitizeInput((input?.value || '').trim(), 500);
   if (!cmd) { showNeonToast('Pehle task likho!', 'warning'); return; }
   try {
     const { data } = await supabaseClient.rpc('create_agent_command', {
@@ -3625,6 +3654,62 @@ window.submitBotTxHash = async function() {
     }
     return true;
   };
+
+  // --- 10. DOM MUTATION OBSERVER: Detect injected elements ---
+  // Blocks script tags, iframe injection, and unauthorized DOM modifications.
+  const _allowedNodes = new Set(['#app', '#game-screen', '.bg-aurora', '.bg-grid', '.topbar', '.tab-panel', '.tab-bar']);
+  const _blockedTags = new Set(['SCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'APPLET']);
+  
+  const domObserver = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      for (const node of m.addedNodes) {
+        if (node.nodeType !== 1) continue; // skip text nodes
+        // Block dangerous element types
+        if (_blockedTags.has(node.tagName)) {
+          node.remove();
+          console.warn('[Anti-injection] Blocked injected element: ' + node.tagName);
+          showNeonToast('Injection attempt blocked!', 'error');
+          continue;
+        }
+        // Block inline event handlers on any element
+        if (node.attributes) {
+          for (const attr of Array.from(node.attributes)) {
+            if (attr.name.startsWith('on')) {
+              node.removeAttribute(attr.name);
+              console.warn('[Anti-injection] Removed event handler: ' + attr.name);
+            }
+          }
+        }
+        // Block javascript: and data: URIs in src/href
+        for (const attr of ['src', 'href', 'action', 'formaction']) {
+          const val = node.getAttribute && node.getAttribute(attr);
+          if (val && /^(javascript|data|vbscript):/i.test(val)) {
+            node.removeAttribute(attr);
+            console.warn('[Anti-injection] Blocked URI: ' + attr + '=' + val);
+          }
+        }
+      }
+      // Also check attribute mutations on existing nodes
+      if (m.type === 'attributes' && m.target && m.attributeName) {
+        const attr = m.attributeName;
+        if (attr.startsWith('on')) {
+          m.target.removeAttribute(attr);
+          console.warn('[Anti-injection] Removed event handler on existing node: ' + attr);
+        }
+        const val = m.target.getAttribute && m.target.getAttribute(attr);
+        if (val && /^(javascript|data|vbscript):/i.test(val)) {
+          m.target.removeAttribute(attr);
+          console.warn('[Anti-injection] Blocked URI on existing node: ' + attr);
+        }
+      }
+    }
+  });
+  domObserver.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['src', 'href', 'action', 'formaction', 'onclick', 'onerror', 'onload', 'onmouseover']
+  });
 
 })();
 
