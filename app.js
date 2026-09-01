@@ -147,25 +147,12 @@ function checkWorldAppEnvironment() {
   
   const canRun = isWorldApp || isDevMode;
   
-  if (!canRun) {  
-    document.body.innerHTML = `  
-      <div style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#050000; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:999999; font-family:'Space Grotesk',sans-serif; text-align:center; padding:20px;">  
-        <div style="background:rgba(255, 0, 0, 0.08); border:2px solid #ff3333; padding:30px; border-radius:20px; box-shadow: 0 0 30px rgba(255, 0, 0, 0.4); max-width:400px;">  
-          <h1 style="color:#ff3333; font-size:24px; margin-bottom:15px; text-shadow: 0 0 10px rgba(255,51,51,0.5);">\u26A0\uFE0F ACCESS DENIED</h1>  
-          <p style="color:#ffffff; font-size:16px; line-height:1.5; margin-bottom:20px;">This mini app can only be accessed inside <b>World App</b>.</p>  
-          <div style="background:#ff3333; color:#000; font-weight:bold; padding:12px 20px; border-radius:10px; font-size:15px; box-shadow: 0 0 15px #ff3333;">  
-            Please open inside World App  
-          </div>  
-          <p style="color:#666; font-size:11px; margin-top:15px;">Unauthorized access attempts are logged.</p>  
-        </div>  
-      </div>  
-    `;  
-    return false;  
-  }  
-  return true;  
+  // NEVER destroy the page body — always show the app UI.
+  // Just gate wallet/payment operations instead of blocking the first screen.
+  return canRun;  
 }  
 
-function waitForMiniKitReady(timeoutMs = 5000) {  
+function waitForMiniKitReady(timeoutMs = 15000) {  
   return new Promise((resolve) => {  
     const start = Date.now();  
     (function check() {  
@@ -224,7 +211,8 @@ function waitForMiniKitReady(timeoutMs = 5000) {
   }  
 
   const ready = await waitForMiniKitReady();  
-  if (!ready) { checkWorldAppEnvironment(); return; }  
+  // Always continue loading the app — never block the first screen.
+  // If MiniKit is not ready, wallet/payment features will be gated later.  
 
   // Sign in even when isInstalled() is flaky: the walletAuth call itself
   // is the real gate and fails gracefully outside the World App. This
@@ -3613,17 +3601,18 @@ window.submitBotTxHash = async function() {
   console.log('%cThis game uses server-side verification for all rolls, payments, and settlements.', 'color: #ff9999; font-size: 12px;');
 
   // --- 4b. WORLD APP RUNTIME CHECK: Periodically verify still in World App ---
+  // Only block after user is fully authenticated and in an active game.
+  // Never kill the first screen or a waiting screen.
   setInterval(function() {
     try {
+      // Skip check if user is not yet authenticated or not in an active game
+      if (!myAddress || !realWorldIdUser || !gameActive) return;
       const stillInWorldApp = typeof MiniKit !== 'undefined' && 
                                typeof MiniKit.isInstalled === 'function' && 
                                MiniKit.isInstalled();
       if (!stillInWorldApp) {
-        // If somehow not in World App anymore, kill the session
-        document.body.innerHTML = '<div style="position:fixed;inset:0;background:#050000;display:flex;align-items:center;justify-content:center;z-index:999999;font-family:sans-serif;color:#ff3333;font-size:18px;text-align:center;">\u26A0\uFE0F Session ended.<br>Please reopen in World App.</div>';
-        clearInterval(gameTimerInterval);
-        clearInterval(pollTimer);
-        if (channel) channel.unsubscribe();
+        // Only show warning — never destroy the page
+        showNeonToast('Warning: World App environment not detected.', 'error');
       }
     } catch (e) {}
   }, 10000);
