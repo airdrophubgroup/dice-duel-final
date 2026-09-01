@@ -1,47 +1,70 @@
 # ============================================================
 # Supabase Keep-Alive — Prevent Free Tier Pause
 # ============================================================
-# Runs every 5 days at 00:00 UTC
-# Pings the Supabase REST API to keep the project active
-# Free tier pauses after 7 days of inactivity — this runs every 5
+# Runs every 2 days at 00:00 UTC
+# Pings Supabase REST, Auth, Storage, and Edge Functions
+# Free tier pauses after 7 days of inactivity — this runs every 2
 # ============================================================
 
 name: Supabase Keep-Alive
 
 on:
   schedule:
-    # Every 5 days at midnight UTC
-    - cron: '0 0 */5 * *'
+    # Every 2 days at midnight UTC — free tier pauses after 7 days
+    - cron: '0 0 */2 * *'
   workflow_dispatch:  # Allow manual trigger from GitHub UI
 
 jobs:
   keepalive:
     runs-on: ubuntu-latest
+    env:
+      SB_URL: "https://efmkazyrxllcyvcwmewd.supabase.co"
+      SB_KEY: "sb_publishable_px6Myv6S29bTXRYmYLAkgQ_WDHDb7da"
     steps:
       - name: Ping Supabase Database
         run: |
-          echo "🏓 Pinging Supabase to keep it alive..."
+          echo "Pinging Supabase to keep it alive..."
           echo "Timestamp: $(date -u)"
           
-          # Ping the REST API — any table works, we just need a response
-          # This counts as "activity" and resets the 7-day pause timer
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
-            "${{ secrets.SUPABASE_URL }}/rest/v1/matches?select=id&limit=1")
+            -H "apikey: $SB_KEY" \
+            -H "Authorization: Bearer $SB_KEY" \
+            "$SB_URL/rest/v1/matches?select=id&limit=1")
+          
+          echo "Database endpoint: HTTP $RESPONSE"
           
           if [ "$RESPONSE" = "200" ]; then
-            echo "✅ Supabase is alive! HTTP $RESPONSE"
+            echo "Supabase is alive!"
           else
-            echo "⚠️ Unexpected response: HTTP $RESPONSE"
-            echo "Will retry on next scheduled run"
+            echo "Unexpected response: HTTP $RESPONSE — will retry next run"
           fi
 
-      - name: Ping Supabase Auth (extra activity)
+      - name: Ping Supabase Auth
         run: |
-          # Also hit the auth endpoint for extra activity signal
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-            "${{ secrets.SUPABASE_URL }}/auth/v1/health")
+            -H "apikey: $SB_KEY" \
+            "$SB_URL/auth/v1/health")
           
           echo "Auth endpoint: HTTP $RESPONSE"
+          
+          if [ "$RESPONSE" = "200" ]; then
+            echo "Auth is alive!"
+          else
+            echo "Auth unexpected: HTTP $RESPONSE"
+          fi
+
+      - name: Ping Supabase Storage
+        run: |
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: $SB_KEY" \
+            "$SB_URL/storage/v1/bucket")
+          
+          echo "Storage endpoint: HTTP $RESPONSE"
+
+      - name: Ping Supabase Edge Functions
+        run: |
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: $SB_KEY" \
+            "$SB_URL/functions/v1/verify-payment")
+          
+          echo "Edge Functions endpoint: HTTP $RESPONSE"
