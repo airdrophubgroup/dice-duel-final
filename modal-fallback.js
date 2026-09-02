@@ -70,10 +70,21 @@
         e.stopPropagation();
         var onclickStr = el.getAttribute('onclick');
         if (!onclickStr) return;
-        // Extract function name: 'closeUserHistoryModal()' -> 'closeUserHistoryModal'
-        var match = onclickStr.match(/^\s*(\w+)\s*\(/);
-        if (match && typeof window[match[1]] === 'function') {
-          window[match[1]]();
+        // Execute the full onclick string (handles multiple calls
+        // like 'closeSupportModal();openSupportBot();')
+        try {
+          new Function(onclickStr)();
+        } catch(err) {
+          // Fallback: extract all function names and call them
+          var matches = onclickStr.match(/(\w+)\s*\(/g);
+          if (matches) {
+            matches.forEach(function(m) {
+              var fnName = m.replace(/\s*\(\s*$/, '').trim();
+              if (typeof window[fnName] === 'function') {
+                window[fnName]();
+              }
+            });
+          }
         }
       });
     });
