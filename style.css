@@ -258,7 +258,7 @@ details[open] .accord-arrow{ transform:rotate(180deg); }
 }
 .more-tile::before{
   content:''; position:absolute; inset:0; background:linear-gradient(135deg, rgba(41,217,194,0.12), rgba(108,92,231,0.08));
-  opacity:0; transition:opacity 0.3s;
+  opacity:0; transition:opacity 0.3s; pointer-events:none;
 }
 .more-tile:hover{ transform:translateY(-2px); border-color:rgba(41,217,194,0.3); box-shadow:0 6px 20px rgba(41,217,194,0.15); }
 .more-tile:hover::before{ opacity:1; }
