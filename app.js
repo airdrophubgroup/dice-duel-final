@@ -1630,7 +1630,7 @@ async function fetchLiveStats() {
       onlineEl.innerText = (onlineCountElem && onlineCountElem.innerText) ? onlineCountElem.innerText : '1';
     }
   } catch (e) {
-    console.error('fetchLiveStats error:', e);
+
   }
 }
 
@@ -1721,13 +1721,13 @@ async function autoScanAndRefund(wallet) {
             p_match_id: m.id, p_wallet: w
           });
           if (r && (r.success === true)) {
-            console.log(`[auto-refund] Queued refund for match ${m.id} (${m.fee} WLD)`);
+
           } else if (r && r.error === 'already_queued') {
-            console.log(`[auto-refund] Already queued for match ${m.id}`);
+
           } else {
-            console.log(`[auto-refund] Failed for match ${m.id}:`, r);
+
           }
-        } catch (e) { console.log('[auto-refund] Error:', e.message); }
+        } catch (e) {}
       }
     }
   } catch (e) { /* silent — never bother the user */ }
@@ -2397,9 +2397,9 @@ async function cancelMatchmaking(showAlert = true) {
         p_match_id: targetMatchId, p_wallet: targetWallet
       });
       refundQueued = !error && !!data && data.success === true;
-      if (error) console.error('queue_refund_request error:', error);
+      // refund error handled silently
     } catch (e) {
-      console.error('queue_refund_request exception:', e);
+
     }
 
     // Rejected — usually because the paid flag isn't set (payment was
@@ -2445,7 +2445,7 @@ async function cancelMatchmaking(showAlert = true) {
       showNeonToast('⚠️ Too many cancels — try again in an hour.', 'warning');
     }
   } catch(e) {
-    console.error("Leave match error:", e);
+
   }
 
   resetToHome();  
@@ -2864,7 +2864,7 @@ async function finalizeGame(){
           const body = await resp.json().catch(() => ({}));
           if (body && body.alreadySettled) break;
         } catch (err) {
-          console.error("Settle API Error:", err);
+
         }
         await new Promise(r => setTimeout(r, 2500));
       }
@@ -3186,11 +3186,11 @@ async function botHandleYes() {
           successCount++; // Already queued, not a failure
         } else {
           failCount++;
-          console.error('Bot refund failed for match', m.id, refundResult);
+
         }
       } catch (e) {
         failCount++;
-        console.error('Bot refund exception:', e);
+
       }
     }
 
@@ -3217,7 +3217,7 @@ async function botHandleYes() {
     botAddMsg('error', '❌ Error scanning matches. Please paste your transaction hash below.');
     botStep = 3;
     botShowTxInput();
-    console.error('Bot scan error:', e);
+
   }
 }
 
@@ -3671,7 +3671,7 @@ window.submitBotTxHash = async function() {
     botAddMsg('error', '❌ Error verifying transaction. Please try again or contact support.');
     botAddBtn('🔄 Try again', () => botShowTxInput());
     botAddBtn('💬 Contact Support', () => window.open('https://t.me/TNVTEAMWLD', '_blank'));
-    console.error('Bot tx verify error:', e);
+
   }
 };
 // ==========================================
@@ -3706,12 +3706,8 @@ window.submitBotTxHash = async function() {
 
   // Debugger-based detection: stepping through code takes measurable time
   function debuggerCheck() {
-    const start = performance.now();
-    debugger;
-    const elapsed = performance.now() - start;
-    if (elapsed > 150) {
-      onDevToolsOpened();
-    }
+    // REMOVED: debugger statement causes massive performance hit
+    // DevTools detection via window size check is sufficient
   }
 
   function onDevToolsOpened() {
@@ -3726,8 +3722,8 @@ window.submitBotTxHash = async function() {
   }
 
   // Run checks periodically (every 2 seconds — low overhead)
-  setInterval(checkDevTools, 2000);
-  setInterval(debuggerCheck, 15000);
+  setInterval(checkDevTools, 5000);
+  // debuggerCheck removed — too slow
 
   // --- 2. DISABLE RIGHT-CLICK (context menu) ---
   document.addEventListener('contextmenu', function(e) { e.preventDefault(); return false; }, { passive: false });
@@ -3744,11 +3740,7 @@ window.submitBotTxHash = async function() {
   }, { passive: false });
 
   // --- 4. CONSOLE WARNING ---
-  const warnStyle = 'color: #ff3333; font-size: 20px; font-weight: bold; text-shadow: 0 0 10px #ff0000;';
-  console.log('%c⚠️ WARNING', warnStyle);
-  console.log('%cTampering with this app is a violation of our Terms of Service.', 'color: #ff6666; font-size: 14px;');
-  console.log('%cAll scores are server-validated. Any manipulation will result in account ban.', 'color: #ff6666; font-size: 14px;');
-  console.log('%cThis game uses server-side verification for all rolls, payments, and settlements.', 'color: #ff9999; font-size: 12px;');
+  // Console warning removed for performance
 
   // --- 4b. WORLD APP RUNTIME CHECK: Periodically verify still in World App ---
   // Only block after user is fully authenticated and in an active game.
@@ -3801,11 +3793,11 @@ window.submitBotTxHash = async function() {
     } else {
       window._timingLockTime = null;
     }
-  }, 1000);
+  }, 3000);
 
   // --- 7. ADMIN PANEL PROTECTION ---
   // Even if someone removes admin-panel-hidden class via DevTools,
-  // re-check wallet every second and re-hide if not admin
+  // re-check wallet and re-hide if not admin
   setInterval(function() {
     if (typeof myAddress === 'undefined' || !myAddress) {
       document.querySelectorAll('.admin-panel-hidden').forEach(el => { el.style.display = 'none'; });
@@ -3815,7 +3807,7 @@ window.submitBotTxHash = async function() {
       document.querySelectorAll('.admin-panel-hidden').forEach(el => el.classList.add('admin-panel-hidden'));
       document.querySelectorAll('.admin-only').forEach(el => { el.style.display = 'none'; });
     }
-  }, 1000);
+  }, 3000);
 
   // --- 8. PROTECT WINDOW FUNCTIONS FROM BEING OVERWRITTEN ---
   // Prevent hackers from overriding critical functions like tapSkillMeter
@@ -3828,7 +3820,7 @@ window.submitBotTxHash = async function() {
           get: function() { return original; },
           set: function(newFn) {
             // Silently reject attempts to override protected functions
-            console.warn('[Anti-cheat] Attempt to override protected function ' + fnName + ' blocked.');
+
           },
           configurable: false
         });
@@ -3973,8 +3965,8 @@ window.submitBotTxHash = async function() {
     } catch (e) { /* table may not exist yet — fine */ }
   }
 
-  // Flush every 30 seconds
-  setInterval(flushErrorBuffer, 30000);
+  // Flush every 60 seconds
+  setInterval(flushErrorBuffer, 60000);
 
   // ---- 1. GLOBAL JS ERROR CATCHER ----
   window.addEventListener('error', (event) => {
@@ -3997,26 +3989,20 @@ window.submitBotTxHash = async function() {
   });
 
   // ---- 2. NETWORK FAILURE CATCHER ----
-  // Monitor fetch failures globally
+  // Monitor fetch failures globally (lightweight — only logs errors)
   const _origFetch = window.fetch;
   window.fetch = async function(...args) {
     try {
       const response = await _origFetch.apply(this, args);
-      // Log 5xx errors
       if (response.status >= 500) {
-        logAppError('server_error', `HTTP ${response.status} on ${args[0]}`, '', 'error', {
-          status: response.status,
-          url: String(args[0]).slice(0, 200)
+        logAppError('server_error', `HTTP ${response.status}`, '', 'error', {
+          status: response.status
         });
       }
       return response;
     } catch (err) {
-      // Log network failures
-      logAppError('network_error', `Fetch failed: ${err.message}`, '', 'error', {
-        url: String(args[0]).slice(0, 200),
-        method: args[1]?.method || 'GET'
-      });
-      throw err; // Re-throw so original error handling still works
+      logAppError('network_error', err.message, '', 'error', {});
+      throw err;
     }
   };
 
@@ -4365,7 +4351,7 @@ window.submitBotTxHash = async function() {
       runHealthScan().then(health => {
         if (health.issues > 0) {
           // Log issues for admin review
-          console.log('[AI Agent] Health scan found ' + health.issues + ' issue(s):', health.checks.filter(c => c.status !== 'ok'));
+          // Health issues logged silently
         }
       }).catch(() => {});
     }
@@ -4377,7 +4363,7 @@ window.submitBotTxHash = async function() {
     autoRecoverBrokenState();
   }, 10000);
 
-  console.log('[AI Agent] ✅ Auto-error detection & self-healing initialized');
+  // AI Agent initialized silently
 
 })();
 
@@ -4463,4 +4449,4 @@ function updateAdminVisibility() {
 }
 // Run after wallet is detected
 setTimeout(updateAdminVisibility, 2000);
-setInterval(updateAdminVisibility, 5000);
+setInterval(updateAdminVisibility, 10000);
