@@ -1159,8 +1159,8 @@ window.closeAirdropsModal = function() {
 };
 
 window.openUserHistoryModal = async function() {  
-  if (!myAddress) { showNeonToast('Please sign in first!', 'warning'); return; }  
   $('user-history-modal').style.display = 'flex';  
+  if (!myAddress) { $('user-history-list').innerHTML = '<div style="text-align:center;color:var(--slate);font-size:11px;">Sign in to see match history</div>'; return; }  
   const container = $('user-history-list');  
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading history...</div>`;  
   try {  
@@ -1218,8 +1218,8 @@ window.closeUserHistoryModal = function() { $('user-history-modal').style.displa
 window.closeUserWithdrawalsModal = function() { $('user-withdrawals-modal').style.display = 'none'; };  
 
 window.openUserWithdrawalsModal = async function() {  
-  if (!myAddress) { showNeonToast('Please sign in first!', 'warning'); return; }  
   $('user-withdrawals-modal').style.display = 'flex';  
+  if (!myAddress) { $('user-withdrawals-list').innerHTML = '<div style="text-align:center;color:var(--slate);font-size:11px;">Sign in to see withdrawal requests</div>'; return; }  
   const container = $('user-withdrawals-list');  
   container.innerHTML = `<div style="text-align:center; color:var(--slate);">Loading requests...</div>`;  
   try {  
