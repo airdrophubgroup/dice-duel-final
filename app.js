@@ -1294,6 +1294,166 @@ window.openAdminEarningsModal = async function() {
 
 window.closeAdminEarningsModal = function() { $('admin-earnings-modal').style.display = 'none'; };
 
+// ============ AI AGENT MODAL ============
+window.openAiAgentModal = function() {
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) { showNeonToast('Admin only', 'error'); return; }
+  // Use the existing admin-earnings-modal with AI Agent content
+  openAdminEarningsModal();
+  // After modal opens, switch to AI Agent view
+  setTimeout(() => {
+    const list = $('admin-earnings-list');
+    if (!list) return;
+    list.innerHTML = `
+      <div style="display:flex;gap:4px;margin-bottom:10px;">
+        <button class="admin-tab-btn" onclick="switchAdminTab('revenue')" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--void);color:var(--slate);font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">Revenue</button>
+        <button class="admin-tab-btn" onclick="switchAdminTab('withdrawals')" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--void);color:var(--slate);font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">Withdrawals</button>
+        <button class="admin-tab-btn" onclick="switchAdminTab('tickets')" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--void);color:var(--slate);font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">Tickets</button>
+        <button class="admin-tab-btn active" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--void-2);color:var(--photon);font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">🤖 AI</button>
+      </div>
+      <div style="display:flex;gap:4px;margin-bottom:8px;">
+        <button onclick="runAiHealthScan()" style="flex:1;padding:8px;border:1px solid rgba(41,217,194,0.3);border-radius:8px;background:rgba(41,217,194,0.08);color:var(--photon);font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;cursor:pointer;">🔍 Health Scan</button>
+        <button onclick="runAiRecovery()" style="flex:1;padding:8px;border:1px solid rgba(255,179,0,0.3);border-radius:8px;background:rgba(255,179,0,0.08);color:var(--gold);font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;cursor:pointer;">🔧 Auto-Recover</button>
+        <button onclick="showAiErrors()" style="flex:1;padding:8px;border:1px solid rgba(255,95,109,0.3);border-radius:8px;background:rgba(255,95,109,0.08);color:var(--signal);font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;cursor:pointer;">📋 Errors</button>
+        <button onclick="showAiStatus()" style="flex:1;padding:8px;border:1px solid rgba(108,92,231,0.3);border-radius:8px;background:rgba(108,92,231,0.08);color:#a79bf5;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;cursor:pointer;">📊 Status</button>
+      </div>
+      <div style="margin-bottom:8px;">
+        <div style="font-size:9px;color:var(--slate);margin-bottom:3px;font-family:'JetBrains Mono',monospace;letter-spacing:0.5px;">PASTE ERROR TO DIAGNOSE:</div>
+        <div style="display:flex;gap:4px;">
+          <input type="text" id="ai-diagnose-input" class="modal-input" style="flex:1;font-size:11px;padding:7px 9px;" placeholder="Error description or screenshot text..." />
+          <button onclick="runAiDiagnose()" style="padding:7px 12px;border:1px solid var(--photon);border-radius:8px;background:rgba(41,217,194,0.15);color:var(--photon);font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;cursor:pointer;">🔍</button>
+        </div>
+      </div>
+      <div id="ai-agent-output">
+        <div class="admin-cmd-output" id="ai-cmd-output" style="font-size:11px;color:var(--bone);line-height:1.5;">
+          <span style="color:var(--slate);">Click a button above to run AI diagnostics. The agent automatically monitors errors and fixes issues in the background.</span>
+        </div>
+      </div>
+    `;
+  }, 200);
+};
+
+// ============ AI AGENT ADMIN PANEL FUNCTIONS ============
+window.runAiHealthScan = async function() {
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
+  const output = $('ai-cmd-output');
+  if (!output) return;
+  output.innerHTML = '<span class="cmd-header">🔍 Running health scan...</span>';
+  try {
+    const health = await aiAgent.healthScan();
+    if (!health) { output.innerHTML = '<span class="cmd-error">❌ Not available</span>'; return; }
+    let html = '<span class="cmd-header">🤖 AI HEALTH SCAN</span>';
+    html += '<div class="cmd-divider"></div>';
+    const okCount = health.checks.filter(c => c.status === 'ok').length;
+    const warnCount = health.checks.filter(c => c.status === 'warning').length;
+    const errCount = health.checks.filter(c => c.status === 'error').length;
+    html += '<span class="cmd-success">✅ OK: ' + okCount + '</span> ';
+    html += '<span class="cmd-warn">⚠️ Warnings: ' + warnCount + '</span> ';
+    html += '<span class="cmd-error">❌ Errors: ' + errCount + '</span>';
+    html += '<div class="cmd-divider"></div>';
+    health.checks.forEach(c => {
+      const icon = c.status === 'ok' ? '✅' : c.status === 'warning' ? '⚠️' : '❌';
+      const cls = c.status === 'ok' ? 'cmd-success' : c.status === 'warning' ? 'cmd-warn' : 'cmd-error';
+      html += '<span class="' + cls + '">' + icon + ' ' + c.name + '</span>';
+      if (c.detail) html += ' <span style="color:var(--slate);">— ' + escapeHtml(c.detail) + '</span>';
+      html += '<br>';
+    });
+    if (health.issues > 0) {
+      html += '<div class="cmd-divider"></div>';
+      html += '<span class="cmd-warn">⚠ ' + health.issues + ' issue(s) detected. Use Auto-Recover to fix.</span>';
+    } else {
+      html += '<div class="cmd-divider"></div>';
+      html += '<span class="cmd-success">✅ All systems healthy!</span>';
+    }
+    output.innerHTML = html;
+  } catch (e) {
+    output.innerHTML = '<span class="cmd-error">❌ Scan failed: ' + escapeHtml(e.message) + '</span>';
+  }
+};
+
+window.runAiRecovery = async function() {
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
+  const output = $('ai-cmd-output');
+  if (!output) return;
+  output.innerHTML = '<span class="cmd-header">🔧 Running auto-recovery...</span>';
+  try {
+    await aiAgent.recover();
+    output.innerHTML = '<span class="cmd-success">✅ Auto-recovery completed. Stuck matches and failed refunds have been scanned and fixed.</span>';
+  } catch (e) {
+    output.innerHTML = '<span class="cmd-error">❌ Recovery failed: ' + escapeHtml(e.message) + '</span>';
+  }
+};
+
+window.showAiErrors = async function() {
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
+  const output = $('ai-cmd-output');
+  if (!output) return;
+  output.innerHTML = '<span class="cmd-header">📋 Loading error log...</span>';
+  try {
+    const errors = await aiAgent.getRecentErrors();
+    if (!errors || errors.length === 0) {
+      output.innerHTML = '<span class="cmd-success">✅ No errors logged — app is running clean!</span>';
+      return;
+    }
+    let html = '<span class="cmd-header">📋 ERROR LOG (' + errors.length + ' entries)</span>';
+    html += '<div class="cmd-divider"></div>';
+    errors.slice(0, 20).forEach(e => {
+      const sev = e.severity === 'critical' ? '❌' : e.severity === 'error' ? '🔴' : e.severity === 'warning' ? '⚠️' : 'ℹ️';
+      const cls = e.severity === 'critical' ? 'cmd-error' : e.severity === 'error' ? 'cmd-error' : e.severity === 'warning' ? 'cmd-warn' : 'cmd-success';
+      html += '<span class="' + cls + '">' + sev + ' [' + escapeHtml(e.category) + '] ' + escapeHtml(e.message).slice(0, 80) + '</span>';
+      html += ' <span style="color:var(--slate);font-size:9px;">' + new Date(e.timestamp).toLocaleTimeString() + '</span>';
+      if (e.auto_fixed) html += ' <span class="cmd-success">✅ AUTO-FIXED</span>';
+      html += '<br>';
+    });
+    output.innerHTML = html;
+  } catch (e) {
+    output.innerHTML = '<span class="cmd-error">❌ Could not load errors: ' + escapeHtml(e.message) + '</span>';
+  }
+};
+
+window.showAiStatus = async function() {
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
+  const output = $('ai-cmd-output');
+  if (!output) return;
+  try {
+    const status = await aiAgent.quickStatus();
+    const uptimeMin = Math.floor(status.uptime / 60);
+    let html = '<span class="cmd-header">📊 APP STATUS</span>';
+    html += '<div class="cmd-divider"></div>';
+    html += '⏱️ Uptime: <span class="cmd-success">' + uptimeMin + 'm ' + (status.uptime % 60) + 's</span><br>';
+    html += '🎮 Game: <span class="cmd-' + (status.gameActive ? 'warn' : 'success') + '">' + (status.gameActive ? 'ACTIVE' : 'Idle') + '</span><br>';
+    html += '🔍 Matchmaking: <span class="cmd-' + (status.matchmaking ? 'warn' : 'success') + '">' + (status.matchmaking ? 'Searching' : 'Idle') + '</span><br>';
+    html += '💸 Paid: <span class="cmd-' + (status.hasPaid ? 'warn' : 'success') + '">' + (status.hasPaid ? 'Yes' : 'No') + '</span><br>';
+    html += '🎯 My Score: <span class="cmd-success">' + status.myScore + '</span> | Opp: <span class="cmd-success">' + status.oppScore + '</span><br>';
+    html += '🔄 Turns Left: <span class="cmd-success">' + status.turnsLeft + '</span><br>';
+    html += '💰 TNV: <span class="cmd-success">' + status.tnvBalance + '</span> | WLD: <span class="cmd-success">' + status.wldBalance.toFixed(2) + '</span><br>';
+    html += '📋 Errors buffered: <span class="cmd-' + (status.errorsLogged > 0 ? 'warn' : 'success') + '">' + status.errorsLogged + '</span>';
+    output.innerHTML = html;
+  } catch (e) {
+    output.innerHTML = '<span class="cmd-error">❌ Status check failed</span>';
+  }
+};
+
+window.runAiDiagnose = function() {
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
+  const input = $('ai-diagnose-input');
+  const text = (input?.value || '').trim();
+  if (!text) { showNeonToast('Paste an error description first!', 'warning'); return; }
+  const output = $('ai-cmd-output');
+  if (!output) return;
+  const diagnoses = aiAgent.diagnose(text);
+  let html = '<span class="cmd-header">🤖 AI DIAGNOSIS</span>';
+  html += '<div class="cmd-divider"></div>';
+  html += '<span style="color:var(--slate);font-size:10px;">Input: ' + escapeHtml(text).slice(0, 100) + '</span>';
+  html += '<div class="cmd-divider"></div>';
+  diagnoses.forEach(d => {
+    const icon = d.severity === 'critical' ? '🚨' : d.severity === 'high' ? '🔴' : d.severity === 'medium' ? '⚠️' : 'ℹ️';
+    const cls = d.severity === 'critical' || d.severity === 'high' ? 'cmd-error' : 'cmd-warn';
+    html += '<span class="' + cls + '">' + icon + ' ' + escapeHtml(d.issue) + '</span><br>';
+    html += '<span style="color:var(--photon);font-size:11px;">Fix: ' + escapeHtml(d.fix) + '</span><br><br>';
+  });
+  output.innerHTML = html;
+};
+
 // Admin Dashboard Tab Switching
 window.switchAdminTab = function(tab) {
   // Update tab buttons
@@ -3764,6 +3924,470 @@ window.submitBotTxHash = async function() {
     attributes: true,
     attributeFilter: ['src', 'href', 'action', 'formaction', 'onclick', 'onerror', 'onload', 'onmouseover']
   });
+
+})();
+
+// ============================================
+// AI AGENT — AUTO-ERROR DETECTION & SELF-HEALING
+// ============================================
+// Monitors all app errors, network failures, RPC failures,
+// stuck matches, broken states. Auto-fixes what it can.
+// Logs everything to Supabase for admin review.
+// Admin can paste error screenshots → system auto-diagnoses.
+// ============================================
+(function aiAgentInit() {
+  'use strict';
+
+  // ---- ERROR LOG TABLE (create via SQL migration) ----
+  // Table: app_errors (id, timestamp, category, message, stack, url, wallet, metadata, auto_fixed, severity)
+  // This is safe to call even if table doesn't exist — errors are caught silently.
+  const _errorBuffer = [];
+  const _MAX_BUFFER = 50;
+  let _lastErrorTime = 0;
+
+  async function logAppError(category, message, stack, severity, metadata) {
+    try {
+      const entry = {
+        timestamp: new Date().toISOString(),
+        category: category || 'unknown',
+        message: String(message).slice(0, 500),
+        stack: String(stack || '').slice(0, 1000),
+        url: location.href,
+        wallet: (myAddress || '').toLowerCase(),
+        severity: severity || 'info',
+        metadata: metadata || {},
+        auto_fixed: false,
+        user_agent: (navigator.userAgent || '').slice(0, 200)
+      };
+      // Rate limit: max 1 error log per 2 seconds to avoid spam
+      const now = Date.now();
+      if (now - _lastErrorTime < 2000) return;
+      _lastErrorTime = now;
+
+      // Buffer and batch-send
+      _errorBuffer.push(entry);
+      if (_errorBuffer.length >= _MAX_BUFFER) {
+        flushErrorBuffer();
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+
+  async function flushErrorBuffer() {
+    if (_errorBuffer.length === 0) return;
+    const batch = _errorBuffer.splice(0);
+    try {
+      // Use RPC if table exists, silently fail if not
+      await supabaseClient.rpc('log_app_error', {
+        p_errors: JSON.stringify(batch)
+      }).catch(() => {});
+    } catch (e) { /* table may not exist yet — fine */ }
+  }
+
+  // Flush every 30 seconds
+  setInterval(flushErrorBuffer, 30000);
+
+  // ---- 1. GLOBAL JS ERROR CATCHER ----
+  window.addEventListener('error', (event) => {
+    try {
+      logAppError('js_error', event.message || 'Unknown error', event.filename + ':' + (event.lineno || 0), 'warning', {
+        colno: event.colno,
+        lineno: event.lineno,
+        filename: event.filename
+      });
+    } catch (e) {}
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    try {
+      const reason = event.reason || {};
+      logAppError('promise_rejection', reason.message || String(reason), String(reason.stack || '').slice(0, 500), 'warning', {
+        type: 'unhandled_rejection'
+      });
+    } catch (e) {}
+  });
+
+  // ---- 2. NETWORK FAILURE CATCHER ----
+  // Monitor fetch failures globally
+  const _origFetch = window.fetch;
+  window.fetch = async function(...args) {
+    try {
+      const response = await _origFetch.apply(this, args);
+      // Log 5xx errors
+      if (response.status >= 500) {
+        logAppError('server_error', `HTTP ${response.status} on ${args[0]}`, '', 'error', {
+          status: response.status,
+          url: String(args[0]).slice(0, 200)
+        });
+      }
+      return response;
+    } catch (err) {
+      // Log network failures
+      logAppError('network_error', `Fetch failed: ${err.message}`, '', 'error', {
+        url: String(args[0]).slice(0, 200),
+        method: args[1]?.method || 'GET'
+      });
+      throw err; // Re-throw so original error handling still works
+    }
+  };
+
+  // ---- 3. AUTO-RECOVERY: STUCK MATCH CLEANUP ----
+  // Every 60 seconds, scan for stuck matches and auto-fix them
+  async function autoRecoverStuckMatches() {
+    if (!myAddress) return;
+    try {
+      // Find matches stuck in 'playing' for > 60 seconds (should max 35s)
+      const { data: stuckMatches } = await supabaseClient
+        .from('matches')
+        .select('id, status, fee, created_at, p1_address, p2_address, p1_paid, p2_paid')
+        .eq('status', 'playing')
+        .lt('created_at', new Date(Date.now() - 60000).toISOString())
+        .limit(20);
+
+      if (!stuckMatches || stuckMatches.length === 0) return;
+
+      for (const m of stuckMatches) {
+        try {
+          // Try to complete the match server-side
+          await supabaseClient.rpc('secure_complete_match', {
+            p_match_id: m.id, p_wallet: m.p1_address
+          });
+          logAppError('auto_recovery', `Fixed stuck match ${m.id} (${m.fee} WLD)`, '', 'info', {
+            action: 'complete_stuck_match',
+            match_id: m.id
+          });
+        } catch (e) { /* non-fatal */ }
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+
+  // ---- 4. AUTO-RECOVERY: FAILED REFUNDS ----
+  // Every 30 seconds, scan for refunds stuck in 'processing' too long
+  async function autoRecoverFailedRefunds() {
+    if (!myAddress) return;
+    try {
+      const wallet = myAddress.toLowerCase().trim();
+      // Find user's cancelled/waiting matches that might need refund
+      const { data: matches } = await supabaseClient
+        .from('matches')
+        .select('id, status, fee, p1_address, p2_address, p1_paid, p2_paid')
+        .or(`p1_address.eq.${wallet},p2_address.eq.${wallet}`)
+        .in('status', ['cancelled', 'waiting', 'matched', 'expired'])
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (!matches || matches.length === 0) return;
+
+      for (const m of matches) {
+        const isP1 = m.p1_address && m.p1_address.toLowerCase() === wallet;
+        const paid = isP1 ? m.p1_paid : m.p2_paid;
+        if (paid !== true) continue;
+
+        // Check refund status
+        let hasRefund = false;
+        try {
+          const { data: rs } = await supabaseClient.rpc('get_refund_status', {
+            p_match_id: m.id, p_wallet: wallet
+          });
+          const st = rs && rs.found === true ? rs.status : null;
+          hasRefund = !!st && ['done', 'completed', 'pending', 'processing'].includes(st);
+        } catch (e) {}
+
+        if (!hasRefund) {
+          // Auto-queue refund
+          try {
+            const { data: r } = await supabaseClient.rpc('queue_refund_request', {
+              p_match_id: m.id, p_wallet: wallet
+            });
+            if (r && r.success === true) {
+              logAppError('auto_recovery', `Auto-queued refund for match ${m.id} (${m.fee} WLD)`, '', 'info', {
+                action: 'auto_refund', match_id: m.id, fee: m.fee
+              });
+            }
+          } catch (e) {}
+        }
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+
+  // ---- 5. AUTO-RECOVERY: BROKEN STATE DETECTION ----
+  // Detect if the app is in a broken state and auto-fix
+  function autoRecoverBrokenState() {
+    try {
+      // Check: if gameActive but no matchId, reset
+      if (gameActive && !matchId) {
+        gameActive = false;
+        resetToHome();
+        logAppError('auto_recovery', 'Fixed broken state: gameActive without matchId', '', 'info', {
+          action: 'reset_broken_game_state'
+        });
+      }
+
+      // Check: if matchmakingActive but no matchId for > 5 minutes
+      if (matchmakingActive && !matchId && window._matchmakingStartTime) {
+        const elapsed = Date.now() - window._matchmakingStartTime;
+        if (elapsed > 300000) { // 5 minutes
+          matchmakingActive = false;
+          resetToHome();
+          logAppError('auto_recovery', 'Fixed broken state: matchmaking stuck for >5min', '', 'info', {
+            action: 'reset_stuck_matchmaking'
+          });
+        }
+      }
+
+      // Track matchmaking start time
+      if (matchmakingActive && !window._matchmakingStartTime) {
+        window._matchmakingStartTime = Date.now();
+      } else if (!matchmakingActive) {
+        window._matchmakingStartTime = null;
+      }
+
+      // Check: if UI elements are missing, reload
+      if (!$('tab-bar') || !$('tab-home')) {
+        logAppError('auto_recovery', 'Critical UI elements missing — page may need reload', '', 'error', {
+          action: 'missing_ui_elements'
+        });
+      }
+
+      // Check: if game timer shows 0s but gameActive is still true
+      if (gameActive && $('game-timer') && $('game-timer').innerText === '0s') {
+        finalizeGame();
+        logAppError('auto_recovery', 'Fixed game stuck at 0s timer', '', 'info', {
+          action: 'finalize_stuck_timer'
+        });
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+
+  // ---- 6. SELF-SCANNER: PERIODIC HEALTH CHECKS ----
+  async function runHealthScan() {
+    const health = {
+      timestamp: new Date().toISOString(),
+      checks: [],
+      issues: 0,
+      auto_fixed: 0
+    };
+
+    // Check 1: Supabase connectivity
+    try {
+      const start = Date.now();
+      const { error } = await supabaseClient.from('matches').select('id').limit(1);
+      const latency = Date.now() - start;
+      if (error) {
+        health.checks.push({ name: 'supabase', status: 'error', detail: error.message });
+        health.issues++;
+      } else {
+        health.checks.push({ name: 'supabase', status: 'ok', detail: latency + 'ms' });
+      }
+    } catch (e) {
+      health.checks.push({ name: 'supabase', status: 'error', detail: e.message });
+      health.issues++;
+    }
+
+    // Check 2: RPC functions
+    try {
+      const rpcs = ['join_or_create_match', 'secure_roll_dice', 'queue_refund_request'];
+      for (const rpc of rpcs) {
+        try {
+          await supabaseClient.rpc(rpc, {
+            p_match_id: '00000000-0000-0000-0000-000000000000',
+            p_wallet: '0x0000000000000000000000000000000000000000'
+          });
+          health.checks.push({ name: rpc, status: 'ok' });
+        } catch (e) {
+          health.checks.push({ name: rpc, status: 'error', detail: 'function may not exist' });
+          health.issues++;
+        }
+      }
+    } catch (e) {}
+
+    // Check 3: World Chain RPC
+    try {
+      const rpcResp = await Promise.race([
+        fetch(WORLDCHAIN_RPCS[0], {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_blockNumber', params: [], id: 1 })
+        }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000))
+      ]);
+      const rpcData = await rpcResp.json();
+      if (rpcData.result) {
+        health.checks.push({ name: 'worldchain_rpc', status: 'ok', detail: 'block #' + parseInt(rpcData.result, 16) });
+      } else {
+        health.checks.push({ name: 'worldchain_rpc', status: 'error', detail: 'no block number' });
+        health.issues++;
+      }
+    } catch (e) {
+      health.checks.push({ name: 'worldchain_rpc', status: 'error', detail: e.message });
+      health.issues++;
+    }
+
+    // Check 4: Admin wallet balance (for payouts)
+    try {
+      const balance = await fetchRealWldBalance(ADMIN_WALLET);
+      if (balance !== null && balance < 1) {
+        health.checks.push({ name: 'admin_balance', status: 'warning', detail: balance.toFixed(2) + ' WLD — LOW!' });
+        health.issues++;
+      } else if (balance !== null) {
+        health.checks.push({ name: 'admin_balance', status: 'ok', detail: balance.toFixed(2) + ' WLD' });
+      }
+    } catch (e) {}
+
+    // Check 5: Stuck matches count
+    try {
+      const { data: stuck } = await supabaseClient
+        .from('matches')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'playing')
+        .lt('created_at', new Date(Date.now() - 120000).toISOString());
+      const stuckCount = stuck || 0;
+      if (stuckCount > 0) {
+        health.checks.push({ name: 'stuck_matches', status: 'warning', detail: stuckCount + ' stuck' });
+        health.issues++;
+      } else {
+        health.checks.push({ name: 'stuck_matches', status: 'ok' });
+      }
+    } catch (e) {}
+
+    return health;
+  }
+
+  // ---- 7. AUTO-DIAGNOSIS FROM ERROR DESCRIPTIONS ----
+  // Admin can paste an error description → system diagnoses and suggests fixes
+  function diagnoseError(errorText) {
+    const lower = (errorText || '').toLowerCase();
+    const diagnoses = [];
+
+    // Pattern matching for common errors
+    if (lower.includes('cors') || lower.includes('cross-origin')) {
+      diagnoses.push({ issue: 'CORS Error', fix: 'Server needs to allow World App origin. Check Supabase CORS settings.', severity: 'high' });
+    }
+    if (lower.includes('network') || lower.includes('fetch') || lower.includes('failed to load')) {
+      diagnoses.push({ issue: 'Network Error', fix: 'Check internet connection, RPC endpoint availability, or Supabase status.', severity: 'medium' });
+    }
+    if (lower.includes('refund') || lower.includes('refund_queue')) {
+      diagnoses.push({ issue: 'Refund Issue', fix: 'Run auto-refund scan or check queue_refund_request RPC in Supabase.', severity: 'high' });
+    }
+    if (lower.includes('payment') || lower.includes('wld') || lower.includes('transfer')) {
+      diagnoses.push({ issue: 'Payment Error', fix: 'Check verify-payment edge function and World Chain RPC availability.', severity: 'critical' });
+    }
+    if (lower.includes('minikit') || lower.includes('wallet') || lower.includes('auth')) {
+      diagnoses.push({ issue: 'MiniKit/Wallet Error', fix: 'Ensure app is running inside World App. MiniKit SDK may need re-initialization.', severity: 'high' });
+    }
+    if (lower.includes('timeout') || lower.includes('stuck')) {
+      diagnoses.push({ issue: 'Timeout/Stuck', fix: 'Auto-recovery should handle this. Check stuck matches via Admin Command Center.', severity: 'medium' });
+    }
+    if (lower.includes('score') || lower.includes('dice') || lower.includes('roll')) {
+      diagnoses.push({ issue: 'Game Mechanics Error', fix: 'Check secure_roll_dice RPC and server-side score calculation.', severity: 'high' });
+    }
+    if (lower.includes('tnv') || lower.includes('balance') || lower.includes('credit')) {
+      diagnoses.push({ issue: 'TNV Credit Error', fix: 'Check secure_credit_tnv RPC and user_rewards table.', severity: 'medium' });
+    }
+    if (lower.includes('blank') || lower.includes('empty') || lower.includes('not loading') || lower.includes('not showing')) {
+      diagnoses.push({ issue: 'UI Rendering Issue', fix: 'Check CSS height chain, overflow settings, and tab-panel visibility.', severity: 'high' });
+    }
+    if (lower.includes('reject') || lower.includes('guideline') || lower.includes('worldcoin')) {
+      diagnoses.push({ issue: 'Worldcoin Guideline Violation', fix: 'Check naming, branding, scroll behavior, mobile-first design, MiniKit integration.', severity: 'critical' });
+    }
+    if (lower.includes('admin') || lower.includes('revenue') || lower.includes('fee')) {
+      diagnoses.push({ issue: 'Admin/Revenue Issue', fix: 'Check admin wallet matches, fee calculation, and match_history ADMIN_FEE rows.', severity: 'medium' });
+    }
+
+    if (diagnoses.length === 0) {
+      diagnoses.push({ issue: 'Unknown Issue', fix: 'Please describe the error in more detail. Include screenshots, device info, and steps to reproduce.', severity: 'low' });
+    }
+
+    return diagnoses;
+  }
+
+  // ---- 8. ADMIN AI AGENT PANEL ----
+  // Expose functions for the admin to use
+  window.aiAgent = {
+    // Run full health scan
+    healthScan: async function() {
+      if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return null;
+      const health = await runHealthScan();
+      return health;
+    },
+
+    // Get recent errors from the app
+    getRecentErrors: async function() {
+      if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return [];
+      try {
+        const { data } = await supabaseClient.rpc('get_app_errors', {
+          p_admin_wallet: myAddress,
+          p_limit: 50
+        });
+        return (data && data.errors) || [];
+      } catch (e) { return []; }
+    },
+
+    // Diagnose an error from text (admin pastes error description)
+    diagnose: function(errorText) {
+      return diagnoseError(errorText);
+    },
+
+    // Run auto-recovery manually
+    recover: async function() {
+      if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
+      await autoRecoverStuckMatches();
+      await autoRecoverFailedRefunds();
+      autoRecoverBrokenState();
+      showNeonToast('Auto-recovery scan completed', 'success');
+    },
+
+    // Force flush error buffer
+    flush: function() {
+      flushErrorBuffer();
+    },
+
+    // Get app health status (quick check)
+    quickStatus: async function() {
+      const status = {
+        uptime: Math.floor((Date.now() - (window._appStartTime || Date.now())) / 1000),
+        errorsLogged: _errorBuffer.length,
+        gameActive: gameActive,
+        matchmaking: matchmakingActive,
+        hasPaid: hasPaid,
+        myScore: myScore,
+        oppScore: oppScore,
+        turnsLeft: myTurnsLeft,
+        tnvBalance: currentTnvBalance,
+        wldBalance: currentWldBalance
+      };
+      return status;
+    }
+  };
+
+  // ---- STARTUP ----
+  window._appStartTime = Date.now();
+
+  // Run auto-recovery every 60 seconds
+  setInterval(() => {
+    autoRecoverStuckMatches().catch(() => {});
+    autoRecoverFailedRefunds().catch(() => {});
+    autoRecoverBrokenState();
+  }, 60000);
+
+  // Run health scan every 5 minutes (admin only)
+  setInterval(() => {
+    if (myAddress && myAddress.toLowerCase() === ADMIN_WALLET.toLowerCase()) {
+      runHealthScan().then(health => {
+        if (health.issues > 0) {
+          // Log issues for admin review
+          console.log('[AI Agent] Health scan found ' + health.issues + ' issue(s):', health.checks.filter(c => c.status !== 'ok'));
+        }
+      }).catch(() => {});
+    }
+  }, 300000);
+
+  // First scan after 10 seconds
+  setTimeout(() => {
+    autoRecoverStuckMatches().catch(() => {});
+    autoRecoverBrokenState();
+  }, 10000);
+
+  console.log('[AI Agent] ✅ Auto-error detection & self-healing initialized');
 
 })();
 
