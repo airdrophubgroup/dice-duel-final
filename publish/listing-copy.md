@@ -42,7 +42,7 @@ TNV Duel Arena
 
 ### Short Description (max ~80 chars)
 ```
-1v1 skill timing duel with WLD entry fees. Win WLD payouts + TNV rewards.
+1v1 skill timing duel. Find opponent, pay to play, win WLD + TNV rewards.
 ```
 
 ### Category
@@ -133,12 +133,24 @@ skill duel, game, wld, win, rewards, tnv, arena, battle, 1v1, multiplayer, timin
 
 ## What reviewers check (World App guidelines)
 
-- App opens and works inside World App webview
+- App opens and works inside World App webview ✅
 - Wallet sign-in works (MiniKit walletAuth) ✅
+- Wallet payment works (MiniKit commandsAsync.pay) ✅
 - Usernames shown, not raw addresses ✅
-- No 'official' wording, no World logo in branding
-- No token pre-sales, no paid membership tiers ✅ (none)
+- No 'official' wording, no World logo in branding ✅
+- No token pre-sales, no paid membership tiers ✅
 - Skill-based timing mechanic (not chance/RNG) ✅
 - Mobile-first, compact UI, no long scroll ✅
 - No emojis in app name or descriptions ✅
 - Description avoids generic terms like "Earn" ✅
+- 4-tab bottom navigation, no hamburger/sidebar/footer ✅
+- iOS scroll bounce prevention (overscroll-behavior:none) ✅
+- Safe area insets respected ✅
+- Consent modal for data collection ✅
+- Support email visible ✅
+- CSP + X-Frame-Options headers ✅
+- Search-before-pay flow (opponent found before payment) ✅
+- 6-second payment timeout with warning ✅
+- Auto-refund on cancel/timeout ✅
+- Anti-cheat (server-validated rolls, rate limiting, reconnection cap) ✅
+- Privacy: only own data visible (RLS + RPCs) ✅
