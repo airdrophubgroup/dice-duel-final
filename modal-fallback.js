@@ -49,23 +49,35 @@
     if (btn) btn.click();
   };
 
-  // Backup: attach addEventListener to every more-tile button so clicks
-  // work even if inline onclick is somehow stripped or blocked.
+  // Backup: attach addEventListener to ALL buttons with onclick attrs.
+  // This ensures clicks work even if inline onclick is blocked by
+  // CSP, module loading order, or the preview tool.
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bindMoreTiles);
+    document.addEventListener('DOMContentLoaded', bindAllButtons);
   } else {
-    bindMoreTiles();
+    bindAllButtons();
   }
-  function bindMoreTiles() {
-    var tiles = document.querySelectorAll('.more-tile[onclick]');
-    tiles.forEach(function(tile) {
-      tile.addEventListener('click', function(e) {
-        var onclickStr = tile.getAttribute('onclick');
+  function bindAllButtons() {
+    // Find every element with an inline onclick
+    var allOnclick = document.querySelectorAll('[onclick]');
+    allOnclick.forEach(function(el) {
+      el.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var onclickStr = el.getAttribute('onclick');
         if (!onclickStr) return;
-        // Extract function name: 'openUserHistoryModal()' -> 'openUserHistoryModal'
-        var fnName = onclickStr.replace(/\(\).*$/, '').trim();
-        if (typeof window[fnName] === 'function') {
-          window[fnName]();
+        // Extract function name: 'closeUserHistoryModal()' -> 'closeUserHistoryModal'
+        var match = onclickStr.match(/^\s*(\w+)\s*\(/);
+        if (match && typeof window[match[1]] === 'function') {
+          window[match[1]]();
+        }
+      });
+    });
+    // Also make clicking the modal backdrop (outside .modal-card) close it
+    document.querySelectorAll('.custom-modal').forEach(function(modal) {
+      modal.addEventListener('click', function(e) {
+        // Only close if clicking the backdrop itself, not a child
+        if (e.target === modal) {
+          modal.style.display = 'none';
         }
       });
     });
