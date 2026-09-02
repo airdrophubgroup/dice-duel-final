@@ -7,6 +7,11 @@
 // ============================================================
 
 (function() {
+  // Make $ globally available for all functions (module fallback)
+  if (typeof window.$ === 'undefined') {
+    window.$ = function(id) { return document.getElementById(id); };
+  }
+
   function _modal(id, show) {
     var m = document.getElementById(id);
     if (m) m.style.display = show ? 'flex' : 'none';
