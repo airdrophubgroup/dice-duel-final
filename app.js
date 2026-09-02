@@ -1297,45 +1297,35 @@ window.closeAdminEarningsModal = function() { $('admin-earnings-modal').style.di
 // ============ AI AGENT MODAL ============
 window.openAiAgentModal = function() {
   if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) { showNeonToast('Admin only', 'error'); return; }
-  // Use the existing admin-earnings-modal with AI Agent content
-  openAdminEarningsModal();
-  // After modal opens, switch to AI Agent view
-  setTimeout(() => {
-    const list = $('admin-earnings-list');
-    if (!list) return;
-    list.innerHTML = `
-      <div style="display:flex;gap:4px;margin-bottom:10px;">
-        <button class="admin-tab-btn" onclick="switchAdminTab('revenue')" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--void);color:var(--slate);font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">Revenue</button>
-        <button class="admin-tab-btn" onclick="switchAdminTab('withdrawals')" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--void);color:var(--slate);font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">Withdrawals</button>
-        <button class="admin-tab-btn" onclick="switchAdminTab('tickets')" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--void);color:var(--slate);font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">Tickets</button>
-        <button class="admin-tab-btn active" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--void-2);color:var(--photon);font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">🤖 AI</button>
-      </div>
-      <div style="display:flex;gap:4px;margin-bottom:8px;">
-        <button onclick="runAiHealthScan()" style="flex:1;padding:8px;border:1px solid rgba(41,217,194,0.3);border-radius:8px;background:rgba(41,217,194,0.08);color:var(--photon);font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;cursor:pointer;">🔍 Health Scan</button>
-        <button onclick="runAiRecovery()" style="flex:1;padding:8px;border:1px solid rgba(255,179,0,0.3);border-radius:8px;background:rgba(255,179,0,0.08);color:var(--gold);font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;cursor:pointer;">🔧 Auto-Recover</button>
-        <button onclick="showAiErrors()" style="flex:1;padding:8px;border:1px solid rgba(255,95,109,0.3);border-radius:8px;background:rgba(255,95,109,0.08);color:var(--signal);font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;cursor:pointer;">📋 Errors</button>
-        <button onclick="showAiStatus()" style="flex:1;padding:8px;border:1px solid rgba(108,92,231,0.3);border-radius:8px;background:rgba(108,92,231,0.08);color:#a79bf5;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;cursor:pointer;">📊 Status</button>
-      </div>
-      <div style="margin-bottom:8px;">
-        <div style="font-size:9px;color:var(--slate);margin-bottom:3px;font-family:'JetBrains Mono',monospace;letter-spacing:0.5px;">PASTE ERROR TO DIAGNOSE:</div>
-        <div style="display:flex;gap:4px;">
-          <input type="text" id="ai-diagnose-input" class="modal-input" style="flex:1;font-size:11px;padding:7px 9px;" placeholder="Error description or screenshot text..." />
-          <button onclick="runAiDiagnose()" style="padding:7px 12px;border:1px solid var(--photon);border-radius:8px;background:rgba(41,217,194,0.15);color:var(--photon);font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;cursor:pointer;">🔍</button>
-        </div>
-      </div>
-      <div id="ai-agent-output">
-        <div class="admin-cmd-output" id="ai-cmd-output" style="font-size:11px;color:var(--bone);line-height:1.5;">
-          <span style="color:var(--slate);">Click a button above to run AI diagnostics. The agent automatically monitors errors and fixes issues in the background.</span>
-        </div>
-      </div>
-    `;
-  }, 200);
+  $('ai-agent-modal').style.display = 'flex';
+};
+
+window.closeAiAgentModal = function() {
+  $('ai-agent-modal').style.display = 'none';
+};
+
+window.runAiDiagnoseModal = function() {
+  const input = $('ai-diagnose-input-modal');
+  const text = (input?.value || '').trim();
+  if (!text) { showNeonToast('Paste an error first!', 'warning'); return; }
+  const output = $('ai-cmd-output-modal');
+  if (!output) return;
+  const diagnoses = aiAgent.diagnose(text);
+  let html = '<span class="cmd-header">🤖 AI DIAGNOSIS</span>';
+  html += '<div class="cmd-divider"></div>';
+  diagnoses.forEach(d => {
+    const icon = d.severity === 'critical' ? '🚨' : d.severity === 'high' ? '🔴' : d.severity === 'medium' ? '⚠️' : 'ℹ️';
+    const cls = d.severity === 'critical' || d.severity === 'high' ? 'cmd-error' : 'cmd-warn';
+    html += '<span class="' + cls + '">' + icon + ' ' + escapeHtml(d.issue) + '</span><br>';
+    html += '<span style="color:var(--photon);font-size:11px;">Fix: ' + escapeHtml(d.fix) + '</span><br><br>';
+  });
+  output.innerHTML = html;
 };
 
 // ============ AI AGENT ADMIN PANEL FUNCTIONS ============
 window.runAiHealthScan = async function() {
   if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
-  const output = $('ai-cmd-output');
+  const output = $('ai-cmd-output-modal') || $('ai-cmd-output');
   if (!output) return;
   output.innerHTML = '<span class="cmd-header">🔍 Running health scan...</span>';
   try {
@@ -1372,7 +1362,7 @@ window.runAiHealthScan = async function() {
 
 window.runAiRecovery = async function() {
   if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
-  const output = $('ai-cmd-output');
+  const output = $('ai-cmd-output-modal') || $('ai-cmd-output');
   if (!output) return;
   output.innerHTML = '<span class="cmd-header">🔧 Running auto-recovery...</span>';
   try {
@@ -1385,7 +1375,7 @@ window.runAiRecovery = async function() {
 
 window.showAiErrors = async function() {
   if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
-  const output = $('ai-cmd-output');
+  const output = $('ai-cmd-output-modal') || $('ai-cmd-output');
   if (!output) return;
   output.innerHTML = '<span class="cmd-header">📋 Loading error log...</span>';
   try {
@@ -1412,7 +1402,7 @@ window.showAiErrors = async function() {
 
 window.showAiStatus = async function() {
   if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
-  const output = $('ai-cmd-output');
+  const output = $('ai-cmd-output-modal') || $('ai-cmd-output');
   if (!output) return;
   try {
     const status = await aiAgent.quickStatus();
@@ -1435,10 +1425,10 @@ window.showAiStatus = async function() {
 
 window.runAiDiagnose = function() {
   if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
-  const input = $('ai-diagnose-input');
+  const input = $('ai-diagnose-input-modal') || $('ai-diagnose-input');
   const text = (input?.value || '').trim();
   if (!text) { showNeonToast('Paste an error description first!', 'warning'); return; }
-  const output = $('ai-cmd-output');
+  const output = $('ai-cmd-output-modal') || $('ai-cmd-output');
   if (!output) return;
   const diagnoses = aiAgent.diagnose(text);
   let html = '<span class="cmd-header">🤖 AI DIAGNOSIS</span>';
