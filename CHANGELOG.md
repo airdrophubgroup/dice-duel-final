@@ -1,5 +1,14 @@
 # Changelog — TNV Duel Arena
 
+## Version 1.0.4 (September 2026)
+
+### Worldcoin Guideline Compliance (Major)
+- **Compacted all UI sections** — reduced home card padding (24px→18px), header padding (24px→16px), more-tile padding (24px→16px), and card gaps (32px→18px) to eliminate long scrolling.
+- **Fixed payout table grid** — corrected CSS grid from 4 columns to 3 columns to match the HTML header row.
+- **Reduced More tab item sizes** — smaller icons, tighter gaps, compact stat cards so all 10 items + Live Stats fit in viewport.
+- **Reduced app padding** — tighter 20px side margins for a more mobile-native feel.
+- **Reduced tab panel padding-bottom** — less blank space at the bottom of each tab.
+
 ## Version 1.0.3 (September 2026)
 
 ### Bug Fixes
