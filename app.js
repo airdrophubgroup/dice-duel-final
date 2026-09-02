@@ -1296,7 +1296,6 @@ window.closeAdminEarningsModal = function() { $('admin-earnings-modal').style.di
 
 // ============ AI AGENT MODAL ============
 window.openAiAgentModal = function() {
-  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) { showNeonToast('Admin only', 'error'); return; }
   $('ai-agent-modal').style.display = 'flex';
 };
 
@@ -1305,6 +1304,7 @@ window.closeAiAgentModal = function() {
 };
 
 window.runAiDiagnoseModal = function() {
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) { showNeonToast('Admin only feature', 'warning'); return; }
   const input = $('ai-diagnose-input-modal');
   const text = (input?.value || '').trim();
   if (!text) { showNeonToast('Paste an error first!', 'warning'); return; }
@@ -1324,7 +1324,7 @@ window.runAiDiagnoseModal = function() {
 
 // ============ AI AGENT ADMIN PANEL FUNCTIONS ============
 window.runAiHealthScan = async function() {
-  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) { showNeonToast('Admin only feature', 'warning'); return; }
   const output = $('ai-cmd-output-modal') || $('ai-cmd-output');
   if (!output) return;
   output.innerHTML = '<span class="cmd-header">🔍 Running health scan...</span>';
@@ -1361,7 +1361,7 @@ window.runAiHealthScan = async function() {
 };
 
 window.runAiRecovery = async function() {
-  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) { showNeonToast('Admin only feature', 'warning'); return; }
   const output = $('ai-cmd-output-modal') || $('ai-cmd-output');
   if (!output) return;
   output.innerHTML = '<span class="cmd-header">🔧 Running auto-recovery...</span>';
@@ -1374,7 +1374,7 @@ window.runAiRecovery = async function() {
 };
 
 window.showAiErrors = async function() {
-  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) { showNeonToast('Admin only feature', 'warning'); return; }
   const output = $('ai-cmd-output-modal') || $('ai-cmd-output');
   if (!output) return;
   output.innerHTML = '<span class="cmd-header">📋 Loading error log...</span>';
@@ -1401,7 +1401,7 @@ window.showAiErrors = async function() {
 };
 
 window.showAiStatus = async function() {
-  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;
+  if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) { showNeonToast('Admin only feature', 'warning'); return; }
   const output = $('ai-cmd-output-modal') || $('ai-cmd-output');
   if (!output) return;
   try {
