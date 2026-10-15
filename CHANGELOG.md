@@ -1,5 +1,48 @@
 # Changelog — TNV Duel Arena
 
+## Version 1.0.7 (October 2026)
+
+### Premium interaction pass
+
+One easing curve and three durations now drive the entire app, replacing a
+field of one-off `ease` values where every animation felt unrelated, plus one
+overshooting elastic curve on the roll flash that read as playful and fought
+the restrained tone. The curve is expo-out (`0.16, 1, 0.3, 1`): it
+accelerates once and settles, never bouncing.
+
+**One press language.** Most controls previously had no press state at all,
+or a bare opacity dim, so taps felt unacknowledged. Every tappable surface —
+buttons, tiles, fee chips, icon buttons, tabs, menu rows, admin and bot
+buttons — now scales to 0.97 on press over 90ms and releases cleanly.
+
+**Focus restored.** The global `outline: none` left keyboard and switch users
+with nothing. Focus-visible now renders a ring built from the app's own
+tokens.
+
+**Depth without glow.** Cards carry a 1px hairline on the top edge only, so
+surfaces read as stacked layers instead of flat rectangles. This is the whole
+depth treatment — no outer shadow, no bloom, which is what the rejected build
+leaned on.
+
+**Entrances.** Modals and the result card fade the backdrop and rise 10px;
+tab panels fade and rise 4px. A fixed pair, not a bespoke animation per
+component.
+
+**Searching overlay rebuilt.** It was a spinner and the word "SEARCHING...",
+with all state crammed into one line. It now has an eyebrow, a headline and a
+reassurance sub-line, and both the headline and sub-line reserve height —
+previously every status change made the spinner and label jump vertically,
+which is the loudest tell that an overlay was never designed. Measured layout
+delta between the longest and shortest status text is exactly 0px. The
+spinner is now a 2px two-tone arc whose trail fades, instead of a thick
+single-colour ring.
+
+Status updates go through one `setWaitStatus()` helper rather than seven
+scattered assignments.
+
+Verified at 390×844 and 360×640: all four tabs still report zero overflow.
+`prefers-reduced-motion` disables every new animation and transition.
+
 ## Version 1.0.6 (October 2026)
 
 ### Emoji removal + official World App spacing (same reviewer feedback)

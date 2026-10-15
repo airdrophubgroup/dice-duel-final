@@ -33,6 +33,17 @@
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
 
+  /* MOTION SYSTEM
+     One easing curve and three durations for the whole app. The curve is
+     expo-out: it accelerates once and settles without overshoot. Bouncy
+     curves and arbitrary durations are what make an interface feel
+     generated, because nothing feels like it was made by the same hand. */
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-press: 90ms;   /* finger-down feedback */
+  --dur-fast: 180ms;   /* colour, border, focus, tab switch */
+  --dur-base: 260ms;   /* modal and card entrances */
+
   /* Legacy aliases — inline styles written across app.js still reference
      these older token names. Mapping them onto the current palette keeps
      every dynamic element (toasts, modals, admin panels) on-brand. */
@@ -340,9 +351,8 @@ details[open] .accord-arrow { transform: rotate(180deg); }
 .btn {
   font-family: 'Inter', sans-serif; font-weight: 600; font-size: 14px;
   border: none; border-radius: var(--radius-sm); padding: 14px 24px;
-  cursor: pointer; width: 100%; transition: opacity 0.15s;
+  cursor: pointer; width: 100%;
 }
-.btn:active:not(:disabled) { opacity: 0.8; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-primary {
   background: var(--accent); color: var(--bg); font-weight: 700;
@@ -559,10 +569,15 @@ details[open] .accord-arrow { transform: rotate(180deg); }
 /* A plain indeterminate spinner. The radar rings, sweep and pinging dots
    that used to live here were pure decoration and read as "generated"
    rather than as a real progress state. */
+/* A thin two-tone arc reads as deliberate progress; a thick single-colour
+   ring reads as a placeholder. The secondary arc is the same accent at
+   reduced alpha so the trail fades rather than snaps. */
 .spinner {
-  width: 44px; height: 44px; margin: 0 auto 16px; border-radius: 50%;
-  border: 3px solid var(--border); border-top-color: var(--accent);
-  animation: spin 0.85s linear infinite;
+  width: 42px; height: 42px; margin: 0 auto 20px; border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-right-color: rgba(41,217,194,0.45);
+  animation: spin 0.9s var(--ease-in-out) infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -587,7 +602,26 @@ html.page-hidden .spinner {
   justify-content: center; text-align: center; padding: 0 24px;
   overflow: hidden; overscroll-behavior: none;
 }
-#wait-status { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 18px; margin: 0; color: var(--text); }
+/* ---- SEARCHING OVERLAY ---- */
+/* The status text changes length as matchmaking progresses, so the status
+   and sub-line both reserve height. Without it the spinner and eyebrow
+   shift vertically on every update, which is the loudest tell that an
+   overlay was never designed. */
+.search-panel { max-width: 300px; }
+.search-eyebrow {
+  font-size: 10px; font-weight: 600; letter-spacing: 1.4px;
+  text-transform: uppercase; color: var(--text-muted); margin: 0 0 8px;
+}
+#wait-status {
+  font-family: 'Inter', sans-serif; font-weight: 600; font-size: 18px;
+  letter-spacing: -0.2px; margin: 0; color: var(--text);
+  min-height: 2.3em; display: flex; align-items: center; justify-content: center;
+  line-height: 1.3;
+}
+.search-sub { font-size: 11px; color: var(--text-secondary); margin: 10px 0 0; min-height: 1.4em; }
+#wait-status.is-live { color: var(--accent); }
+@keyframes statusIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+#wait-status.changing, .search-sub.changing { animation: statusIn var(--dur-base) var(--ease); }
 
 /* ---- GAME SCREEN ---- */
 main { display: none; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
@@ -631,11 +665,13 @@ body.game-live main { display: flex; }
 }
 .roll-flash .roll-num {
   font-family: 'Inter', sans-serif; font-size: 64px; font-weight: 900;
-  color: var(--accent); animation: rollNumPop 0.4s cubic-bezier(.175,.885,.32,1.275);
+  color: var(--accent); animation: rollNumPop 0.36s cubic-bezier(0.16, 1, 0.3, 1);
 }
 @keyframes rollFlashIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rollFlashOut { from { opacity: 1; } to { opacity: 0; } }
-@keyframes rollNumPop { 0% { transform: scale(0.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+/* Settles rather than overshoots: the original scale(0.3) start with an
+   elastic curve read as playful, which fought the restrained tone. */
+@keyframes rollNumPop { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
 .opp-roll-flash {
   position: fixed; inset: 0; z-index: 99998; display: flex; flex-direction: column;
@@ -644,7 +680,7 @@ body.game-live main { display: flex; }
 }
 .opp-roll-flash .roll-num {
   font-family: 'Inter', sans-serif; font-size: 48px; font-weight: 900;
-  color: var(--gold); animation: rollNumPop 0.3s ease;
+  color: var(--gold); animation: rollNumPop 0.36s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .opp-roll-flash .roll-label { font-size: 13px; color: var(--gold); opacity: 0.6; margin-top: 8px; }
 
@@ -809,3 +845,96 @@ body.game-live main { display: flex; }
 }
 .tnv-rewards-row:not(.tnv-rewards-header-row) { background: var(--bg-elevated); }
 .tnv-rewards-note { font-size: 10px; color: var(--text-muted); text-align: center; margin-top: 8px; }
+
+/* ============================================================
+   PREMIUM INTERACTION LAYER
+   Added last so it wins over the earlier one-off rules. Everything below
+   shares the --ease curve and one of the three durations, so pressing,
+   focusing, opening and switching all feel like the same hand made them.
+   ============================================================ */
+
+/* ---- ONE PRESS LANGUAGE ---- */
+/* Every tappable surface responds the same way: a short, non-bouncy scale
+   that resets on release. Previously most controls had no press state at
+   all, or a bare opacity dim, so taps felt unacknowledged. */
+.btn, .more-tile, .fee-chip, .icon-btn, .tab-btn, .menu-item,
+.admin-cmd-btn, .bot-btn, .chat-send-btn, .quick-action,
+.withdraw-btn-full, details summary, .custom-modal-close, .chat-close-btn {
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-press) var(--ease),
+              background-color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease),
+              opacity var(--dur-fast) var(--ease);
+}
+.btn:active:not(:disabled), .more-tile:active, .fee-chip:active,
+.icon-btn:active, .menu-item:active, .admin-cmd-btn:active,
+.bot-btn:active, .chat-send-btn:active, .quick-action:active,
+.withdraw-btn-full:not(:disabled):active {
+  transform: scale(0.97);
+}
+.tab-btn:active { transform: scale(0.94); }
+
+/* The old opacity dim now fights the scale; scale alone reads cleaner. */
+.btn:active:not(:disabled), .quick-action:active { opacity: 1; }
+
+/* ---- FOCUS ---- */
+/* Keyboard and switch users previously had nothing, because global
+   outline:none removed the browser default. Re-introduce it as a ring
+   that uses the app's own tokens. */
+.btn:focus-visible, .more-tile:focus-visible, .fee-chip:focus-visible,
+.icon-btn:focus-visible, .tab-btn:focus-visible, .menu-item:focus-visible,
+.bot-btn:focus-visible, .chat-send-btn:focus-visible, .quick-action:focus-visible,
+.withdraw-btn-full:focus-visible, a:focus-visible, summary:focus-visible,
+input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+
+/* ---- SURFACE DEPTH ---- */
+/* A 1px hairline on the top edge only. Cards then read as stacked layers
+   instead of flat rectangles. This is the whole of the depth treatment --
+   deliberately no outer shadow or glow, which is what the original
+   rejected build leaned on. */
+.home-card, .leaderboard-section, .live-stats-card, .modal-card,
+.custom-modal-inner, .stats-box, .more-tile, .fee-chip,
+.payouts-accordion, .security-accordion, .support-email-card,
+.tnv-rewards-card, .quick-actions-card {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+/* ---- ENTRANCES ---- */
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes panelIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+/* Backdrop fades, content rises: a fixed pair, never swapped per component. */
+.custom-modal, #result-overlay { animation: fadeIn var(--dur-base) var(--ease); }
+.modal-card, .custom-modal-inner, .result-card { animation: cardIn var(--dur-base) var(--ease) both; }
+.tab-panel.active { animation: panelIn var(--dur-fast) var(--ease); }
+/* JS toggles display, not a class. An animation declared on the element
+   starts as soon as it becomes rendered, so no extra hook is needed. */
+#waiting-overlay { animation: fadeIn var(--dur-base) var(--ease); }
+
+/* ---- SETTLE, DON'T BOUNCE ---- */
+/* The roll-flash keyframe and its two rules are corrected in place above
+   (around the GAME SCREEN block) rather than redefined here, so there is
+   exactly one rollNumPop in the stylesheet. */
+
+/* ---- REDUCED MOTION ---- */
+@media (prefers-reduced-motion: reduce) {
+  .custom-modal, .modal-card, .custom-modal-inner, .result-card,
+  .tab-panel.active, #waiting-overlay,
+  #wait-status.changing, .search-sub.changing,
+  .roll-flash .roll-num, .opp-roll-flash .roll-num {
+    animation: none !important;
+  }
+  .btn, .more-tile, .fee-chip, .icon-btn, .tab-btn, .menu-item,
+  .admin-cmd-btn, .bot-btn, .chat-send-btn, .quick-action, .withdraw-btn-full {
+    transition: none !important;
+  }
+}

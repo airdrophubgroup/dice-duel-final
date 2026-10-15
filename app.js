@@ -119,6 +119,24 @@ const RESULT_ICONS = {
   tie: _resultIcon('<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/>'),
 };
 
+// Searching-overlay status. The headline and its sub-line both change as
+// matchmaking progresses, and both reserve height in .search-panel so the
+// spinner and eyebrow never shift vertically between updates. Each change is
+// re-animated instead of popping. Pass null for `sub` to leave it untouched.
+function setWaitStatus(status, sub) {
+  const el = $('wait-status');
+  if (!el) return;
+  el.textContent = status;
+  const subEl = $('wait-sub');
+  if (subEl && sub != null) subEl.textContent = sub;
+  [el, subEl].forEach((node) => {
+    if (!node) return;
+    node.classList.remove('changing');
+    void node.offsetWidth; // force a reflow so the animation restarts
+    node.classList.add('changing');
+  });
+}
+
 // Privacy consent
 globalThis.acceptConsent = function() {
   localStorage.setItem('tnv_consent', '1');
@@ -2115,7 +2133,7 @@ async function performWalletAuth(silent = false){
   matchIdBytes32Global = null;
   matchmakingActive = true;  
   $('waiting-overlay').style.display = 'flex';  
-  $('wait-status').innerText = `Finding opponent...`;  
+  setWaitStatus('Finding your opponent…', 'Nothing has been charged yet');  
 
   let matchRow;  
   try {  
@@ -2150,13 +2168,13 @@ async function performWalletAuth(silent = false){
     // We joined an existing waiting match — opponent is already there
     const oppName = (isP1 ? matchRow.p2_username : matchRow.p1_username) || 'Opponent';
     $('opp-name-tag').innerText = oppName;
-    $('wait-status').innerText = `Opponent found: ${oppName}`;
+    setWaitStatus(`Opponent found: ${oppName}`, 'Confirm your entry to start');
     showNeonToast(`Opponent found: ${oppName}!`, 'success');
     // Proceed directly to payment
     await performPaymentAndStartSearch();
   } else {
     // We created a new match — search for opponent first (NO payment yet)
-    $('wait-status').innerText = `Searching for opponent... (0 WLD charged)`;
+    setWaitStatus('Searching for an opponent…', '0 WLD charged · cancel anytime');
     showNeonToast('Searching for opponent. You will be asked to pay only after an opponent is found.', 'info');
     
     // Broadcast live bet alert so other players know someone is searching
@@ -2208,7 +2226,7 @@ async function performWalletAuth(silent = false){
           clearInterval(mTimer);
           const oppNameFound = statusRow.p2_username || 'Opponent';
           $('opp-name-tag').innerText = oppNameFound;
-          $('wait-status').innerText = `Opponent found: ${oppNameFound}`;
+          setWaitStatus(`Opponent found: ${oppNameFound}`, 'Ready to play');
           showNeonToast(`Opponent found: ${oppNameFound}! Confirm payment to start.`, 'success');
           // Now ask for payment
           await performPaymentAndStartSearch();
@@ -2230,7 +2248,7 @@ async function performWalletAuth(silent = false){
   // 6-SECOND PAYMENT TIMEOUT: both players must pay within 6 seconds
   // ============================================
   async function performPaymentAndStartSearch() {
-    $('wait-status').innerText = `Pay within 6 seconds or match cancels!`;
+    setWaitStatus('Pay within 6 seconds', "The match cancels if you don't");
 
     const paymentReference = 'ref_' + randomAlphaNumeric(16);
     let paymentSuccessful = false;
@@ -2342,7 +2360,7 @@ async function performWalletAuth(silent = false){
 
     if (depositBooked) afterBooked();
 
-    $('wait-status').innerText = `Waiting for opponent to pay... (Cancel anytime)`;
+    setWaitStatus('Waiting for your opponent to pay…', 'Cancel anytime');
 
     setupChannel();
     pollTimer = setInterval(checkBothReady, 1000);
@@ -2576,8 +2594,8 @@ async function startSyncCountdown(){
     } catch (e) { /* non-fatal — the other player's call covers it */ }  
   }  
 
-  $('wait-status').style.color = 'var(--photon)';  
-  $('wait-status').innerText = 'OPPONENT CONNECTED!';  
+  $('wait-status').classList.add('is-live');  
+  setWaitStatus('Opponent connected', 'Starting the match…');  
 
   setTimeout(() => {  
     $('waiting-overlay').style.display = 'none';  
