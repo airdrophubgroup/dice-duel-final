@@ -4,11 +4,20 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>TNV Duel Arena — Rules & Support</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
+  /* Tokens aligned with style.css. This page previously carried its own
+     drifted palette -- a different gold (#ffb300 vs #f0b232), background,
+     body text and muted grey, plus an unused --iris purple -- and set its
+     headings in 'Space Grotesk', a font the app no longer loads. The result
+     was that the privacy page, which the consent modal links to, looked like
+     a different product. */
   :root{
-    --void:#0b0b14; --void-2:#111120; --iris:#6c5ce7; --photon:#29d9c2;
-    --bone:#f1eee6; --slate:#8b8ba3; --signal:#ff5f6d; --gold:#ffb300;
-    --border:rgba(241,238,230,0.08); --radius:18px;
+    --void:#0c0c14; --void-2:#14141f; --photon:#29d9c2;
+    --bone:#e8e6e3; --slate:#7a7a8c; --signal:#e85d5d; --gold:#f0b232;
+    --border:rgba(255,255,255,0.06); --radius:16px;
   }
   *{ margin:0; padding:0; box-sizing:border-box; }
   body{
@@ -18,22 +27,22 @@
     line-height:1.6; padding:16px 16px 40px; max-width:480px; margin:0 auto;
     overscroll-behavior:none; min-height:100dvh;
   }
-  h1{ font-family:'Space Grotesk',sans-serif; font-size:24px; color:var(--photon); text-align:center; margin:16px 0 6px; }
+  h1{ font-family:'Inter',sans-serif; font-weight:700; font-size:24px; color:var(--photon); text-align:center; margin:16px 0 6px; letter-spacing:-0.3px; }
   .subtitle{ color:var(--slate); font-size:13px; text-align:center; margin-bottom:16px; }
-  h2{ font-family:'Space Grotesk',sans-serif; font-size:16px; color:var(--photon); margin:16px 0 6px; }
+  h2{ font-family:'Inter',sans-serif; font-weight:600; font-size:16px; color:var(--photon); margin:16px 0 6px; }
   p,li{ font-size:12px; color:var(--bone); }
   .card{ background:var(--void-2); border:1px solid var(--border); border-radius:12px; padding:12px; margin-bottom:10px; }
-  .card h3{ font-size:13px; font-family:'Space Grotesk',sans-serif; color:var(--photon); margin-bottom:4px; }
-  .card p{ color:var(--slate); font-size:11.5px; }
+  .card h3{ font-size:13px; font-family:'Inter',sans-serif; font-weight:600; color:var(--photon); margin-bottom:4px; }
+  .card p{ color:var(--slate); font-size:11px; }
   table{ width:100%; border-collapse:collapse; font-size:11px; }
   th{text-align:left; color:var(--slate); padding:6px; border-bottom:1px solid var(--border); font-size:10px; letter-spacing:1px; }
   td{ padding:6px; border-bottom:1px solid rgba(241,238,230,0.05); }
   .wld{ color:var(--photon); font-family:'JetBrains Mono',monospace; font-weight:600; }
   .tnv{ color:var(--gold); font-family:'JetBrains Mono',monospace; }
   ul{ padding-left:18px; }
-  li{ margin-bottom:4px; color:var(--slate); font-size:11.5px; }
+  li{ margin-bottom:4px; color:var(--slate); font-size:11px; }
   li strong{ color:var(--bone); }
-  .back-btn{ display:inline-block; margin-bottom:12px; padding:6px 14px; background:var(--void-2); border:1px solid var(--border); border-radius:8px; color:var(--photon); font-family:'Space Grotesk',sans-serif; font-size:12px; font-weight:600; text-decoration:none; }
+  .back-btn{ display:inline-block; margin-bottom:12px; padding:6px 14px; background:var(--void-2); border:1px solid var(--border); border-radius:8px; color:var(--photon); font-family:'Inter',sans-serif; font-size:12px; font-weight:600; text-decoration:none; }
   .back-btn:active{ transform:scale(0.96); }
 </style>
 </head>

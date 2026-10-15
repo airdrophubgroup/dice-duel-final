@@ -26,7 +26,7 @@
   --gold-dim: rgba(240,178,50,0.12);
   --danger: #e85d5d;
   --danger-dim: rgba(232,93,93,0.12);
-  --purple: #8b7cf6;
+  --purple: var(--accent);
   --radius: 16px;
   --radius-sm: 10px;
   --radius-xs: 8px;
@@ -38,7 +38,7 @@
      every dynamic element (toasts, modals, admin panels) on-brand. */
   --photon: #29d9c2;
   --signal: #e85d5d;
-  --iris: #8b7cf6;
+  --iris: var(--accent);
   --bone: #e8e6e3;
   --slate: #7a7a8c;
   --stone: #6b6b7b;
@@ -79,7 +79,7 @@ body {
   color: var(--text); letter-spacing: -0.3px;
 }
 .play-subtitle {
-  font-size: 11.5px; color: var(--text-muted); margin-top: 3px;
+  font-size: 11px; color: var(--text-muted); margin-top: 3px;
 }
 
 /* ---- HEADER ---- */
@@ -214,7 +214,7 @@ h1.brand {
   letter-spacing: 0.3px;
 }
 .wd-pending { background: var(--gold-dim); color: var(--gold); }
-.wd-approved { background: rgba(74,222,128,0.1); color: #4ade80; }
+.wd-approved { background: rgba(41,217,194,0.1); color: var(--accent); }
 .wd-rejected { background: var(--danger-dim); color: var(--danger); }
 
 /* ---- MORE TAB GRID ---- */
@@ -233,7 +233,7 @@ h1.brand {
 .more-tile.admin-only { display: none; }
 .more-tile-soon { opacity: 0.5; }
 .soon-badge {
-  position: absolute; top: 4px; right: 4px; font-size: 7px; font-weight: 700;
+  position: absolute; top: 4px; right: 4px; font-size: 9px; font-weight: 700;
   background: var(--gold); color: var(--bg); padding: 2px 5px; border-radius: 4px;
   letter-spacing: 0.5px;
 }
@@ -292,7 +292,7 @@ details[open] .accord-arrow { transform: rotate(180deg); }
   border-radius: var(--radius-xs); padding: 9px 4px; text-align: center;
 }
 .live-stat-value {
-  font-family: var(--mono); font-size: 15px; font-weight: 600;
+  font-family: var(--mono); font-size: 14px; font-weight: 600;
   color: var(--accent);
 }
 .live-stat-label {
@@ -324,7 +324,7 @@ details[open] .accord-arrow { transform: rotate(180deg); }
 }
 .fee-chip:active { transform: scale(0.96); }
 .chip-win {
-  font-size: 9px; font-family: 'Inter', sans-serif; color: #4ade80;
+  font-size: 9px; font-family: 'Inter', sans-serif; color: var(--accent);
   font-weight: 600; white-space: nowrap;
 }
 .play-fee-sub {
@@ -372,8 +372,8 @@ details[open] .accord-arrow { transform: rotate(180deg); }
   padding: 10px 12px; border-radius: var(--radius-xs); font-size: 12px;
 }
 .lb-item.top-1 { border-color: rgba(240,178,50,0.3); background: rgba(240,178,50,0.04); }
-.lb-item.top-2 { border-color: rgba(41,217,194,0.2); background: rgba(41,217,194,0.03); }
-.lb-item.top-3 { border-color: rgba(139,124,246,0.2); background: rgba(139,124,246,0.03); }
+.lb-item.top-2 { border-color: rgba(160,166,180,0.3); background: rgba(160,166,180,0.04); }
+.lb-item.top-3 { border-color: rgba(205,127,50,0.3); background: rgba(205,127,50,0.04); }
 
 .lb-badge {
   width: 24px; height: 24px; font-size: 11px; line-height: 24px;
@@ -387,8 +387,8 @@ details[open] .accord-arrow { transform: rotate(180deg); }
 .lb-badge-bronze { background: rgba(205,127,50,0.12); border-color: rgba(205,127,50,0.3); color: #cd7f32; }
 .lb-rank { font-weight: 700; width: 24px; color: var(--text-muted); }
 .lb-item.top-1 .lb-rank { color: var(--gold); }
-.lb-item.top-2 .lb-rank { color: var(--accent); }
-.lb-item.top-3 .lb-rank { color: var(--purple); }
+.lb-item.top-2 .lb-rank { color: #a0a6b4; }
+.lb-item.top-3 .lb-rank { color: #cd7f32; }
 .lb-user { flex: 1; font-weight: 500; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lb-score { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--gold); }
 
@@ -431,7 +431,7 @@ details[open] .accord-arrow { transform: rotate(180deg); }
   border-bottom: 1px solid var(--border); padding-bottom: 10px;
 }
 .chat-online-dot {
-  width: 8px; height: 8px; border-radius: 50%; background: #4ade80;
+  width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
   display: inline-block; margin-right: 4px;
 }
 .chat-close-btn { background: none; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; }
@@ -445,13 +445,13 @@ details[open] .accord-arrow { transform: rotate(180deg); }
   padding: 8px 10px; border-radius: var(--radius-xs); font-size: 12px;
   word-break: break-word;
 }
-.chat-msg-item.my-msg { background: rgba(139,124,246,0.08); border-color: rgba(139,124,246,0.2); }
+.chat-msg-item.my-msg { background: rgba(41,217,194,0.08); border-color: rgba(41,217,194,0.2); }
 .chat-welcome-banner {
   text-align: center; padding: 16px 12px; margin: 8px 0;
   background: var(--bg-elevated); border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
-.chat-welcome-icon { font-size: 28px; margin-bottom: 8px; }
+.chat-welcome-icon { font-size: 24px; margin-bottom: 8px; }
 .chat-welcome-title {
   font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 700;
   color: var(--text); margin-bottom: 6px;
@@ -608,7 +608,7 @@ body.game-live main { display: flex; }
 @keyframes scorePop { 0%{ transform:scale(1); } 50%{ transform:scale(1.15); color:var(--gold); } 100%{ transform:scale(1); } }
 #my-name-tag { color: var(--accent); }
 #opp-name-tag { color: var(--gold); }
-#game-timer { font-family: 'Inter', sans-serif; color: var(--danger); font-weight: 700; font-size: 28px; }
+#game-timer { font-family: 'Inter', sans-serif; color: var(--danger); font-weight: 700; font-size: 24px; }
 
 .tap-hint { text-align: center; font-size: 11px; color: var(--text-muted); margin-top: 4px; }
 
@@ -659,7 +659,7 @@ body.game-live main { display: flex; }
   padding: 32px 24px; text-align: center; width: 100%; max-width: 320px;
 }
 #result-icon { display: flex; justify-content: center; margin-bottom: 14px; color: var(--text); }
-#result-title { font-family: 'Inter', sans-serif; font-size: 26px; font-weight: 700; margin: 0 0 8px; letter-spacing: -0.3px; }
+#result-title { font-family: 'Inter', sans-serif; font-size: 24px; font-weight: 700; margin: 0 0 8px; letter-spacing: -0.3px; }
 #result-msg { font-size: 14px; color: var(--text-secondary); margin: 0 0 24px; font-weight: 500; }
 .result-victory { border-color: rgba(41,217,194,0.4); }
 .result-victory #result-title, .result-victory #result-icon { color: var(--accent); }
@@ -683,7 +683,7 @@ body.game-live main { display: flex; }
 .mz { flex: 1; }
 .mz-red { background: rgba(232,93,93,0.3); }
 .mz-yellow { background: rgba(240,178,50,0.3); }
-.mz-green { background: rgba(74,222,128,0.3); }
+.mz-green { background: rgba(41,217,194,0.3); }
 .meter-pointer {
   position: absolute; top: 0; left: 0; width: 3px; height: 100%;
   background: var(--text); border-radius: 2px; transition: left 0.05s linear;
@@ -695,7 +695,7 @@ body.game-live main { display: flex; }
 .ms { width: 20%; text-align: center; }
 .ms-red { color: var(--danger); }
 .ms-yellow { color: var(--gold); }
-.ms-green { color: #4ade80; }
+.ms-green { color: var(--accent); }
 .skill-tap-btn { max-width: 320px; margin: 0 auto; }
 
 /* ---- SUPPORT BOT ---- */
@@ -708,7 +708,7 @@ body.game-live main { display: flex; }
   color: var(--text); align-self: flex-start; border-bottom-left-radius: 4px;
 }
 .bot-msg.user {
-  background: rgba(139,124,246,0.1); border: 1px solid rgba(139,124,246,0.2);
+  background: rgba(41,217,194,0.1); border: 1px solid rgba(41,217,194,0.2);
   color: var(--text); align-self: flex-end; border-bottom-right-radius: 4px;
 }
 .bot-msg.system {
@@ -753,7 +753,7 @@ body.game-live main { display: flex; }
 .tnv-w-header { color: var(--text-muted); font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 6px; font-weight: 600; }
 .tnv-w-row:not(.tnv-w-header) { background: var(--bg-elevated); }
 .tnv-w-entry { color: var(--accent); font-weight: 600; }
-.tnv-w-win { color: #4ade80; font-weight: 600; }
+.tnv-w-win { color: var(--accent); font-weight: 600; }
 .tnv-w-lose { color: var(--text-secondary); font-weight: 500; }
 
 /* ---- ADMIN CMD GRID ---- */

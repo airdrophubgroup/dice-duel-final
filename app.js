@@ -397,7 +397,7 @@ function showLiveBetNotification(username, fee) {
   existingContainer.innerHTML = '';  
 
   const ticker = document.createElement('div');  
-  ticker.style.cssText = 'background:var(--bg-card); border:1px solid var(--border); color:var(--text); padding:9px 14px; border-radius:10px; font-size:11.5px; font-family:Inter, sans-serif; box-shadow:0 6px 20px rgba(0,0,0,0.35); opacity:0; transition:opacity 0.25s ease; text-align:center;';  
+  ticker.style.cssText = 'background:var(--bg-card); border:1px solid var(--border); color:var(--text); padding:9px 14px; border-radius:10px; font-size:11px; font-family:Inter, sans-serif; box-shadow:0 6px 20px rgba(0,0,0,0.35); opacity:0; transition:opacity 0.25s ease; text-align:center;';  
   ticker.innerHTML = `<span style="color:var(--accent); font-weight:600;">${escapeHtml(username || 'A player')}</span> started a <span style="color:var(--gold); font-weight:600;">${escapeHtml(fee)}</span> WLD duel`;  
   existingContainer.appendChild(ticker);  
   setTimeout(() => { ticker.style.opacity = '1'; }, 50);  
@@ -746,7 +746,7 @@ async function fetchAdminWithdrawRequests() {
     }  
     let html = '';  
     const pendingCount = data.filter(r => r.status === 'pending').length;  
-    html += `<div style="font-size:10.5px; color:var(--photon); margin-bottom:6px;">Total requests: <b>${data.length}</b> · Pending: <b>${pendingCount}</b></div>`; data.forEach(req => {
+    html += `<div style="font-size:10px; color:var(--photon); margin-bottom:6px;">Total requests: <b>${data.length}</b> · Pending: <b>${pendingCount}</b></div>`; data.forEach(req => {
       let shortAddr = escapeHtml(req.wallet_address.slice(0, 6) + '...' + req.wallet_address.slice(-4));
       const st = (req.status || 'pending').toUpperCase();
       const stColor = req.status === 'approved' ? 'var(--photon)' : req.status === 'pending' ? 'var(--gold)' : 'var(--signal)';
@@ -816,7 +816,7 @@ async function fetchAdminTickets() {
                const name = m.who === 'user' ? escapeHtml(t.user_username || 'User') : 'Agent';
                const align = m.who === 'user' ? 'text-align:right; margin-left:24px;' : 'text-align:left; margin-right:24px;';
                const bg = m.who === 'user' ? 'rgba(255,179,0,0.10); border:1px solid rgba(255,179,0,0.3);' : 'rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);';
-               return `<div style="margin:3px 0;"><div style="font-size:8.5px; color:var(--slate);">${name}</div><div style="${align} display:inline-block; max-width:85%; padding:4px 7px; border-radius:7px; font-size:10.5px; line-height:1.4; ${bg}">${escapeHtml(m.text || '')}</div></div>`;
+               return `<div style="margin:3px 0;"><div style="font-size:9px; color:var(--slate);">${name}</div><div style="${align} display:inline-block; max-width:85%; padding:4px 7px; border-radius:7px; font-size:10px; line-height:1.4; ${bg}">${escapeHtml(m.text || '')}</div></div>`;
              }).join('')}
            </div>`
         : '';
@@ -826,10 +826,10 @@ async function fetchAdminTickets() {
             <span style="color:var(--photon); font-family:'JetBrains Mono',monospace;" title="${escapeHtml(t.user_wallet || '')}">${shortAddr}</span>  
             <span style="font-size:10px; color:var(--slate);">${escapeHtml(t.user_username || '')} · ${escapeHtml(String(t.status || '').toUpperCase())} · ${new Date(t.created_at).toLocaleString()}</span>  
           </div>  
-          <div style="font-size:11.5px; color:#fff; margin-top:4px;">${escapeHtml(t.summary || '')}</div>  
+          <div style="font-size:11px; color:#fff; margin-top:4px;">${escapeHtml(t.summary || '')}</div>  
           ${vHtml}  
           ${convHtml}  
-          ${t.admin_reply ? `<div style="font-size:10.5px; color:var(--gold); margin-top:4px; border-top:1px dashed rgba(255,179,0,0.25); padding-top:4px;"> You (${escapeHtml(t.admin_username || 'Admin')}): ${escapeHtml(t.admin_reply)}</div>` : ''}  
+          ${t.admin_reply ? `<div style="font-size:10px; color:var(--gold); margin-top:4px; border-top:1px dashed rgba(255,179,0,0.25); padding-top:4px;"> You (${escapeHtml(t.admin_username || 'Admin')}): ${escapeHtml(t.admin_reply)}</div>` : ''}  
           <div style="display:flex; gap:6px; margin-top:6px;">  
             <input id="ticket-reply-${t.id}" class="modal-input" style="flex:1; font-size:11px; padding:7px 9px;" placeholder="Type your reply (your real username will show)..." />  
             <button class="approve-btn" onclick="adminReplyTicket(${t.id})">SEND</button>  
@@ -1060,11 +1060,11 @@ async function fetchAgentCommands() {
       html += `
         <div class="admin-req-item" style="border-left:3px solid ${stColor};">
           <div class="admin-req-row">
-            <span style="color:${stColor}; font-size:10.5px; font-weight:700;">${statusIcon} ${st}</span>
+            <span style="color:${stColor}; font-size:10px; font-weight:700;">${statusIcon} ${st}</span>
             <span style="font-size:10px; color:var(--slate);">${new Date(cmd.created_at).toLocaleString()}</span>
           </div>
-          <div style="font-size:11.5px; color:#fff; margin-top:4px; word-break:break-word;">${escapeHtml(cmd.command)}</div>
-          ${cmd.reply ? `<div style="font-size:10.5px; color:var(--gold); margin-top:5px; border-top:1px dashed rgba(255,179,0,0.25); padding-top:5px; line-height:1.5;"> <b style="color:var(--gold);">Agent airdrophubgroup:</b> ${escapeHtml(cmd.reply)}</div>` : ''}
+          <div style="font-size:11px; color:#fff; margin-top:4px; word-break:break-word;">${escapeHtml(cmd.command)}</div>
+          ${cmd.reply ? `<div style="font-size:10px; color:var(--gold); margin-top:5px; border-top:1px dashed rgba(255,179,0,0.25); padding-top:5px; line-height:1.5;"> <b style="color:var(--gold);">Agent airdrophubgroup:</b> ${escapeHtml(cmd.reply)}</div>` : ''}
         </div>
       `;
     });
@@ -1087,7 +1087,7 @@ async function fetchAdminAlerts() {
       html += `  
         <div class="admin-req-item" style="border-left:3px solid ${color};">  
           <div class="admin-req-row">  
-            <span style="color:${color}; font-size:10.5px; font-weight:700;">${a.severity.toUpperCase()} · ${a.category.toUpperCase()}</span>  
+            <span style="color:${color}; font-size:10px; font-weight:700;">${a.severity.toUpperCase()} · ${a.category.toUpperCase()}</span>  
             <span style="font-size:10px; color:var(--slate);">${new Date(a.created_at).toLocaleString()}</span>  
           </div>  
           <div style="font-size:11px; color:#fff; margin-top:3px;">${a.message}</div>  
@@ -1206,13 +1206,13 @@ window.openUserHistoryModal = async function() {
       const timeStr = m.created_at ? new Date(m.created_at).toLocaleString() : '';  
       html += `<div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); padding:8px 10px; border-radius:8px; margin-bottom:6px;">  
         <div style="display:flex; justify-content:space-between; align-items:center;">  
-          <span style="font-weight:700; font-size:11.5px;">vs ${opp}</span>  
+          <span style="font-weight:700; font-size:11px;">vs ${opp}</span>  
           <span style="font-weight:700; color:${color}; font-size:11px;">${resultText}</span>  
         </div>  
-        <div style="display:flex; justify-content:space-between; color:var(--slate); font-size:10.5px; margin-top:3px;">  
+        <div style="display:flex; justify-content:space-between; color:var(--slate); font-size:10px; margin-top:3px;">  
           <span>${Number(m.fee || 0).toFixed(2)} WLD entry · ${myScore} - ${oppScore}</span>  
         </div>  
-        <div style="color:#777; font-size:9.5px; text-align:right; margin-top:2px;">${timeStr}</div>  
+        <div style="color:#777; font-size:9px; text-align:right; margin-top:2px;">${timeStr}</div>  
       </div>`;  
     });  
     container.innerHTML = html;  
@@ -1271,12 +1271,12 @@ window.openAdminEarningsModal = async function() {
         const isToday = daily.today && String(d.day) === String(daily.today.date);
         const label = isToday ? 'TODAY' : String(d.day).slice(0, 10);
         return `<div style="display:flex; justify-content:space-between; align-items:center; padding:7px 10px; border-radius:8px; margin-bottom:5px; background:${isToday ? 'rgba(255,179,0,0.14)' : 'rgba(255,255,255,0.03)'}; border:1px solid ${isToday ? 'rgba(255,179,0,0.45)' : 'rgba(255,255,255,0.06)'};">` +
-          `<span style="font-size:10.5px; font-weight:700; color:${isToday ? 'var(--gold)' : 'var(--bone)'};">${label}</span>` +
+          `<span style="font-size:10px; font-weight:700; color:${isToday ? 'var(--gold)' : 'var(--bone)'};">${label}</span>` +
           `<span style="font-size:11px; font-weight:700; color:var(--gold);">+${Number(d.total).toFixed(2)} WLD <span style="color:var(--slate); font-weight:400;">· ${d.fees} fee(s)</span></span>` +
           `</div>`;
       }).join('');
       if (daily.all_time_total !== undefined) {
-        dayHtml += `<div style="font-size:10.5px; color:var(--slate); text-align:right; margin-top:3px;"> All-time total: <b style="color:var(--gold);">${Number(daily.all_time_total).toFixed(2)} WLD</b></div>`;
+        dayHtml += `<div style="font-size:10px; color:var(--slate); text-align:right; margin-top:3px;"> All-time total: <b style="color:var(--gold);">${Number(daily.all_time_total).toFixed(2)} WLD</b></div>`;
       }
     }
     // --- Full ledger ---
@@ -1288,9 +1288,9 @@ window.openAdminEarningsModal = async function() {
         <div style="background:rgba(243,156,18,0.05); padding:8px 10px; border-radius:8px; margin-bottom:6px;">  
           <div style="display:flex; justify-content:space-between; font-weight:700;">  
             <span style="color:var(--gold);">+${i.amount} WLD</span>  
-            <span style="font-size:9.5px; color:var(--slate);">${timeStr}</span>  
+            <span style="font-size:9px; color:var(--slate);">${timeStr}</span>  
           </div>  
-          <div style="color:var(--slate); font-size:10.5px; margin-top:2px;">${i.description || ''}</div>  
+          <div style="color:var(--slate); font-size:10px; margin-top:2px;">${i.description || ''}</div>  
         </div>  
       `;   
     });  
@@ -1835,7 +1835,7 @@ function showPaymentConfirmedPopup(amountWld) {
   icon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
   const title = document.createElement('div');
   title.textContent = 'Payment confirmed';
-  title.style.cssText = 'color:var(--text); font-size:17px; font-weight:600;';
+  title.style.cssText = 'color:var(--text); font-size:16px; font-weight:600;';
   const sub = document.createElement('div');
   sub.textContent = amountWld ? `${Number(amountWld).toFixed(2)} WLD secured — searching for opponent...` : 'Your entry fee is secured — searching for opponent...';
   sub.style.cssText = 'color:var(--text-secondary); font-size:12px; margin-top:8px; line-height:1.5;';
@@ -1870,7 +1870,7 @@ function showNeonToast(message, type = 'info') {
     document.body.appendChild(container);
   }
   const el = document.createElement('div');
-  el.style.cssText = `pointer-events:auto; display:flex; align-items:center; gap:10px; width:100%; background:var(--bg-elevated); border:1px solid ${c.border}; color:var(--text); padding:12px 14px; border-radius:12px; font-family:Inter, sans-serif; font-size:12.5px; font-weight:500; line-height:1.4; text-align:left; box-shadow:0 8px 24px rgba(0,0,0,0.4); opacity:0; transform:translateY(-8px); transition:opacity .22s ease, transform .22s ease; cursor:pointer;`;
+  el.style.cssText = `pointer-events:auto; display:flex; align-items:center; gap:10px; width:100%; background:var(--bg-elevated); border:1px solid ${c.border}; color:var(--text); padding:12px 14px; border-radius:12px; font-family:Inter, sans-serif; font-size:12px; font-weight:500; line-height:1.4; text-align:left; box-shadow:0 8px 24px rgba(0,0,0,0.4); opacity:0; transform:translateY(-8px); transition:opacity .22s ease, transform .22s ease; cursor:pointer;`;
   const icon = document.createElement('span');
   icon.textContent = c.icon;
   icon.style.cssText = `flex:0 0 auto; width:18px; height:18px; border-radius:6px; color:${c.color}; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;`;
@@ -1979,7 +1979,7 @@ function showNeonCancelPopup(feeAmount) {
       <div style="width:48px; height:48px; margin:0 auto 14px; border-radius:12px; background:var(--gold-dim); border:1px solid rgba(240,178,50,0.35); display:flex; align-items:center; justify-content:center;">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       </div>
-      <h3 style="font-family:'Inter',sans-serif; color:var(--text); font-size:17px; font-weight:600; margin:0 0 10px;">Opponent left</h3>
+      <h3 style="font-family:'Inter',sans-serif; color:var(--text); font-size:16px; font-weight:600; margin:0 0 10px;">Opponent left</h3>
       <p style="font-family:'Inter',sans-serif; font-size:12px; color:var(--text-secondary); line-height:1.6; margin:0 0 8px;">Your opponent cancelled the match.</p>
       <div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:10px; padding:12px; margin:12px 0;">
         <p style="font-family:'Inter',sans-serif; font-size:13px; color:var(--accent); font-weight:600; margin:0 0 4px;">Your funds are safe</p>
@@ -2018,7 +2018,7 @@ function neonConfirm(message) {
     box.style.cssText = 'width:min(88vw, 360px); background:var(--bg-card); border:1px solid var(--border); border-radius:16px; padding:22px; text-align:center; font-family:Inter, sans-serif;';
     const text = document.createElement('div');
     text.textContent = message;
-    text.style.cssText = 'color:var(--text); font-size:13.5px; font-weight:500; line-height:1.5; margin-bottom:18px; word-break:break-word;';
+    text.style.cssText = 'color:var(--text); font-size:14px; font-weight:500; line-height:1.5; margin-bottom:18px; word-break:break-word;';
     const btnRow = document.createElement('div');
     btnRow.style.cssText = 'display:flex; gap:10px;';
     const cancelBtn = document.createElement('button');
@@ -2383,7 +2383,7 @@ function selectFee(amount, element){
   // (must mirror calculatePayout() exactly)
   const winPayouts = {0.1:'0.17',0.2:'0.34',0.5:'0.80',1:'1.60',2:'3.20',5:'8.80',10:'17.8',20:'36',30:'54',40:'72',50:'90'};
   const sub = $('play-fee-sub');
-  if (sub) sub.innerHTML = `Win: <b style="color:#4ade80;">+${winPayouts[selectedFee] || (selectedFee * 1.6).toFixed(2)} WLD</b> \u00b7 Pay only after opponent found`;
+  if (sub) sub.innerHTML = `Win: <b style="color:var(--accent);">+${winPayouts[selectedFee] || (selectedFee * 1.6).toFixed(2)} WLD</b> \u00b7 Pay only after opponent found`;
 }  
 
 function setupChannel() {  
@@ -3057,7 +3057,7 @@ async function botShowAdminReplies() {
     if (replied.length === 0) return;  
     replied.slice(0, 3).forEach(t => {  
       botAddMsg('bot', `You have a reply on support ticket #${t.id}`);  
-      botAddHtmlMsg('bot', `<div style="font-size:11.5px; line-height:1.5;"> <b style="color:var(--gold);">${escapeHtml(t.admin_username || 'Admin')}</b> (Admin): ${escapeHtml(t.admin_reply || '')}</div><div style="color:#777; font-size:9.5px; text-align:right; margin-top:3px;">${new Date(t.admin_reply_at).toLocaleString()}</div>`);  
+      botAddHtmlMsg('bot', `<div style="font-size:11px; line-height:1.5;"> <b style="color:var(--gold);">${escapeHtml(t.admin_username || 'Admin')}</b> (Admin): ${escapeHtml(t.admin_reply || '')}</div><div style="color:#777; font-size:9px; text-align:right; margin-top:3px;">${new Date(t.admin_reply_at).toLocaleString()}</div>`);  
     });  
   } catch (e) {}  
 }
@@ -3430,22 +3430,22 @@ function botHandleNo() {
 function botShowTxInstructions() {
   const addr = myAddress || '';
   botAddHtmlMsg('bot', '<div style="font-family:\'JetBrains Mono\',monospace; font-weight:700; font-size:10px; letter-spacing:1px; color:var(--gold); margin-bottom:6px;"> HOW TO FIND YOUR TX HASH</div>' +
-    '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(41,217,194,0.25); border-radius:8px; background:rgba(41,217,194,0.06); font-size:10.5px; line-height:1.55;">' +
+    '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(41,217,194,0.25); border-radius:8px; background:rgba(41,217,194,0.06); font-size:10px; line-height:1.55;">' +
     '<b style="color:var(--photon);">Step 1</b> — Copy your World Chain wallet address <br/>' +
     (addr ? `<button onclick="navigator.clipboard.writeText('${addr}'); this.textContent='Copied!';" style="margin-top:5px; background:rgba(41,217,194,0.15); border:1px solid rgba(41,217,194,0.5); color:var(--photon); font-size:10px; padding:5px 10px; border-radius:6px; cursor:pointer;"> Copy my address</button>` : '') +
     '</div>' +
-    '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(255,179,0,0.25); border-radius:8px; background:rgba(255,179,0,0.05); font-size:10.5px; line-height:1.55;">' +
+    '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(255,179,0,0.25); border-radius:8px; background:rgba(255,179,0,0.05); font-size:10px; line-height:1.55;">' +
     '<b style="color:var(--gold);">Step 2</b> — Open a World Chain block explorer:<br/>' +
     '<a href="https://worldscan.org/" target="_blank" rel="noopener" style="color:var(--photon); font-weight:700; font-size:11px;"> worldscan.org</a> ' +
     '<span style="color:var(--slate);">(or search \'Worldscan\' on Google)</span>' +
     '</div>' +
-    '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(41,217,194,0.25); border-radius:8px; background:rgba(41,217,194,0.06); font-size:10.5px; line-height:1.55;">' +
+    '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(41,217,194,0.25); border-radius:8px; background:rgba(41,217,194,0.06); font-size:10px; line-height:1.55;">' +
     '<b style="color:var(--photon);">Step 3</b> — Paste your wallet address in the search bar at the top and press Enter. You\'ll see your transaction list.' +
     '</div>' +
-    '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(41,217,194,0.25); border-radius:8px; background:rgba(41,217,194,0.06); font-size:10.5px; line-height:1.55;">' +
+    '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(41,217,194,0.25); border-radius:8px; background:rgba(41,217,194,0.06); font-size:10px; line-height:1.55;">' +
     '<b style="color:var(--photon);">Step 4</b> — Look for the <b style="color:var(--photon);">WLD payment</b> you sent at the exact time you played the match. Open that transaction.' +
     '</div>' +
-    '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(41,217,194,0.25); border-radius:8px; background:rgba(41,217,194,0.06); font-size:10.5px; line-height:1.55;">' +
+    '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(41,217,194,0.25); border-radius:8px; background:rgba(41,217,194,0.06); font-size:10px; line-height:1.55;">' +
     '<b style="color:var(--photon);">Step 5</b> — Copy the <b style="color:var(--gold);">Transaction Hash</b> (starts with <span style="font-family:\'JetBrains Mono\',monospace; color:var(--photon);">0x...</span>, 66 characters) and paste it in the box below' +
     '</div>');
 }

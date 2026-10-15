@@ -162,7 +162,7 @@
         <div><div class="who" id="opp-name-tag">OPP</div><div class="score" id="opp-score">0</div></div>
       </div>
       <div class="skill-meter-wrap" id="skill-meter-wrap">
-        <div class="meter-label">TAP IN THE <span style="color:#4ade80;font-weight:700;">GREEN</span> ZONE!</div>
+        <div class="meter-label">TAP IN THE <span style="color:var(--accent);font-weight:700;">GREEN</span> ZONE!</div>
         <div class="meter-track" id="meter-track">
           <div class="meter-zones">
             <div class="mz mz-red"></div>
@@ -199,7 +199,7 @@
 
   <div id="chat-modal" class="custom-modal" onclick="if(event.target===this)closeChatModal()">
     <div class="modal-card chat-card">
-      <div class="chat-header"><span>Community Chat</span><span style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:4px;"><span class="chat-online-dot"></span>Online: <span id="online-count" style="color:#4ade80;font-weight:700;">1</span></span><button class="chat-close-btn" onclick="closeChatModal()">&times;</button></div>
+      <div class="chat-header"><span>Community Chat</span><span style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:4px;"><span class="chat-online-dot"></span>Online: <span id="online-count" style="color:var(--accent);font-weight:700;">1</span></span><button class="chat-close-btn" onclick="closeChatModal()">&times;</button></div>
       <div id="chat-messages-container" class="chat-messages"><div style="text-align:center;color:var(--text-muted);font-size:11px;">Messages expire in 24h.</div></div>
       <div class="chat-input-area"><input type="text" id="chat-input-field" class="chat-input" placeholder="Type a message..." maxlength="150" /><button class="chat-send-btn" onclick="sendChatMessage()">Send</button></div>
     </div>
@@ -326,7 +326,7 @@
       <div style="color:var(--danger);margin-bottom:12px;display:flex;justify-content:center;">
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       </div>
-      <h2 style="font-family:'Inter',sans-serif;color:var(--danger);margin:0 0 8px;font-size:20px;">ACCOUNT SUSPENDED</h2>
+      <h2 style="font-family:'Inter',sans-serif;color:var(--danger);margin:0 0 8px;font-size:18px;">ACCOUNT SUSPENDED</h2>
       <p style="font-size:13px;color:var(--text-secondary);margin:0 0 24px;line-height:1.5;">Your account has been restricted.</p>
       <a href="https://t.me/TNVTEAMWLD" target="_blank" class="btn btn-primary" style="text-decoration:none;display:flex;justify-content:center;align-items:center;">Contact Support</a>
     </div>
@@ -381,7 +381,7 @@
           <button onclick="runAiHealthScan()" style="flex:1;padding:8px;border:1px solid rgba(41,217,194,0.25);border-radius:8px;background:var(--accent-dim);color:var(--accent);font-family:'Inter',sans-serif;font-size:10px;font-weight:600;cursor:pointer;">Scan</button>
           <button onclick="runAiRecovery()" style="flex:1;padding:8px;border:1px solid rgba(240,178,50,0.25);border-radius:8px;background:var(--gold-dim);color:var(--gold);font-family:'Inter',sans-serif;font-size:10px;font-weight:600;cursor:pointer;">Fix</button>
           <button onclick="showAiErrors()" style="flex:1;padding:8px;border:1px solid rgba(232,93,93,0.25);border-radius:8px;background:var(--danger-dim);color:var(--danger);font-family:'Inter',sans-serif;font-size:10px;font-weight:600;cursor:pointer;">Log</button>
-          <button onclick="showAiStatus()" style="flex:1;padding:8px;border:1px solid rgba(139,124,246,0.25);border-radius:8px;background:rgba(139,124,246,0.08);color:var(--purple);font-family:'Inter',sans-serif;font-size:10px;font-weight:600;cursor:pointer;">Status</button>
+          <button onclick="showAiStatus()" style="flex:1;padding:8px;border:1px solid rgba(41,217,194,0.25);border-radius:8px;background:rgba(41,217,194,0.08);color:var(--purple);font-family:'Inter',sans-serif;font-size:10px;font-weight:600;cursor:pointer;">Status</button>
         </div>
         <div style="margin-bottom:8px;">
           <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;font-weight:600;">DIAGNOSE ERROR:</div>
