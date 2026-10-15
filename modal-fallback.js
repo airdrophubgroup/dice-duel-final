@@ -42,7 +42,7 @@
   window.acceptConsent = function() { localStorage.setItem('tnv_consent', '1'); _modal('consent-modal', 0); };
   window.showNeonToast = function(msg, type) {
     var t = document.createElement('div');
-    t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9999;padding:10px 20px;border-radius:12px;font-size:12px;font-family:Space Grotesk,sans-serif;color:#fff;background:' + (type === 'error' ? 'rgba(255,50,50,0.9)' : type === 'info' ? 'rgba(108,92,231,0.9)' : 'rgba(41,217,194,0.9)') + ';box-shadow:0 4px 20px rgba(0,0,0,0.4);transition:opacity 0.3s;text-align:center;max-width:90%;';
+    t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9999;padding:10px 20px;border-radius:10px;font-size:12px;font-family:Inter,-apple-system,sans-serif;color:#fff;background:' + (type === 'error' ? '#e85d5d' : type === 'info' ? '#8b7cf6' : '#29d9c2') + ';transition:opacity 0.3s;text-align:center;max-width:90%;';
     t.textContent = msg;
     document.body.appendChild(t);
     setTimeout(function() { t.style.opacity = '0'; setTimeout(function() { t.remove(); }, 300); }, 3000);

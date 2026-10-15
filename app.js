@@ -107,6 +107,18 @@ const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 const $ = (id) => document.getElementById(id);
 
+// Result-screen glyphs as inline SVG. These used to be a single oversized
+// letter ('W' / 'L' / '=') rendered at 48px, which reads as a typo rather
+// than a win/loss state.
+const _resultIcon = (paths) =>
+  '<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor"' +
+  ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + paths + '</svg>';
+const RESULT_ICONS = {
+  win: _resultIcon('<circle cx="12" cy="12" r="10"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/>'),
+  loss: _resultIcon('<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>'),
+  tie: _resultIcon('<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/>'),
+};
+
 // Privacy consent
 globalThis.acceptConsent = function() {
   localStorage.setItem('tnv_consent', '1');
@@ -318,7 +330,7 @@ function initGlobalChat() {
       if (payload && payload.message) {  
         saveAndAppendChatMessage(payload.sender, payload.message, payload.address, payload.timestamp);  
       }  
-    })    .on('broadcast', { event: 'live_bet_alert' }, ({ payload }) => {
+    }) .on('broadcast', { event: 'live_bet_alert' }, ({ payload }) => {
       if (!matchmakingActive && !gameActive && payload && payload.address !== myAddress) {
         // ANTI-INJECTION: Sanitize broadcast data before display
         showLiveBetNotification(sanitizeInput(payload.username, 30), sanitizeInput(String(payload.fee), 10));
@@ -385,8 +397,8 @@ function showLiveBetNotification(username, fee) {
   existingContainer.innerHTML = '';  
 
   const ticker = document.createElement('div');  
-  ticker.style.cssText = 'background:rgba(17,17,32,0.92); border:1px solid rgba(41,217,194,0.4); backdrop-filter:blur(8px); color:#f1eee6; padding:8px 12px; border-radius:12px; font-size:11.5px; font-family:"Space Grotesk", sans-serif; box-shadow:0 8px 24px rgba(0,0,0,0.5); opacity:0; transition:all 0.3s ease; text-align:center;';  
-  ticker.innerHTML = `🔥 <span style="color:var(--photon); font-weight:700;">${escapeHtml(username || 'A player')}</span> started a <span style="color:var(--gold); font-weight:700;">${escapeHtml(fee)}</span> WLD duel!`;  
+  ticker.style.cssText = 'background:var(--bg-card); border:1px solid var(--border); color:var(--text); padding:9px 14px; border-radius:10px; font-size:11.5px; font-family:Inter, sans-serif; box-shadow:0 6px 20px rgba(0,0,0,0.35); opacity:0; transition:opacity 0.25s ease; text-align:center;';  
+  ticker.innerHTML = `<span style="color:var(--accent); font-weight:600;">${escapeHtml(username || 'A player')}</span> started a <span style="color:var(--gold); font-weight:600;">${escapeHtml(fee)}</span> WLD duel`;  
   existingContainer.appendChild(ticker);  
   setTimeout(() => { ticker.style.opacity = '1'; }, 50);  
 
@@ -415,16 +427,13 @@ function loadAndCleanChatHistory() {
       const welcome = document.createElement('div');
       welcome.className = 'chat-welcome-banner';
       welcome.innerHTML = `
-        <div class="chat-welcome-icon">🎲</div>
-        <div class="chat-welcome-title">Welcome to TNV Arena Chat!</div>
-        <div class="chat-welcome-sub">Connect with players, share tips, and celebrate wins together.</div>
+        <div class="chat-welcome-title">Community Chat</div>
+        <div class="chat-welcome-sub">Talk with other players. Messages expire after 24 hours.</div>
         <div class="chat-welcome-rules">
-          <div class="chat-welcome-rule">✅ Be respectful to everyone</div>
-          <div class="chat-welcome-rule">🚫 No spam or self-promotion</div>
-          <div class="chat-welcome-rule">🎯 Keep it game-related</div>
-          <div class="chat-welcome-rule">💬 Have fun and good luck!</div>
+          <div class="chat-welcome-rule">Be respectful to everyone</div>
+          <div class="chat-welcome-rule">No spam or self-promotion</div>
+          <div class="chat-welcome-rule">Keep it game-related</div>
         </div>
-        <div class="chat-welcome-tip">💡 Tip: Messages expire after 24 hours</div>
       `;
       container.appendChild(welcome);
     } else {
@@ -486,16 +495,13 @@ window.openChatModal = function() {
     const welcome = document.createElement('div');
     welcome.className = 'chat-welcome-banner';
     welcome.innerHTML = `
-      <div class="chat-welcome-icon">🎲</div>
-      <div class="chat-welcome-title">Welcome to TNV Arena Chat!</div>
-      <div class="chat-welcome-sub">Connect with players, share tips, and celebrate wins together.</div>
+      <div class="chat-welcome-title">Community Chat</div>
+      <div class="chat-welcome-sub">Talk with other players. Messages expire after 24 hours.</div>
       <div class="chat-welcome-rules">
-        <div class="chat-welcome-rule">✅ Be respectful to everyone</div>
-        <div class="chat-welcome-rule">🚫 No spam or self-promotion</div>
-        <div class="chat-welcome-rule">🎯 Keep it game-related</div>
-        <div class="chat-welcome-rule">💬 Have fun and good luck!</div>
+        <div class="chat-welcome-rule">Be respectful to everyone</div>
+        <div class="chat-welcome-rule">No spam or self-promotion</div>
+        <div class="chat-welcome-rule">Keep it game-related</div>
       </div>
-      <div class="chat-welcome-tip">💡 Tip: Messages expire after 24 hours</div>
     `;
     container.appendChild(welcome);
   }
@@ -740,7 +746,7 @@ async function fetchAdminWithdrawRequests() {
     }  
     let html = '';  
     const pendingCount = data.filter(r => r.status === 'pending').length;  
-    html += `<div style="font-size:10.5px; color:var(--photon); margin-bottom:6px;">Total requests: <b>${data.length}</b> · Pending: <b>${pendingCount}</b></div>`;    data.forEach(req => {
+    html += `<div style="font-size:10.5px; color:var(--photon); margin-bottom:6px;">Total requests: <b>${data.length}</b> · Pending: <b>${pendingCount}</b></div>`; data.forEach(req => {
       let shortAddr = escapeHtml(req.wallet_address.slice(0, 6) + '...' + req.wallet_address.slice(-4));
       const st = (req.status || 'pending').toUpperCase();
       const stColor = req.status === 'approved' ? 'var(--photon)' : req.status === 'pending' ? 'var(--gold)' : 'var(--signal)';
@@ -772,7 +778,7 @@ async function fetchAdminCheaters() {
       container.innerHTML = `<div style="font-size:11px; color:var(--slate); text-align:center;">No suspicious activity</div>`;  
       return;  
     }  
-    let html = '';    data.forEach(log => {
+    let html = ''; data.forEach(log => {
       let shortAddr = escapeHtml(log.wallet_address.slice(0, 6) + '...' + log.wallet_address.slice(-4));
       html += `  
         <div class="admin-req-item">  
@@ -793,7 +799,7 @@ async function fetchAdminTickets() {
     if (!data || data.success === false || !Array.isArray(data) || data.length === 0) {  
       container.innerHTML = `<div style="font-size:11px; color:var(--slate); text-align:center;">No open tickets</div>`;  
       return;  
-    }    let html = '';
+    } let html = '';
     data.forEach(t => {
       const shortAddr = (t.user_wallet || '').slice(0, 6) + '...' + (t.user_wallet || '').slice(-4);
       const verified = t.verified && typeof t.verified === 'object' ? t.verified : {};
@@ -804,10 +810,10 @@ async function fetchAdminTickets() {
       const conv = Array.isArray(verified.conversation) ? verified.conversation : [];
       const convHtml = conv.length > 0
         ? `<div style="margin-top:6px; border:1px solid rgba(41,217,194,0.2); border-radius:8px; background:rgba(41,217,194,0.04); padding:6px 8px;">
-             <div style="font-size:9px; letter-spacing:1px; color:var(--gold); font-weight:700; margin-bottom:4px;">💬 USER CONVERSATION (Agent airdrophubgroup)</div>
+             <div style="font-size:9px; letter-spacing:1px; color:var(--gold); font-weight:700; margin-bottom:4px;"> USER CONVERSATION (Agent airdrophubgroup)</div>
              ${conv.map(m => {
                const who = m.who === 'user' ? 'user' : 'agent';
-               const name = m.who === 'user' ? escapeHtml(t.user_username || 'User') : '🤖 Agent';
+               const name = m.who === 'user' ? escapeHtml(t.user_username || 'User') : 'Agent';
                const align = m.who === 'user' ? 'text-align:right; margin-left:24px;' : 'text-align:left; margin-right:24px;';
                const bg = m.who === 'user' ? 'rgba(255,179,0,0.10); border:1px solid rgba(255,179,0,0.3);' : 'rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);';
                return `<div style="margin:3px 0;"><div style="font-size:8.5px; color:var(--slate);">${name}</div><div style="${align} display:inline-block; max-width:85%; padding:4px 7px; border-radius:7px; font-size:10.5px; line-height:1.4; ${bg}">${escapeHtml(m.text || '')}</div></div>`;
@@ -823,7 +829,7 @@ async function fetchAdminTickets() {
           <div style="font-size:11.5px; color:#fff; margin-top:4px;">${escapeHtml(t.summary || '')}</div>  
           ${vHtml}  
           ${convHtml}  
-          ${t.admin_reply ? `<div style="font-size:10.5px; color:var(--gold); margin-top:4px; border-top:1px dashed rgba(255,179,0,0.25); padding-top:4px;">💬 You (${escapeHtml(t.admin_username || 'Admin')}): ${escapeHtml(t.admin_reply)}</div>` : ''}  
+          ${t.admin_reply ? `<div style="font-size:10.5px; color:var(--gold); margin-top:4px; border-top:1px dashed rgba(255,179,0,0.25); padding-top:4px;"> You (${escapeHtml(t.admin_username || 'Admin')}): ${escapeHtml(t.admin_reply)}</div>` : ''}  
           <div style="display:flex; gap:6px; margin-top:6px;">  
             <input id="ticket-reply-${t.id}" class="modal-input" style="flex:1; font-size:11px; padding:7px 9px;" placeholder="Type your reply (your real username will show)..." />  
             <button class="approve-btn" onclick="adminReplyTicket(${t.id})">SEND</button>  
@@ -869,7 +875,7 @@ window.runAdminCmd = async function(cmd) {
   const resultDiv = $('admin-cmd-result');
   if (!output || !resultDiv) return;
   resultDiv.style.display = 'block';
-  output.innerHTML = '<span class="cmd-header">⏳ Running ' + cmd + '...</span>';
+  output.innerHTML = '<span class="cmd-header"> Running ' + cmd + '...</span>';
 
   try {
     let html = '';
@@ -881,15 +887,15 @@ window.runAdminCmd = async function(cmd) {
       const pending = tickets.filter(t => t.status === 'pending').length;
       const done = tickets.filter(t => t.status === 'done').length;
       const inProgress = tickets.filter(t => t.status === 'in_progress').length;
-      html = '<span class="cmd-header">🎫 TICKET STATUS</span>';
-      html += '<span class="cmd-success">✅ Done: ' + done + '</span>  ';
-      html += '<span class="cmd-warn">🔄 In Progress: ' + inProgress + '</span>  ';
-      html += '<span class="cmd-error">⏳ Pending: ' + pending + '</span>';
+      html = '<span class="cmd-header"> TICKET STATUS</span>';
+      html += '<span class="cmd-success"> Done: ' + done + '</span>  ';
+      html += '<span class="cmd-warn"> In Progress: ' + inProgress + '</span>  ';
+      html += '<span class="cmd-error"> Pending: ' + pending + '</span>';
       html += '<div class="cmd-divider"></div>';
       if (pending > 0) {
-        html += '<span class="cmd-warn">⚠ ' + pending + ' tickets need attention!</span>';
+        html += '<span class="cmd-warn"> ' + pending + ' tickets need attention!</span>';
       } else {
-        html += '<span class="cmd-success">✅ All clear!</span>';
+        html += '<span class="cmd-success"> All clear!</span>';
       }
 
     } else if (cmd === 'check-withdrawals') {
@@ -897,14 +903,14 @@ window.runAdminCmd = async function(cmd) {
       const data = (res.data && res.data.requests) || [];
       const pending = data.filter(r => r.status === 'pending').length;
       const approved = data.filter(r => r.status === 'approved').length;
-      html = '<span class="cmd-header">💸 WITHDRAWAL REQUESTS</span>';
-      html += '<span class="cmd-success">✅ Approved: ' + approved + '</span>  ';
-      html += '<span class="cmd-warn">⏳ Pending: ' + pending + '</span>';
+      html = '<span class="cmd-header"> WITHDRAWAL REQUESTS</span>';
+      html += '<span class="cmd-success"> Approved: ' + approved + '</span>  ';
+      html += '<span class="cmd-warn"> Pending: ' + pending + '</span>';
       html += '<div class="cmd-divider"></div>';
       if (pending > 0) {
-        html += '<span class="cmd-warn">⚠ ' + pending + ' withdrawals need approval!</span>';
+        html += '<span class="cmd-warn"> ' + pending + ' withdrawals need approval!</span>';
       } else {
-        html += '<span class="cmd-success">✅ All processed!</span>';
+        html += '<span class="cmd-success"> All processed!</span>';
       }
 
     } else if (cmd === 'check-refunds') {
@@ -914,30 +920,30 @@ window.runAdminCmd = async function(cmd) {
         .eq('status', 'playing')
         .lt('created_at', new Date(Date.now() - 120000).toISOString());
       const stuckCount = stuck ? stuck.length : 0;
-      html = '<span class="cmd-header">🔄 REFUND STATUS</span>';
-      html += '<span class="cmd-success">✅ System running</span>';
+      html = '<span class="cmd-header"> REFUND STATUS</span>';
+      html += '<span class="cmd-success"> System running</span>';
       html += '<div class="cmd-divider"></div>';
       if (stuckCount > 0) {
-        html += '<span class="cmd-error">🔴 ' + stuckCount + ' stuck matches (>2min old)</span>';
+        html += '<span class="cmd-error"> ' + stuckCount + ' stuck matches (>2min old)</span>';
       } else {
-        html += '<span class="cmd-success">✅ No stuck matches</span>';
+        html += '<span class="cmd-success"> No stuck matches</span>';
       }
 
     } else if (cmd === 'check-bugs') {
-      html = '<span class="cmd-header">🐛 SYSTEM HEALTH CHECK</span>';
+      html = '<span class="cmd-header"> SYSTEM HEALTH CHECK</span>';
       // Check RPC functions
       const rpcs = ['join_or_create_match', 'secure_roll_dice', 'secure_complete_match', 'queue_refund_request'];
       for (const rpc of rpcs) {
         try {
           const { error } = await supabaseClient.rpc(rpc, { p_match_id: '00000000-0000-0000-0000-000000000000', p_wallet: '0x0000000000000000000000000000000000000000' });
           // If we get here, RPC exists (even if it errors on bad input)
-          html += '<span class="cmd-success">✅ ' + rpc + '</span>  ';
+          html += '<span class="cmd-success"> ' + rpc + '</span>  ';
         } catch (e) {
-          html += '<span class="cmd-error">❌ ' + rpc + ' MISSING</span>  ';
+          html += '<span class="cmd-error"> ' + rpc + ' MISSING</span>  ';
         }
       }
       html += '<div class="cmd-divider"></div>';
-      html += '<span class="cmd-success">✅ All systems operational</span>';
+      html += '<span class="cmd-success"> All systems operational</span>';
 
     } else if (cmd === 'check-players') {
       const { data: recent } = await supabaseClient.from('matches')
@@ -946,7 +952,7 @@ window.runAdminCmd = async function(cmd) {
       const total = recent ? recent.length : 0;
       const active = recent ? recent.filter(m => m.status === 'playing').length : 0;
       const waiting = recent ? recent.filter(m => m.status === 'waiting').length : 0;
-      html = '<span class="cmd-header">👥 PLAYER ACTIVITY (1h)</span>';
+      html = '<span class="cmd-header"> PLAYER ACTIVITY (1h)</span>';
       html += 'Total matches: <span class="cmd-success">' + total + '</span><br>';
       html += 'Playing now: <span class="cmd-success">' + active + '</span><br>';
       html += 'Searching: <span class="cmd-warn">' + waiting + '</span>';
@@ -956,7 +962,7 @@ window.runAdminCmd = async function(cmd) {
       const data = (res.data && res.data.revenue) || res.data || [];
       const total = Array.isArray(data) ? data.reduce((sum, r) => sum + (Number(r.amount) || 0), 0) : 0;
       const count = Array.isArray(data) ? data.length : 0;
-      html = '<span class="cmd-header">💰 REVENUE SUMMARY</span>';
+      html = '<span class="cmd-header"> REVENUE SUMMARY</span>';
       html += 'Total fees: <span class="cmd-success">' + total.toFixed(2) + ' WLD</span><br>';
       html += 'Matches: <span class="cmd-success">' + count + '</span>';
 
@@ -964,44 +970,44 @@ window.runAdminCmd = async function(cmd) {
       const res = await supabaseClient.rpc('admin_get_cheaters', { p_admin_wallet: myAddress });
       const data = res.data || [];
       const count = Array.isArray(data) ? data.length : 0;
-      html = '<span class="cmd-header">🛡️ CHEATER LOG</span>';
+      html = '<span class="cmd-header"> CHEATER LOG</span>';
       html += 'Detections: <span class="cmd-warn">' + count + '</span>';
       if (count > 0) {
         html += '<div class="cmd-divider"></div>';
         data.slice(0, 5).forEach(c => {
-          html += '<span class="cmd-error">⚠ ' + (c.wallet_address || '').slice(0, 10) + '... — ' + (c.click_count || 0) + ' clicks</span><br>';
+          html += '<span class="cmd-error"> ' + (c.wallet_address || '').slice(0, 10) + '... — ' + (c.click_count || 0) + ' clicks</span><br>';
         });
       }
 
     } else if (cmd === 'check-all') {
-      html = '<span class="cmd-header">📊 FULL SYSTEM REPORT</span><div class="cmd-divider"></div>';
+      html = '<span class="cmd-header"> FULL SYSTEM REPORT</span><div class="cmd-divider"></div>';
       // Tickets
       const tRes = await supabaseClient.rpc('get_agent_commands', { p_admin_wallet: myAddress });
       const tData = (tRes.data && tRes.data.commands) || tRes.data || [];
       const tPending = Array.isArray(tData) ? tData.filter(t => t.status === 'pending').length : 0;
-      html += '🎫 Tickets pending: <span class="cmd-' + (tPending > 0 ? 'warn' : 'success') + '">' + tPending + '</span><br>';
+      html += 'Tickets pending: <span class="cmd-' + (tPending > 0 ? 'warn' : 'success') + '">' + tPending + '</span><br>';
       // Withdrawals
       const wRes = await supabaseClient.rpc('admin_get_withdraw_requests', { p_admin_wallet: myAddress });
       const wData = (wRes.data && wRes.data.requests) || [];
       const wPending = wData.filter(r => r.status === 'pending').length;
-      html += '💸 Withdrawals pending: <span class="cmd-' + (wPending > 0 ? 'warn' : 'success') + '">' + wPending + '</span><br>';
+      html += 'Withdrawals pending: <span class="cmd-' + (wPending > 0 ? 'warn' : 'success') + '">' + wPending + '</span><br>';
       // Matches
       const { data: recent } = await supabaseClient.from('matches')
         .select('id, status')
         .gte('created_at', new Date(Date.now() - 3600000).toISOString());
-      html += '👥 Matches (1h): <span class="cmd-success">' + (recent ? recent.length : 0) + '</span><br>';
-      html += '🎮 Playing now: <span class="cmd-success">' + (recent ? recent.filter(m => m.status === 'playing').length : 0) + '</span><br>';
+      html += 'Matches (1h): <span class="cmd-success">' + (recent ? recent.length : 0) + '</span><br>';
+      html += 'Playing now: <span class="cmd-success">' + (recent ? recent.filter(m => m.status === 'playing').length : 0) + '</span><br>';
       // Cheaters
       const cRes = await supabaseClient.rpc('admin_get_cheaters', { p_admin_wallet: myAddress });
       const cData = cRes.data || [];
-      html += '🛡️ Cheaters: <span class="cmd-' + (cData.length > 0 ? 'warn' : 'success') + '">' + (Array.isArray(cData) ? cData.length : 0) + '</span><br>';
+      html += 'Cheaters: <span class="cmd-' + (cData.length > 0 ? 'warn' : 'success') + '">' + (Array.isArray(cData) ? cData.length : 0) + '</span><br>';
       html += '<div class="cmd-divider"></div>';
-      html += '<span class="cmd-success">✅ Report generated at ' + new Date().toLocaleTimeString() + '</span>';
+      html += '<span class="cmd-success"> Report generated at ' + new Date().toLocaleTimeString() + '</span>';
     }
 
     output.innerHTML = html;
   } catch (e) {
-    output.innerHTML = '<span class="cmd-error">❌ Error: ' + escapeHtml(e.message || String(e)) + '</span>';
+    output.innerHTML = '<span class="cmd-error"> Error: ' + escapeHtml(e.message || String(e)) + '</span>';
   }
 };
 
@@ -1016,7 +1022,7 @@ window.sendAgentCommand = async function() {
       p_command: cmd
     });
     if (data && data.success === true) {
-      showNeonToast('✅ Command sent to Agent airdrophubgroup!', 'success');
+      showNeonToast('Command sent to Agent airdrophubgroup!', 'success');
       input.value = '';
       fetchAgentCommands();
     } else {
@@ -1043,14 +1049,14 @@ async function fetchAgentCommands() {
   try {
     const { data } = await supabaseClient.rpc('get_agent_commands', { p_admin_wallet: myAddress });
     if (!data || data.success === false || !Array.isArray(data) || data.length === 0) {
-      container.innerHTML = `<div style="font-size:11px; color:var(--slate); text-align:center;">Abhi koi command nahi bheji gayi. Upar likh kar bhejo — agent kaam karega. 🎲</div>`;
+      container.innerHTML = `<div style="font-size:11px; color:var(--slate); text-align:center;">Abhi koi command nahi bheji gayi. Upar likh kar bhejo — agent kaam karega. </div>`;
       return;
     }
     let html = '';
     data.forEach(cmd => {
       const st = (cmd.status || 'pending').toUpperCase();
       const stColor = cmd.status === 'done' ? 'var(--photon)' : cmd.status === 'failed' ? 'var(--signal)' : cmd.status === 'in_progress' ? 'var(--gold)' : 'var(--slate)';
-      const statusIcon = cmd.status === 'done' ? '✅' : cmd.status === 'failed' ? '❌' : cmd.status === 'in_progress' ? '🔄' : '⏳';
+      const statusIcon = cmd.status === 'done' ? 'DONE' : cmd.status === 'failed' ? 'FAILED' : cmd.status === 'in_progress' ? 'RUNNING' : 'PENDING';
       html += `
         <div class="admin-req-item" style="border-left:3px solid ${stColor};">
           <div class="admin-req-row">
@@ -1058,7 +1064,7 @@ async function fetchAgentCommands() {
             <span style="font-size:10px; color:var(--slate);">${new Date(cmd.created_at).toLocaleString()}</span>
           </div>
           <div style="font-size:11.5px; color:#fff; margin-top:4px; word-break:break-word;">${escapeHtml(cmd.command)}</div>
-          ${cmd.reply ? `<div style="font-size:10.5px; color:var(--gold); margin-top:5px; border-top:1px dashed rgba(255,179,0,0.25); padding-top:5px; line-height:1.5;">🤖 <b style="color:var(--gold);">Agent airdrophubgroup:</b> ${escapeHtml(cmd.reply)}</div>` : ''}
+          ${cmd.reply ? `<div style="font-size:10.5px; color:var(--gold); margin-top:5px; border-top:1px dashed rgba(255,179,0,0.25); padding-top:5px; line-height:1.5;"> <b style="color:var(--gold);">Agent airdrophubgroup:</b> ${escapeHtml(cmd.reply)}</div>` : ''}
         </div>
       `;
     });
@@ -1072,7 +1078,7 @@ async function fetchAdminAlerts() {
     const container = $('admin-alerts-container');  
     if (!container) return;  
     if (!data || data.success === false || !Array.isArray(data) || data.length === 0) {  
-      container.innerHTML = `<div style="font-size:11px; color:var(--photon); text-align:center;">✅ All systems healthy — no alerts</div>`;  
+      container.innerHTML = `<div style="font-size:11px; color:var(--photon); text-align:center;"> All systems healthy — no alerts</div>`;  
       return;  
     }  
     let html = '';  
@@ -1094,7 +1100,7 @@ async function fetchAdminAlerts() {
 
 window.promptBlockUser = async function(walletToBlock) {  
   if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) return;  
-  if (await neonConfirm(`⚠️ Block user: ${walletToBlock}?`)) {  
+  if (await neonConfirm(`Block user: ${walletToBlock}?`)) {  
     const { data: result } = await supabaseClient.rpc('secure_admin_block_user', {  
       p_admin_wallet: myAddress, p_target_wallet: walletToBlock  
     });  
@@ -1185,7 +1191,7 @@ window.openUserHistoryModal = async function() {
       return;  
     }  
     const me = myAddress.toLowerCase();  
-    let html = `<div style="background:rgba(41,217,194,0.07); border:1px solid rgba(41,217,194,0.25); color:var(--photon); font-size:10px; padding:7px 9px; border-radius:8px; margin-bottom:8px; line-height:1.4;">ℹ️ Only your latest <b>10 matches</b> are shown. Older matches are automatically deleted from the server.</div>`;    data.forEach(m => {
+    let html = `<div style="background:rgba(41,217,194,0.07); border:1px solid rgba(41,217,194,0.25); color:var(--photon); font-size:10px; padding:7px 9px; border-radius:8px; margin-bottom:8px; line-height:1.4;"> Only your latest <b>10 matches</b> are shown. Older matches are automatically deleted from the server.</div>`; data.forEach(m => {
       const isP1 = (m.p1_address || '').toLowerCase() === me;
       const opp = escapeHtml(isP1 ? (m.p2_username || 'Unknown') : (m.p1_username || 'Unknown'));
       const myScore = isP1 ? m.p1_score : m.p2_score;
@@ -1260,7 +1266,7 @@ window.openAdminEarningsModal = async function() {
     // --- Daily revenue cards (24h groups) ---
     let dayHtml = '';
     if (daily && Array.isArray(daily.days) && daily.days.length > 0) {
-      dayHtml += `<div style="font-size:10px; letter-spacing:1.2px; color:var(--gold); font-weight:700; margin:8px 0 6px;">📅 DAILY REVENUE (24H)</div>`;
+      dayHtml += `<div style="font-size:10px; letter-spacing:1.2px; color:var(--gold); font-weight:700; margin:8px 0 6px;"> DAILY REVENUE (24H)</div>`;
       dayHtml += daily.days.map(d => {
         const isToday = daily.today && String(d.day) === String(daily.today.date);
         const label = isToday ? 'TODAY' : String(d.day).slice(0, 10);
@@ -1270,7 +1276,7 @@ window.openAdminEarningsModal = async function() {
           `</div>`;
       }).join('');
       if (daily.all_time_total !== undefined) {
-        dayHtml += `<div style="font-size:10.5px; color:var(--slate); text-align:right; margin-top:3px;">🏆 All-time total: <b style="color:var(--gold);">${Number(daily.all_time_total).toFixed(2)} WLD</b></div>`;
+        dayHtml += `<div style="font-size:10.5px; color:var(--slate); text-align:right; margin-top:3px;"> All-time total: <b style="color:var(--gold);">${Number(daily.all_time_total).toFixed(2)} WLD</b></div>`;
       }
     }
     // --- Full ledger ---
@@ -1311,10 +1317,10 @@ window.runAiDiagnoseModal = function() {
   const output = $('ai-cmd-output-modal');
   if (!output) return;
   const diagnoses = aiAgent.diagnose(text);
-  let html = '<span class="cmd-header">🤖 AI DIAGNOSIS</span>';
+  let html = '<span class="cmd-header"> AI DIAGNOSIS</span>';
   html += '<div class="cmd-divider"></div>';
   diagnoses.forEach(d => {
-    const icon = d.severity === 'critical' ? '🚨' : d.severity === 'high' ? '🔴' : d.severity === 'medium' ? '⚠️' : 'ℹ️';
+    const icon = d.severity === 'critical' ? 'CRIT' : d.severity === 'high' ? 'HIGH' : d.severity === 'medium' ? 'WARN' : 'INFO';
     const cls = d.severity === 'critical' || d.severity === 'high' ? 'cmd-error' : 'cmd-warn';
     html += '<span class="' + cls + '">' + icon + ' ' + escapeHtml(d.issue) + '</span><br>';
     html += '<span style="color:var(--photon);font-size:11px;">Fix: ' + escapeHtml(d.fix) + '</span><br><br>';
@@ -1327,21 +1333,21 @@ window.runAiHealthScan = async function() {
   if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) { showNeonToast('Admin only feature', 'warning'); return; }
   const output = $('ai-cmd-output-modal') || $('ai-cmd-output');
   if (!output) return;
-  output.innerHTML = '<span class="cmd-header">🔍 Running health scan...</span>';
+  output.innerHTML = '<span class="cmd-header"> Running health scan...</span>';
   try {
     const health = await aiAgent.healthScan();
-    if (!health) { output.innerHTML = '<span class="cmd-error">❌ Not available</span>'; return; }
-    let html = '<span class="cmd-header">🤖 AI HEALTH SCAN</span>';
+    if (!health) { output.innerHTML = '<span class="cmd-error"> Not available</span>'; return; }
+    let html = '<span class="cmd-header"> AI HEALTH SCAN</span>';
     html += '<div class="cmd-divider"></div>';
     const okCount = health.checks.filter(c => c.status === 'ok').length;
     const warnCount = health.checks.filter(c => c.status === 'warning').length;
     const errCount = health.checks.filter(c => c.status === 'error').length;
-    html += '<span class="cmd-success">✅ OK: ' + okCount + '</span> ';
-    html += '<span class="cmd-warn">⚠️ Warnings: ' + warnCount + '</span> ';
-    html += '<span class="cmd-error">❌ Errors: ' + errCount + '</span>';
+    html += '<span class="cmd-success"> OK: ' + okCount + '</span> ';
+    html += '<span class="cmd-warn"> Warnings: ' + warnCount + '</span> ';
+    html += '<span class="cmd-error"> Errors: ' + errCount + '</span>';
     html += '<div class="cmd-divider"></div>';
     health.checks.forEach(c => {
-      const icon = c.status === 'ok' ? '✅' : c.status === 'warning' ? '⚠️' : '❌';
+      const icon = c.status === 'ok' ? 'OK' : c.status === 'warning' ? 'WARN' : 'FAIL';
       const cls = c.status === 'ok' ? 'cmd-success' : c.status === 'warning' ? 'cmd-warn' : 'cmd-error';
       html += '<span class="' + cls + '">' + icon + ' ' + c.name + '</span>';
       if (c.detail) html += ' <span style="color:var(--slate);">— ' + escapeHtml(c.detail) + '</span>';
@@ -1349,14 +1355,14 @@ window.runAiHealthScan = async function() {
     });
     if (health.issues > 0) {
       html += '<div class="cmd-divider"></div>';
-      html += '<span class="cmd-warn">⚠ ' + health.issues + ' issue(s) detected. Use Auto-Recover to fix.</span>';
+      html += '<span class="cmd-warn"> ' + health.issues + ' issue(s) detected. Use Auto-Recover to fix.</span>';
     } else {
       html += '<div class="cmd-divider"></div>';
-      html += '<span class="cmd-success">✅ All systems healthy!</span>';
+      html += '<span class="cmd-success"> All systems healthy!</span>';
     }
     output.innerHTML = html;
   } catch (e) {
-    output.innerHTML = '<span class="cmd-error">❌ Scan failed: ' + escapeHtml(e.message) + '</span>';
+    output.innerHTML = '<span class="cmd-error"> Scan failed: ' + escapeHtml(e.message) + '</span>';
   }
 };
 
@@ -1364,12 +1370,12 @@ window.runAiRecovery = async function() {
   if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) { showNeonToast('Admin only feature', 'warning'); return; }
   const output = $('ai-cmd-output-modal') || $('ai-cmd-output');
   if (!output) return;
-  output.innerHTML = '<span class="cmd-header">🔧 Running auto-recovery...</span>';
+  output.innerHTML = '<span class="cmd-header"> Running auto-recovery...</span>';
   try {
     await aiAgent.recover();
-    output.innerHTML = '<span class="cmd-success">✅ Auto-recovery completed. Stuck matches and failed refunds have been scanned and fixed.</span>';
+    output.innerHTML = '<span class="cmd-success"> Auto-recovery completed. Stuck matches and failed refunds have been scanned and fixed.</span>';
   } catch (e) {
-    output.innerHTML = '<span class="cmd-error">❌ Recovery failed: ' + escapeHtml(e.message) + '</span>';
+    output.innerHTML = '<span class="cmd-error"> Recovery failed: ' + escapeHtml(e.message) + '</span>';
   }
 };
 
@@ -1377,26 +1383,26 @@ window.showAiErrors = async function() {
   if (!myAddress || myAddress.toLowerCase() !== ADMIN_WALLET.toLowerCase()) { showNeonToast('Admin only feature', 'warning'); return; }
   const output = $('ai-cmd-output-modal') || $('ai-cmd-output');
   if (!output) return;
-  output.innerHTML = '<span class="cmd-header">📋 Loading error log...</span>';
+  output.innerHTML = '<span class="cmd-header"> Loading error log...</span>';
   try {
     const errors = await aiAgent.getRecentErrors();
     if (!errors || errors.length === 0) {
-      output.innerHTML = '<span class="cmd-success">✅ No errors logged — app is running clean!</span>';
+      output.innerHTML = '<span class="cmd-success"> No errors logged — app is running clean!</span>';
       return;
     }
-    let html = '<span class="cmd-header">📋 ERROR LOG (' + errors.length + ' entries)</span>';
+    let html = '<span class="cmd-header"> ERROR LOG (' + errors.length + ' entries)</span>';
     html += '<div class="cmd-divider"></div>';
     errors.slice(0, 20).forEach(e => {
-      const sev = e.severity === 'critical' ? '❌' : e.severity === 'error' ? '🔴' : e.severity === 'warning' ? '⚠️' : 'ℹ️';
+      const sev = e.severity === 'critical' ? 'CRIT' : e.severity === 'error' ? 'ERR' : e.severity === 'warning' ? 'WARN' : 'INFO';
       const cls = e.severity === 'critical' ? 'cmd-error' : e.severity === 'error' ? 'cmd-error' : e.severity === 'warning' ? 'cmd-warn' : 'cmd-success';
       html += '<span class="' + cls + '">' + sev + ' [' + escapeHtml(e.category) + '] ' + escapeHtml(e.message).slice(0, 80) + '</span>';
       html += ' <span style="color:var(--slate);font-size:9px;">' + new Date(e.timestamp).toLocaleTimeString() + '</span>';
-      if (e.auto_fixed) html += ' <span class="cmd-success">✅ AUTO-FIXED</span>';
+      if (e.auto_fixed) html += ' <span class="cmd-success"> AUTO-FIXED</span>';
       html += '<br>';
     });
     output.innerHTML = html;
   } catch (e) {
-    output.innerHTML = '<span class="cmd-error">❌ Could not load errors: ' + escapeHtml(e.message) + '</span>';
+    output.innerHTML = '<span class="cmd-error"> Could not load errors: ' + escapeHtml(e.message) + '</span>';
   }
 };
 
@@ -1407,19 +1413,19 @@ window.showAiStatus = async function() {
   try {
     const status = await aiAgent.quickStatus();
     const uptimeMin = Math.floor(status.uptime / 60);
-    let html = '<span class="cmd-header">📊 APP STATUS</span>';
+    let html = '<span class="cmd-header"> APP STATUS</span>';
     html += '<div class="cmd-divider"></div>';
-    html += '⏱️ Uptime: <span class="cmd-success">' + uptimeMin + 'm ' + (status.uptime % 60) + 's</span><br>';
-    html += '🎮 Game: <span class="cmd-' + (status.gameActive ? 'warn' : 'success') + '">' + (status.gameActive ? 'ACTIVE' : 'Idle') + '</span><br>';
-    html += '🔍 Matchmaking: <span class="cmd-' + (status.matchmaking ? 'warn' : 'success') + '">' + (status.matchmaking ? 'Searching' : 'Idle') + '</span><br>';
-    html += '💸 Paid: <span class="cmd-' + (status.hasPaid ? 'warn' : 'success') + '">' + (status.hasPaid ? 'Yes' : 'No') + '</span><br>';
-    html += '🎯 My Score: <span class="cmd-success">' + status.myScore + '</span> | Opp: <span class="cmd-success">' + status.oppScore + '</span><br>';
-    html += '🔄 Turns Left: <span class="cmd-success">' + status.turnsLeft + '</span><br>';
-    html += '💰 TNV: <span class="cmd-success">' + status.tnvBalance + '</span> | WLD: <span class="cmd-success">' + status.wldBalance.toFixed(2) + '</span><br>';
-    html += '📋 Errors buffered: <span class="cmd-' + (status.errorsLogged > 0 ? 'warn' : 'success') + '">' + status.errorsLogged + '</span>';
+    html += 'Uptime: <span class="cmd-success">' + uptimeMin + 'm ' + (status.uptime % 60) + 's</span><br>';
+    html += 'Game: <span class="cmd-' + (status.gameActive ? 'warn' : 'success') + '">' + (status.gameActive ? 'ACTIVE' : 'Idle') + '</span><br>';
+    html += 'Matchmaking: <span class="cmd-' + (status.matchmaking ? 'warn' : 'success') + '">' + (status.matchmaking ? 'Searching' : 'Idle') + '</span><br>';
+    html += 'Paid: <span class="cmd-' + (status.hasPaid ? 'warn' : 'success') + '">' + (status.hasPaid ? 'Yes' : 'No') + '</span><br>';
+    html += 'My Score: <span class="cmd-success">' + status.myScore + '</span> | Opp: <span class="cmd-success">' + status.oppScore + '</span><br>';
+    html += 'Turns Left: <span class="cmd-success">' + status.turnsLeft + '</span><br>';
+    html += 'TNV: <span class="cmd-success">' + status.tnvBalance + '</span> | WLD: <span class="cmd-success">' + status.wldBalance.toFixed(2) + '</span><br>';
+    html += 'Errors buffered: <span class="cmd-' + (status.errorsLogged > 0 ? 'warn' : 'success') + '">' + status.errorsLogged + '</span>';
     output.innerHTML = html;
   } catch (e) {
-    output.innerHTML = '<span class="cmd-error">❌ Status check failed</span>';
+    output.innerHTML = '<span class="cmd-error"> Status check failed</span>';
   }
 };
 
@@ -1431,12 +1437,12 @@ window.runAiDiagnose = function() {
   const output = $('ai-cmd-output-modal') || $('ai-cmd-output');
   if (!output) return;
   const diagnoses = aiAgent.diagnose(text);
-  let html = '<span class="cmd-header">🤖 AI DIAGNOSIS</span>';
+  let html = '<span class="cmd-header"> AI DIAGNOSIS</span>';
   html += '<div class="cmd-divider"></div>';
   html += '<span style="color:var(--slate);font-size:10px;">Input: ' + escapeHtml(text).slice(0, 100) + '</span>';
   html += '<div class="cmd-divider"></div>';
   diagnoses.forEach(d => {
-    const icon = d.severity === 'critical' ? '🚨' : d.severity === 'high' ? '🔴' : d.severity === 'medium' ? '⚠️' : 'ℹ️';
+    const icon = d.severity === 'critical' ? 'CRIT' : d.severity === 'high' ? 'HIGH' : d.severity === 'medium' ? 'WARN' : 'INFO';
     const cls = d.severity === 'critical' || d.severity === 'high' ? 'cmd-error' : 'cmd-warn';
     html += '<span class="' + cls + '">' + icon + ' ' + escapeHtml(d.issue) + '</span><br>';
     html += '<span style="color:var(--photon);font-size:11px;">Fix: ' + escapeHtml(d.fix) + '</span><br><br>';
@@ -1592,20 +1598,59 @@ window.submitAdminReply = async function(ticketId) {
   } catch (e) {
     showNeonToast('Error sending reply', 'error');
   }
-};async function fetchLeaderboard() {
+};
+
+// Leaderboard display name.
+// Guideline: show usernames, never raw wallet addresses. When a resolved
+// username exists we use it; otherwise we fall back to a stable pseudonym
+// derived from the address so the board still reads as distinct players
+// without exposing any part of anyone's wallet.
+function leaderboardName(row) {
+  const raw = row.display_name || row.username || row.user_username || '';
+  if (raw && String(raw).trim()) {
+    const n = sanitizeInput(String(raw).trim(), 24);
+    return n.charAt(0) === '@' ? n : '@' + n;
+  }
+  const addr = String(row.wallet_address || '');
+  if (!addr) return 'Anonymous';
+  let h = 0;
+  for (let i = 0; i < addr.length; i++) { h = (h * 31 + addr.charCodeAt(i)) >>> 0; }
+  return 'Player ' + String(1000 + (h % 9000));
+}
+
+async function fetchLeaderboard() {
+  const lbContainer = $('lb-container');
+  if (!lbContainer) return;
+  let rows = null;
+  // Preferred path: server-side RPC that resolves usernames and never
+  // returns wallet addresses to the client at all.
   try {
-    const { data } = await supabaseClient.from('user_rewards').select('wallet_address, tnv_balance').order('tnv_balance', { ascending: false }).limit(10);
-    const lbContainer = $('lb-container');
-    if (!data || data.length === 0) { lbContainer.innerHTML = `<div class="lb-item" style="justify-content:center; color:var(--slate);">No leaders yet</div>`; return; }
-    let html = '';
-    data.forEach((row, index) => {
-      let rankClass = index === 0 ? 'top-1' : (index === 1 ? 'top-2' : (index === 2 ? 'top-3' : ''));
-      let badge = index === 0 ? '<span class="lb-badge lb-badge-gold" title="1st Place">🥇</span>' : (index === 1 ? '<span class="lb-badge lb-badge-silver" title="2nd Place">🥈</span>' : (index === 2 ? '<span class="lb-badge lb-badge-bronze" title="3rd Place">🥉</span>' : ''));
-      let shortWallet = row.wallet_address.startsWith('0xDEV') ? 'Dev_' + row.wallet_address.slice(-4) : row.wallet_address.slice(0, 6) + '...' + row.wallet_address.slice(-4);
-      html += `<div class="lb-item ${rankClass}">${badge}<span class="lb-rank">#${index + 1}</span><span class="lb-user">${shortWallet}</span><span class="lb-score">${row.tnv_balance} TNV</span></div>`;
-    });
-    lbContainer.innerHTML = html;
-  } catch (e) {}
+    const { data, error } = await supabaseClient.rpc('get_leaderboard');
+    if (!error && Array.isArray(data)) rows = data;
+  } catch (e) { /* RPC not deployed yet — fall through to legacy read */ }
+  if (!rows) {
+    try {
+      const { data } = await supabaseClient.from('user_rewards')
+        .select('wallet_address, tnv_balance')
+        .order('tnv_balance', { ascending: false }).limit(10);
+      rows = data || [];
+    } catch (e) { rows = []; }
+  }
+  rows = (rows || []).filter(r => Number(r.tnv_balance) > 0);
+  if (!rows.length) {
+    lbContainer.innerHTML = '<div class="lb-item" style="justify-content:center; color:var(--slate);">No leaders yet</div>';
+    return;
+  }
+  lbContainer.innerHTML = rows.map((row, index) => {
+    const rank = Number(row.rank) || index + 1;
+    const rankClass = index === 0 ? 'top-1' : (index === 1 ? 'top-2' : (index === 2 ? 'top-3' : ''));
+    const badgeClass = index === 0 ? 'lb-badge-gold' : (index === 1 ? 'lb-badge-silver' : (index === 2 ? 'lb-badge-bronze' : ''));
+    return `<div class="lb-item ${rankClass}">`
+      + `<span class="lb-badge ${badgeClass}">#${rank}</span>`
+      + `<span class="lb-user">${escapeHtml(leaderboardName(row))}</span>`
+      + `<span class="lb-score">${escapeHtml(Number(row.tnv_balance).toLocaleString())} TNV</span>`
+      + `</div>`;
+  }).join('');
 }
 
 // LIVE STATS: fetch withdrawal requests, agent messages, total matches, online players
@@ -1636,7 +1681,11 @@ async function fetchLiveStats() {
 
 // Fetch live stats on load and every 30 seconds
 setTimeout(fetchLiveStats, 3000);
-setInterval(fetchLiveStats, 30000);  
+setInterval(fetchLiveStats, 30000);
+
+// Resolve the Home tab's withdrawal placeholder even before sign-in, so a
+// visitor never sees a permanent "Loading..." state.
+setTimeout(refreshHomeWithdrawStatus, 600);
 
 window.openWithdrawModal = function() {  
   if (currentTnvBalance < 5000) { showNeonToast('Min 5,000 TNV required!', 'warning'); return; }  
@@ -1669,6 +1718,14 @@ window.submitWithdrawRequest = async function() {
   myAddress = address ? address.toLowerCase() : address;
   $('display-username').innerText = myUsername;
   $('my-name-tag').innerText = myUsername;
+  // Persist the resolved username so the public leaderboard can show a
+  // name instead of a wallet address. Best-effort: older databases simply
+  // do not have this RPC yet and the board falls back to a pseudonym.
+  try {
+    if (myAddress && myUsername) {
+      supabaseClient.rpc('set_user_username', { p_wallet: myAddress, p_username: String(myUsername).replace(/^@/, '').slice(0, 24) }).catch(() => {});
+    }
+  } catch (e) {}
   fetchUserBalanceAndLeaderboard(myAddress);
   // AUTO-REFUND SCAN: silently check for stuck payments on login
   autoScanAndRefund(myAddress);
@@ -1754,7 +1811,7 @@ async function resolveUsername(address){
 function showAuthBanner(msg){  
   const el = $('auth-banner');  
   if (!el) return;  
-  el.textContent = '⚠️ ' + msg;  
+  el.textContent = msg;  
   el.style.display = 'block';  
 }  
 
@@ -1769,25 +1826,22 @@ function showPaymentConfirmedPopup(amountWld) {
   if (prev) prev.remove();
   const overlay = document.createElement('div');
   overlay.id = 'payment-confirmed-popup';
-  overlay.style.cssText = 'position:fixed; inset:0; z-index:999997; display:flex; align-items:center; justify-content:center; background:rgba(4,18,14,0.55); animation:payFadeIn .25s ease; pointer-events:none;';
+  overlay.style.cssText = 'position:fixed; inset:0; z-index:999997; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.6); animation:payFadeIn .25s ease; pointer-events:none;';
   const card = document.createElement('div');
-  card.style.cssText = 'width:min(86vw, 340px); background:linear-gradient(165deg, rgba(10,44,34,0.98), rgba(6,22,18,0.98)); border:2px solid var(--photon); border-radius:22px; padding:28px 22px; text-align:center; font-family:"Space Grotesk", sans-serif; box-shadow:0 0 45px rgba(41,217,194,0.45), inset 0 0 28px rgba(41,217,194,0.08); animation:payPop .38s cubic-bezier(.2,1.5,.4,1); pointer-events:auto;';
+  card.style.cssText = 'width:min(86vw, 340px); background:var(--bg-card); border:1px solid var(--border); border-radius:16px; padding:26px 22px; text-align:center; font-family:Inter, sans-serif; pointer-events:auto;';
   card.innerHTML = '';
   const icon = document.createElement('div');
-  icon.textContent = '✅';
-  icon.style.cssText = 'font-size:52px; line-height:1; margin-bottom:12px; filter:drop-shadow(0 0 14px rgba(41,217,194,0.7));';
+  icon.style.cssText = 'width:52px; height:52px; margin:0 auto 14px; border-radius:50%; background:var(--accent-dim); border:1px solid rgba(41,217,194,0.4); display:flex; align-items:center; justify-content:center;';
+  icon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
   const title = document.createElement('div');
-  title.textContent = 'PAYMENT CONFIRMED';
-  title.style.cssText = 'color:var(--photon); font-size:19px; font-weight:800; letter-spacing:1.5px; text-shadow:0 0 16px rgba(41,217,194,0.6);';
+  title.textContent = 'Payment confirmed';
+  title.style.cssText = 'color:var(--text); font-size:17px; font-weight:600;';
   const sub = document.createElement('div');
   sub.textContent = amountWld ? `${Number(amountWld).toFixed(2)} WLD secured — searching for opponent...` : 'Your entry fee is secured — searching for opponent...';
-  sub.style.cssText = 'color:#9fe8de; font-size:12px; margin-top:8px; opacity:.9; line-height:1.5;';
-  const bar = document.createElement('div');
-  bar.style.cssText = 'width:56px; height:3px; margin:16px auto 0; border-radius:2px; background:linear-gradient(90deg, transparent, var(--photon), transparent); background-size:200% 100%; animation:payBar 1s linear infinite;';
+  sub.style.cssText = 'color:var(--text-secondary); font-size:12px; margin-top:8px; line-height:1.5;';
   card.appendChild(icon);
   card.appendChild(title);
   card.appendChild(sub);
-  card.appendChild(bar);
   overlay.appendChild(card);
   card.addEventListener('click', () => overlay.remove());
   document.body.appendChild(overlay);
@@ -1802,10 +1856,10 @@ function showPaymentConfirmedPopup(amountWld) {
 // types: 'success' | 'warning' | 'error' | 'info'
 function showNeonToast(message, type = 'info') {
   const colors = {
-    success: { border: 'var(--photon)', color: 'var(--photon)', shadow: 'rgba(41,217,194,0.45)', icon: '✓' },
-    warning: { border: 'var(--gold)',   color: 'var(--gold)',   shadow: 'rgba(255,179,0,0.4)',   icon: '⚠' },
-    error:   { border: 'var(--signal)', color: 'var(--signal)', shadow: 'rgba(255,95,109,0.45)', icon: '✕' },
-    info:    { border: 'var(--iris)',   color: '#a79bf5',       shadow: 'rgba(108,92,231,0.45)', icon: 'ℹ' },
+    success: { border: 'rgba(41,217,194,0.45)', color: 'var(--accent)', icon: '\u2713' },
+    warning: { border: 'rgba(240,178,50,0.45)', color: 'var(--gold)', icon: '!' },
+    error: { border: 'rgba(232,93,93,0.45)', color: 'var(--danger)', icon: '\u2715' },
+    info: { border: 'var(--border)', color: 'var(--text)', icon: 'i' },
   };
   const c = colors[type] || colors.info;
   let container = document.getElementById('neon-toast-container');
@@ -1816,10 +1870,10 @@ function showNeonToast(message, type = 'info') {
     document.body.appendChild(container);
   }
   const el = document.createElement('div');
-  el.style.cssText = `pointer-events:auto; display:flex; align-items:center; gap:10px; width:100%; background:rgba(12,12,22,0.92); border:1.5px solid ${c.border}; color:${c.color}; padding:12px 16px; border-radius:14px; font-family:"Space Grotesk", sans-serif; font-size:12.5px; font-weight:600; line-height:1.4; text-align:left; box-shadow:0 0 22px ${c.shadow}, inset 0 0 12px rgba(255,255,255,0.02); backdrop-filter:blur(10px); opacity:0; transform:translateY(-10px); transition:opacity .25s ease, transform .25s ease; cursor:pointer;`;
+  el.style.cssText = `pointer-events:auto; display:flex; align-items:center; gap:10px; width:100%; background:var(--bg-elevated); border:1px solid ${c.border}; color:var(--text); padding:12px 14px; border-radius:12px; font-family:Inter, sans-serif; font-size:12.5px; font-weight:500; line-height:1.4; text-align:left; box-shadow:0 8px 24px rgba(0,0,0,0.4); opacity:0; transform:translateY(-8px); transition:opacity .22s ease, transform .22s ease; cursor:pointer;`;
   const icon = document.createElement('span');
   icon.textContent = c.icon;
-  icon.style.cssText = `flex:0 0 auto; width:22px; height:22px; border-radius:50%; border:1.5px solid ${c.border}; display:flex; align-items:center; justify-content:center; font-size:12px; box-shadow:0 0 10px ${c.shadow};`;
+  icon.style.cssText = `flex:0 0 auto; width:18px; height:18px; border-radius:6px; color:${c.color}; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;`;
   const msg = document.createElement('span');
   msg.style.cssText = 'flex:1; word-break:break-word;';
   msg.textContent = message;
@@ -1847,18 +1901,18 @@ function showPaymentCountdown(seconds = 6) {
     overlay.style.cssText = 'position:fixed; inset:0; z-index:999997; display:flex; align-items:center; justify-content:center; background:rgba(5,0,0,0.9); backdrop-filter:blur(10px); animation:fadeIn 0.3s ease;';
 
     const card = document.createElement('div');
-    card.style.cssText = 'background:rgba(17,17,32,0.98); border:2px solid var(--signal); border-radius:20px; padding:28px 24px; max-width:340px; width:90%; text-align:center; box-shadow:0 0 40px rgba(255,95,109,0.3), 0 0 80px rgba(255,95,109,0.1); animation:popIn 0.4s cubic-bezier(0.175,0.885,0.32,1.275);';
+    card.style.cssText = 'background:var(--bg-card); border:1px solid rgba(232,93,93,0.4); border-radius:16px; padding:24px; max-width:320px; width:90%; text-align:center;';
 
     let timeLeft = seconds;
     card.innerHTML = `
-      <div style="width:70px; height:70px; margin:0 auto 16px; border-radius:50%; background:linear-gradient(135deg, rgba(255,95,109,0.2), rgba(255,179,0,0.15)); border:3px solid var(--signal); display:flex; align-items:center; justify-content:center; font-size:32px; font-weight:900; color:var(--signal); font-family:'JetBrains Mono',monospace; box-shadow:0 0 25px rgba(255,95,109,0.5); animation:countdownPulse 1s ease-in-out infinite;" id="countdown-number">${timeLeft}</div>
-      <h3 style="font-family:'Space Grotesk',sans-serif; color:var(--signal); font-size:16px; margin:0 0 8px; text-shadow:0 0 12px rgba(255,95,109,0.4);">⚡ PAY NOW OR MATCH CANCELS</h3>
-      <p style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--bone); line-height:1.6; margin:0 0 12px;">Complete payment in World App within <span style="color:var(--signal); font-weight:700;" id="countdown-seconds">${timeLeft}s</span></p>
-      <div style="background:rgba(255,95,109,0.08); border:1px solid rgba(255,95,109,0.3); border-radius:10px; padding:10px; margin:0 0 8px;">
-        <p style="font-family:'Space Grotesk',sans-serif; font-size:11px; color:var(--signal); font-weight:600; margin:0;">If payment not received → Match auto-cancels</p>
-        <p style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--slate); margin:4px 0 0;">Opponent is waiting for your payment</p>
+      <div style="width:56px; height:56px; margin:0 auto 14px; border-radius:12px; background:var(--danger-dim); border:1px solid rgba(232,93,93,0.4); display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:700; color:var(--danger); font-family:var(--mono);" id="countdown-number">${timeLeft}</div>
+      <h3 style="font-family:'Inter',sans-serif; color:var(--text); font-size:16px; font-weight:600; margin:0 0 8px;">Confirm payment</h3>
+      <p style="font-family:'Inter',sans-serif; font-size:12px; color:var(--text-secondary); line-height:1.6; margin:0 0 12px;">Complete the payment in World App within <span style="color:var(--danger); font-weight:600;" id="countdown-seconds">${timeLeft}s</span></p>
+      <div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:10px; padding:10px; margin:0 0 8px;">
+        <p style="font-family:'Inter',sans-serif; font-size:11px; color:var(--text-secondary); font-weight:500; margin:0;">If payment is not received, the match auto-cancels.</p>
+        <p style="font-family:'Inter',sans-serif; font-size:11px; color:var(--text-muted); margin:4px 0 0;">Your opponent is waiting for your payment.</p>
       </div>
-      <div id="countdown-status" style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--photon); margin-top:8px;">Waiting for payment...</div>
+      <div id="countdown-status" style="font-family:'Inter',sans-serif; font-size:11px; color:var(--text-muted); margin-top:8px;">Waiting for payment...</div>
     `;
 
     overlay.appendChild(card);
@@ -1871,14 +1925,13 @@ function showPaymentCountdown(seconds = 6) {
       if (numEl) numEl.textContent = timeLeft;
       if (secEl) secEl.textContent = timeLeft + 's';
       if (timeLeft <= 3) {
-        if (numEl) { numEl.style.color = '#ff0040'; numEl.style.textShadow = '0 0 20px #ff0040'; }
-        card.style.borderColor = '#ff0040';
-        card.style.boxShadow = '0 0 50px rgba(255,0,64,0.5)';
+        if (numEl) numEl.style.color = 'var(--danger)';
+        card.style.borderColor = 'rgba(232,93,93,0.7)';
       }
       if (timeLeft <= 0) {
         clearInterval(timer);
         const statusEl = document.getElementById('countdown-status');
-        if (statusEl) { statusEl.textContent = '❌ TIME UP — Match cancelled'; statusEl.style.color = 'var(--signal)'; }
+        if (statusEl) { statusEl.textContent = 'Time up — match cancelled'; statusEl.style.color = 'var(--danger)'; }
         setTimeout(() => { cleanup(); resolve('timeout'); }, 1000);
       }
     }, 1000);
@@ -1920,19 +1973,21 @@ function showNeonCancelPopup(feeAmount) {
     overlay.style.cssText = 'position:fixed; inset:0; z-index:999998; display:flex; align-items:center; justify-content:center; background:rgba(5,0,0,0.85); backdrop-filter:blur(8px); animation:fadeIn 0.3s ease;';
 
     const card = document.createElement('div');
-    card.style.cssText = 'background:rgba(17,17,32,0.98); border:2px solid var(--gold); border-radius:20px; padding:28px 24px; max-width:340px; width:90%; text-align:center; box-shadow:0 0 40px rgba(255,179,0,0.3), 0 0 80px rgba(255,179,0,0.1); animation:popIn 0.4s cubic-bezier(0.175,0.885,0.32,1.275);';
+    card.style.cssText = 'background:var(--bg-card); border:1px solid var(--border); border-radius:16px; padding:24px; max-width:320px; width:90%; text-align:center;';
 
     card.innerHTML = `
-      <div style="width:60px; height:60px; margin:0 auto 16px; border-radius:50%; background:linear-gradient(135deg, rgba(255,179,0,0.2), rgba(255,95,109,0.15)); border:2px solid var(--gold); display:flex; align-items:center; justify-content:center; font-size:28px; box-shadow:0 0 20px rgba(255,179,0,0.4);">⚡</div>
-      <h3 style="font-family:'Space Grotesk',sans-serif; color:var(--gold); font-size:18px; margin:0 0 12px; text-shadow:0 0 12px rgba(255,179,0,0.4);">Opponent Left</h3>
-      <p style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--bone); line-height:1.6; margin:0 0 8px;">Your opponent cancelled the match.</p>
-      <div style="background:rgba(41,217,194,0.08); border:1px solid rgba(41,217,194,0.3); border-radius:10px; padding:12px; margin:12px 0;">
-        <p style="font-family:'Space Grotesk',sans-serif; font-size:13px; color:var(--photon); font-weight:700; margin:0 0 4px;">Your funds are SAFE</p>
-        <p style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--slate); margin:0;">${feeAmount} WLD refund is being processed</p>
-        <p style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--photon); margin:4px 0 0;">Refund arrives within ~1 minute</p>
+      <div style="width:48px; height:48px; margin:0 auto 14px; border-radius:12px; background:var(--gold-dim); border:1px solid rgba(240,178,50,0.35); display:flex; align-items:center; justify-content:center;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <h3 style="font-family:'Inter',sans-serif; color:var(--text); font-size:17px; font-weight:600; margin:0 0 10px;">Opponent left</h3>
+      <p style="font-family:'Inter',sans-serif; font-size:12px; color:var(--text-secondary); line-height:1.6; margin:0 0 8px;">Your opponent cancelled the match.</p>
+      <div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:10px; padding:12px; margin:12px 0;">
+        <p style="font-family:'Inter',sans-serif; font-size:13px; color:var(--accent); font-weight:600; margin:0 0 4px;">Your funds are safe</p>
+        <p style="font-family:'Inter',sans-serif; font-size:11px; color:var(--text-secondary); margin:0;">${feeAmount} WLD refund is being processed</p>
+        <p style="font-family:'Inter',sans-serif; font-size:11px; color:var(--text-muted); margin:4px 0 0;">Refund arrives within about a minute</p>
       </div>
       <div style="display:flex; gap:8px; margin-top:16px;">
-        <button id="cancel-popup-ok" style="flex:1; background:linear-gradient(135deg,var(--iris),#4c3fc9); color:var(--bone); border:none; border-radius:10px; padding:12px; font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:13px; cursor:pointer; transition:transform 0.15s;">GOT IT</button>
+        <button id="cancel-popup-ok" style="flex:1; background:var(--accent); color:var(--bg); border:none; border-radius:10px; padding:12px; font-family:'Inter',sans-serif; font-weight:600; font-size:13px; cursor:pointer;">GOT IT</button>
       </div>
     `;
 
@@ -1960,26 +2015,22 @@ function neonConfirm(message) {
     overlay.id = 'neon-confirm-overlay';
     overlay.style.cssText = 'position:fixed; inset:0; z-index:999998; display:flex; align-items:center; justify-content:center; background:rgba(5,5,12,0.75); backdrop-filter:blur(6px);';
     const box = document.createElement('div');
-    box.style.cssText = 'width:min(88vw, 360px); background:linear-gradient(160deg, rgba(17,17,32,0.98), rgba(11,11,20,0.98)); border:1.5px solid var(--photon); border-radius:18px; padding:22px; text-align:center; font-family:"Space Grotesk", sans-serif; box-shadow:0 0 30px rgba(41,217,194,0.25), inset 0 0 20px rgba(41,217,194,0.05);';
-    const icon = document.createElement('div');
-    icon.textContent = '⚠️';
-    icon.style.cssText = 'font-size:30px; margin-bottom:10px; filter:drop-shadow(0 0 8px rgba(255,179,0,0.5));';
+    box.style.cssText = 'width:min(88vw, 360px); background:var(--bg-card); border:1px solid var(--border); border-radius:16px; padding:22px; text-align:center; font-family:Inter, sans-serif;';
     const text = document.createElement('div');
     text.textContent = message;
-    text.style.cssText = 'color:var(--bone); font-size:13.5px; font-weight:600; line-height:1.5; margin-bottom:18px; word-break:break-word;';
+    text.style.cssText = 'color:var(--text); font-size:13.5px; font-weight:500; line-height:1.5; margin-bottom:18px; word-break:break-word;';
     const btnRow = document.createElement('div');
     btnRow.style.cssText = 'display:flex; gap:10px;';
     const cancelBtn = document.createElement('button');
     cancelBtn.textContent = 'Cancel';
-    cancelBtn.style.cssText = 'flex:1; padding:10px; border-radius:12px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.04); color:var(--slate); font-family:"Space Grotesk", sans-serif; font-size:12px; font-weight:700; cursor:pointer;';
+    cancelBtn.style.cssText = 'flex:1; padding:11px; border-radius:10px; border:1px solid var(--border); background:transparent; color:var(--text-secondary); font-family:Inter, sans-serif; font-size:13px; font-weight:500; cursor:pointer;';
     const okBtn = document.createElement('button');
     okBtn.textContent = 'Confirm';
-    okBtn.style.cssText = 'flex:1; padding:10px; border-radius:12px; border:1.5px solid var(--signal); background:rgba(255,95,109,0.12); color:var(--signal); font-family:"Space Grotesk", sans-serif; font-size:12px; font-weight:700; cursor:pointer; box-shadow:0 0 14px rgba(255,95,109,0.3);';
+    okBtn.style.cssText = 'flex:1; padding:11px; border-radius:10px; border:none; background:var(--accent); color:var(--bg); font-family:Inter, sans-serif; font-size:13px; font-weight:600; cursor:pointer;';
     cancelBtn.onclick = () => { overlay.remove(); resolve(false); };
     okBtn.onclick = () => { overlay.remove(); resolve(true); };
     btnRow.appendChild(cancelBtn);
     btnRow.appendChild(okBtn);
-    box.appendChild(icon);
     box.appendChild(text);
     box.appendChild(btnRow);
     overlay.appendChild(box);
@@ -2179,7 +2230,7 @@ async function performWalletAuth(silent = false){
   // 6-SECOND PAYMENT TIMEOUT: both players must pay within 6 seconds
   // ============================================
   async function performPaymentAndStartSearch() {
-    $('wait-status').innerText = `⚡ Pay within 6 seconds or match cancels!`;
+    $('wait-status').innerText = `Pay within 6 seconds or match cancels!`;
 
     const paymentReference = 'ref_' + randomAlphaNumeric(16);
     let paymentSuccessful = false;
@@ -2217,7 +2268,7 @@ async function performWalletAuth(silent = false){
     const countdownResult = await countdownPromise;
     if (countdownResult === 'timeout' && !paymentSuccessful) {
       // 6 seconds up, payment not received — cancel match
-      showNeonToast('⏰ Payment timeout — Match cancelled', 'error');
+      showNeonToast('Payment timeout — Match cancelled', 'error');
       if (matchId && myAddress) {
         ensureRefundQueuedInBackground(matchId, myAddress.toLowerCase().trim());
       }
@@ -2295,7 +2346,7 @@ async function performWalletAuth(silent = false){
 
     setupChannel();
     pollTimer = setInterval(checkBothReady, 1000);
-n    // Background retry for deposit booking
+n // Background retry for deposit booking
     let bookingInFlight = false;
     let bookingAttempts = 0;
     bookingRetryTimer = setInterval(async () => {
@@ -2345,7 +2396,7 @@ function setupChannel() {
       if (pollTimer) clearInterval(pollTimer);  
       if (payload && payload.oppName) $('opp-name-tag').innerText = payload.oppName;  
       startSyncCountdown();  
-    })    .on('broadcast', { event: 'score_update' }, ({ payload }) => {
+    }) .on('broadcast', { event: 'score_update' }, ({ payload }) => {
       if (payload.sender !== myAddress){
         // ANTI-CHEAT: Validate incoming score from opponent
         const validRolls = [1, 2, 3, 4, 5, 6];
@@ -2442,7 +2493,7 @@ async function cancelMatchmaking(showAlert = true) {
       p_match_id: targetMatchId, p_wallet: targetWallet
     });
     if (leaveRes?.data && leaveRes.data.success === false && leaveRes.data.error?.includes('too many cancellations')) {
-      showNeonToast('⚠️ Too many cancels — try again in an hour.', 'warning');
+      showNeonToast('Too many cancels — try again in an hour.', 'warning');
     }
   } catch(e) {
 
@@ -2527,13 +2578,11 @@ async function startSyncCountdown(){
 
   $('wait-status').style.color = 'var(--photon)';  
   $('wait-status').innerText = 'OPPONENT CONNECTED!';  
-  $('target-dot').classList.add('connected');   
 
   setTimeout(() => {  
     $('waiting-overlay').style.display = 'none';  
     if (typeof showGameScreen === 'function') showGameScreen();
     else { document.body.classList.add('game-live'); $('game-screen').style.display = 'block'; }  
-    $('target-dot').classList.remove('connected');  
 
     myTurnsLeft = 15;
     // Fresh game — reset scores so a second match in the same session
@@ -2790,7 +2839,7 @@ async function tapSkillMeter() {
       // Show burst status if player has catch-up taps available
       const burst = getBurstAllowance();
       if (burst > 0) {
-        $('turn-indicator').innerText = `⚡ BURST! ${burst} fast taps available (${myTurnsLeft} left)`;
+        $('turn-indicator').innerText = `BURST! ${burst} fast taps available (${myTurnsLeft} left)`;
       } else {
         $('turn-indicator').innerText = `tap TAP NOW! to score (${myTurnsLeft} turns left)`;
       }
@@ -2887,7 +2936,7 @@ async function finalizeGame(){
   let winTnv = getTnvRewardForFee(matchFee);  
   let earnedTnv = isWin ? winTnv : Math.floor(winTnv / 3);  
 
-  // TIE = void match (both players refunded, no winner/loser) → NO TNV
+  // TIE = void match (both players refunded, no winner/loser) NO TNV
   // for anyone. secure_credit_tnv also rejects ties server-side; skipping
   // here keeps the popup consistent with the rules.  
   // The settled flag is only set on SUCCESS — a transient RPC failure is
@@ -2913,18 +2962,18 @@ async function finalizeGame(){
   }  
 
   if (isTie){  
-    $('result-icon').innerText = '=';  
+    $('result-icon').innerHTML = RESULT_ICONS.tie;  
     $('result-title').innerText = 'TIE!';  
     $('result-msg').innerText = `Equal scores — your ${matchFee} WLD is being refunded automatically`;  
     $('result-card').className = 'result-card result-tie';  
   } else if (isWin){  
-    $('result-icon').innerText = 'W';  
+    $('result-icon').innerHTML = RESULT_ICONS.win;  
     $('result-title').innerText = 'VICTORY!';  
     $('result-msg').innerText = `+${exactChipEarn} WLD & +${earnedTnv} TNV`;  
     $('result-card').className = 'result-card result-victory';  
     playVictorySound();  
   } else {  
-    $('result-icon').innerText = 'L';  
+    $('result-icon').innerHTML = RESULT_ICONS.loss;  
     $('result-title').innerText = 'DEFEAT!';  
     $('result-msg').innerText = `Fee deducted & +${earnedTnv} TNV (Consolation)`;  
     $('result-card').className = 'result-card result-defeat';  
@@ -2983,20 +3032,20 @@ window.openSupportBot = function() {
   botStep = 0;
 
   if (!myAddress) {
-    botAddMsg('bot', '👋 Hi! I\'m the Payment Support Bot.');
+    botAddMsg('bot', 'Hi! I\'m the Payment Support Bot.');
     botAddMsg('bot', 'Please sign in first so I can check your account. Tap PLAY NOW to connect your wallet.');
     botAddBtn('Got it', () => closeSupportBot());
     return;
-  }  botAddMsg('bot', '👋 Hi! I\'m the Payment Support Bot.');  
+  } botAddMsg('bot', 'Hi! I\'m the Payment Support Bot.');  
   // Show any admin replies from a previous Agent ticket first — the
   // admin replies with their REAL Worldcoin username.
   botShowAdminReplies();  
   botAddMsg('bot', 'Did you make a payment for a match that didn\'t connect or didn\'t get a refund?');  
   botStep = 1;  
-  botAddBtn('✅ Yes, I paid', () => botHandleYes());  
-  botAddBtn('❌ No', () => botHandleNo(), 'danger');  
-  botAddBtn('❓ How to find my Tx Hash', () => { botClearBtns(); botStep = 3; botShowTxInput(); });  
-  botAddBtn('🤝 Talk to Agent airdrophubgroup', () => botStartAgent(), 'agent');  
+  botAddBtn('Yes, I paid', () => botHandleYes());  
+  botAddBtn('No', () => botHandleNo(), 'danger');  
+  botAddBtn('How to find my Tx Hash', () => { botClearBtns(); botStep = 3; botShowTxInput(); });  
+  botAddBtn('Talk to Agent airdrophubgroup', () => botStartAgent(), 'agent');  
 };  
 
 async function botShowAdminReplies() {  
@@ -3007,8 +3056,8 @@ async function botShowAdminReplies() {
     const replied = data.filter(t => t.status === 'replied' && t.admin_reply);  
     if (replied.length === 0) return;  
     replied.slice(0, 3).forEach(t => {  
-      botAddMsg('bot', `📬 You have a reply on support ticket #${t.id}`);  
-      botAddHtmlMsg('bot', `<div style="font-size:11.5px; line-height:1.5;">💬 <b style="color:var(--gold);">${escapeHtml(t.admin_username || 'Admin')}</b> (Admin): ${escapeHtml(t.admin_reply || '')}</div><div style="color:#777; font-size:9.5px; text-align:right; margin-top:3px;">${new Date(t.admin_reply_at).toLocaleString()}</div>`);  
+      botAddMsg('bot', `You have a reply on support ticket #${t.id}`);  
+      botAddHtmlMsg('bot', `<div style="font-size:11.5px; line-height:1.5;"> <b style="color:var(--gold);">${escapeHtml(t.admin_username || 'Admin')}</b> (Admin): ${escapeHtml(t.admin_reply || '')}</div><div style="color:#777; font-size:9.5px; text-align:right; margin-top:3px;">${new Date(t.admin_reply_at).toLocaleString()}</div>`);  
     });  
   } catch (e) {}  
 }
@@ -3084,7 +3133,7 @@ function botAddBtn(text, onClick, extraClass) {
 
 async function botHandleYes() {
   botAddMsg('user', 'Yes, I paid but didn\'t get a refund.');
-  botAddMsg('system', '🔍 Scanning your recent matches...');
+  botAddMsg('system', 'Scanning your recent matches...');
   botShowTyping();
   botStep = 2;
 
@@ -3095,8 +3144,8 @@ async function botHandleYes() {
   }
   if (!myAddress) {
     botHideTyping();
-    botAddMsg('error', '⚠️ Please sign in first so I can check your account. Tap PLAY NOW to connect your wallet.');
-    botAddBtn('👍 Got it', () => closeSupportBot());
+    botAddMsg('error', 'Please sign in first so I can check your account. Tap PLAY NOW to connect your wallet.');
+    botAddBtn('Got it', () => closeSupportBot());
     return;
   }
 
@@ -3149,7 +3198,7 @@ async function botHandleYes() {
       // All paid matches already have refunds or are completed
       const hasCompleted = matches.some(m => m.status === 'completed');
       if (hasCompleted) {
-        botAddMsg('bot', '✅ All your paid matches have been completed or already refunded. You\'re all good!');
+        botAddMsg('bot', 'All your paid matches have been completed or already refunded. You\'re all good!');
       } else {
         botAddMsg('bot', 'I checked your recent matches and they all already have pending refunds or no payment was found.');
         botAddMsg('bot', 'If you still need help, paste your transaction hash below and I\'ll verify it directly on-chain.');
@@ -3164,10 +3213,10 @@ async function botHandleYes() {
 
     for (const m of refundableMatches) {
       const fee = Number(m.fee);
-      botAddHtmlMsg('bot', `📋 <b>Match:</b> ${fee} WLD | Status: ${m.status} | Created: ${new Date(m.created_at).toLocaleString()}`);
+      botAddHtmlMsg('bot', `<b>Match:</b> ${fee} WLD | Status: ${m.status} | Created: ${new Date(m.created_at).toLocaleString()}`);
     }
 
-    botAddMsg('bot', '🔄 Processing your refund now...');
+    botAddMsg('bot', 'Processing your refund now...');
     botShowTyping();
 
     let successCount = 0;
@@ -3197,24 +3246,24 @@ async function botHandleYes() {
     botHideTyping();
 
     if (successCount > 0) {
-      botAddMsg('success', `✅ ${successCount} refund(s) queued successfully! Your WLD will be returned within ~1 minute.`);
-      botAddMsg('bot', '💡 The refund is processed automatically by our server. You don\'t need to do anything else.');
-      botAddMsg('system', '⏰ If you don\'t see the refund after 5 minutes, come back and paste your transaction hash below.');
+      botAddMsg('success', `${successCount} refund(s) queued successfully! Your WLD will be returned within ~1 minute.`);
+      botAddMsg('bot', 'The refund is processed automatically by our server. You don\'t need to do anything else.');
+      botAddMsg('system', 'If you don\'t see the refund after 5 minutes, come back and paste your transaction hash below.');
     }
 
     if (failCount > 0) {
-      botAddMsg('bot', `⚠️ ${failCount} refund(s) couldn\'t be queued. Please paste your transaction hash below for manual verification.`);
+      botAddMsg('bot', `${failCount} refund(s) couldn\'t be queued. Please paste your transaction hash below for manual verification.`);
       botStep = 3;
       botShowTxInput();
-    }    if (successCount > 0 && failCount === 0) {  
-      botAddBtn('👍 Thanks!', () => closeSupportBot());  
-      botAddBtn('📋 Check another', () => { botClearBtns(); botHandleYes(); });  
-      botAddBtn('🤝 Not satisfied? Talk to Agent', () => botStartAgent(), 'agent');  
+    } if (successCount > 0 && failCount === 0) {  
+      botAddBtn('Thanks!', () => closeSupportBot());  
+      botAddBtn('Check another', () => { botClearBtns(); botHandleYes(); });  
+      botAddBtn('Not satisfied? Talk to Agent', () => botStartAgent(), 'agent');  
     }  
 
   } catch (e) {
     botHideTyping();
-    botAddMsg('error', '❌ Error scanning matches. Please paste your transaction hash below.');
+    botAddMsg('error', 'Error scanning matches. Please paste your transaction hash below.');
     botStep = 3;
     botShowTxInput();
 
@@ -3236,20 +3285,20 @@ function botStartAgent() {
   // Start a fresh transcript for this agent session — the admin will see
   // this user's full conversation attached to the ticket.
   botTranscript = [];
-  botAddHtmlMsg('bot', '🤝 Hi! I\'m <b>Agent airdrophubgroup</b> — a real person from the airdrophubgroup team, not a bot. 🤗');
-  botAddMsg('bot', 'I understand you\'re having trouble. Please don\'t worry — I\'ll personally look into it with you, step by step, and make sure you\'re taken care of. ❤️');
+  botAddHtmlMsg('bot', 'Hi! I\'m <b>Agent airdrophubgroup</b> — a real person from the airdrophubgroup team, not a bot.');
+  botAddMsg('bot', 'I understand you\'re having trouble. Please don\'t worry — I\'ll personally look into it with you, step by step, and make sure you\'re taken care of.');
   botAddMsg('bot', 'Can you tell me what happened?');
   botAgentStep = 1;
-  botAddBtn('💸 I paid but no refund', () => botAgentIssue('norefund'));
-  botAddBtn('🔗 Match never connected', () => botAgentIssue('noconnect'));
-  botAddBtn('❓ Something else', () => botAgentIssue('other'));
+  botAddBtn('I paid but no refund', () => botAgentIssue('norefund'));
+  botAddBtn('Match never connected', () => botAgentIssue('noconnect'));
+  botAddBtn('Something else', () => botAgentIssue('other'));
 }
 
 async function botAgentIssue(kind) {
   botClearBtns();
   const labels = { norefund: 'I paid but my refund never came.', noconnect: 'I joined a match but it never connected.', other: 'I have another problem with the game.' };
   botAddMsg('user', labels[kind] || labels.other);
-  botAddMsg('bot', 'Okay, thank you for telling me. 🙏 Let me carefully check your account right now — I\'ll verify every single thing before we go further.');
+  botAddMsg('bot', 'Okay, thank you for telling me. Let me carefully check your account right now — I\'ll verify every single thing before we go further.');
   botShowTyping();
   botAgentStep = 2;
 
@@ -3309,29 +3358,29 @@ async function botAgentIssue(kind) {
   botAgentVerified = verified;
 
   // Empathetic summary
-  botAddMsg('bot', 'Alright, I\'ve personally checked everything on your account. Here\'s what I found: 👇');
+  botAddMsg('bot', 'Alright, I\'ve personally checked everything on your account. Here\'s what I found:');
   botAddHtmlMsg('bot',
     `<div style="font-size:11px; line-height:1.7; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:9px 11px;">` +
-    `📊 <b>Your account verification</b><br/>` +
-    `🎮 Matches found: <b>${verified.match_count || 0}</b><br/>` +
-    `💸 Payments made: <b>${verified.paid_matches || 0}</b><br/>` +
-    `✅ Refunds received: <b>${verified.refunded || 0}</b><br/>` +
-    `⏳ Refunds processing: <b>${verified.pending || 0}</b><br/>` +
-    `⚠️ Payments without refund: <b>${verified.missing || 0}</b><br/>` +
-    `🎫 Your support tickets: <b>${verified.tickets || 0}</b>` +
+    `<b>Your account verification</b><br/>` +
+    `Matches found: <b>${verified.match_count || 0}</b><br/>` +
+    `Payments made: <b>${verified.paid_matches || 0}</b><br/>` +
+    `Refunds received: <b>${verified.refunded || 0}</b><br/>` +
+    `Refunds processing: <b>${verified.pending || 0}</b><br/>` +
+    `Payments without refund: <b>${verified.missing || 0}</b><br/>` +
+    `Your support tickets: <b>${verified.tickets || 0}</b>` +
     `</div>`
   );
 
   if ((verified.missing || 0) > 0) {
-    botAddMsg('bot', 'I can see you have a payment that hasn\'t been refunded yet — that\'s not fair to you, and I\'m sorry. 😔 I\'ll make sure the team handles it personally.');
+    botAddMsg('bot', 'I can see you have a payment that hasn\'t been refunded yet — that\'s not fair to you, and I\'m sorry. I\'ll make sure the team handles it personally.');
   } else {
-    botAddMsg('bot', 'I checked everything and didn\'t find any missing refund on your account. But if you\'re still worried, I\'ll happily create a ticket so the team reviews it personally — no question is too small. 😊');
+    botAddMsg('bot', 'I checked everything and didn\'t find any missing refund on your account. But if you\'re still worried, I\'ll happily create a ticket so the team reviews it personally — no question is too small.');
   }
 
   botAgentStep = 3;
-  botAddBtn('✅ Yes, create my ticket', () => botCreateTicket());
-  botAddBtn('↩️ Let me check again', () => { botClearBtns(); botHandleYes(); });
-  botAddBtn('❌ Never mind', () => closeSupportBot());
+  botAddBtn('Yes, create my ticket', () => botCreateTicket());
+  botAddBtn('Let me check again', () => { botClearBtns(); botHandleYes(); });
+  botAddBtn('Never mind', () => closeSupportBot());
 }
 
 async function botCreateTicket() {
@@ -3352,26 +3401,26 @@ async function botCreateTicket() {
     });
     botHideTyping();
     if (data && data.success) {
-      botAddMsg('success', `✅ Your support ticket #${data.ticket_id} has been created!`);
-      botAddHtmlMsg('bot', 'The admin (airdrophubgroup team) has been notified and will personally reply to you <b>right here</b> — the reply will show their real Worldcoin username. 🙌');
-      botAddMsg('bot', 'Thank you for your patience — we\'ll take care of you. ❤️');
-      botAddBtn('👍 Done', () => closeSupportBot());
+      botAddMsg('success', `Your support ticket #${data.ticket_id} has been created!`);
+      botAddHtmlMsg('bot', 'The admin (airdrophubgroup team) has been notified and will personally reply to you <b>right here</b> — the reply will show their real Worldcoin username.');
+      botAddMsg('bot', 'Thank you for your patience — we\'ll take care of you.');
+      botAddBtn('Done', () => closeSupportBot());
     } else {
-      botAddMsg('error', '❌ Could not create the ticket: ' + (data?.error || 'unknown error'));
-      botAddBtn('🔄 Try again', () => botCreateTicket());
+      botAddMsg('error', 'Could not create the ticket: ' + (data?.error || 'unknown error'));
+      botAddBtn('Try again', () => botCreateTicket());
     }
   } catch (e) {
     botHideTyping();
-    botAddMsg('error', '❌ Something went wrong creating the ticket. Please try again.');
-    botAddBtn('🔄 Try again', () => botCreateTicket());
+    botAddMsg('error', 'Something went wrong creating the ticket. Please try again.');
+    botAddBtn('Try again', () => botCreateTicket());
   }
 }
 
 function botHandleNo() {
   botAddMsg('user', 'No, I didn\'t pay.');
   botAddMsg('bot', 'No problem! If you didn\'t make a payment, there\'s nothing to refund. Your funds are safe.');
-  botAddMsg('bot', 'Come back anytime if you need help! 🎲');
-  botAddBtn('👍 Got it', () => closeSupportBot());
+  botAddMsg('bot', 'Come back anytime if you need help!');
+  botAddBtn('Got it', () => closeSupportBot());
 }
 
 // Step-by-step guide shown before the tx-hash input so users who
@@ -3380,14 +3429,14 @@ function botHandleNo() {
 // at the match time -> copy the hash -> paste it below.
 function botShowTxInstructions() {
   const addr = myAddress || '';
-  botAddHtmlMsg('bot', '<div style="font-family:\'JetBrains Mono\',monospace; font-weight:700; font-size:10px; letter-spacing:1px; color:var(--gold); margin-bottom:6px;">📖 HOW TO FIND YOUR TX HASH</div>' +
+  botAddHtmlMsg('bot', '<div style="font-family:\'JetBrains Mono\',monospace; font-weight:700; font-size:10px; letter-spacing:1px; color:var(--gold); margin-bottom:6px;"> HOW TO FIND YOUR TX HASH</div>' +
     '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(41,217,194,0.25); border-radius:8px; background:rgba(41,217,194,0.06); font-size:10.5px; line-height:1.55;">' +
-    '<b style="color:var(--photon);">Step 1</b> — Copy your World Chain wallet address 👇<br/>' +
-    (addr ? `<button onclick="navigator.clipboard.writeText('${addr}'); this.textContent='✅ Copied!';" style="margin-top:5px; background:rgba(41,217,194,0.15); border:1px solid rgba(41,217,194,0.5); color:var(--photon); font-size:10px; padding:5px 10px; border-radius:6px; cursor:pointer;">📋 Copy my address</button>` : '') +
+    '<b style="color:var(--photon);">Step 1</b> — Copy your World Chain wallet address <br/>' +
+    (addr ? `<button onclick="navigator.clipboard.writeText('${addr}'); this.textContent='Copied!';" style="margin-top:5px; background:rgba(41,217,194,0.15); border:1px solid rgba(41,217,194,0.5); color:var(--photon); font-size:10px; padding:5px 10px; border-radius:6px; cursor:pointer;"> Copy my address</button>` : '') +
     '</div>' +
     '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(255,179,0,0.25); border-radius:8px; background:rgba(255,179,0,0.05); font-size:10.5px; line-height:1.55;">' +
     '<b style="color:var(--gold);">Step 2</b> — Open a World Chain block explorer:<br/>' +
-    '<a href="https://worldscan.org/" target="_blank" rel="noopener" style="color:var(--photon); font-weight:700; font-size:11px;">🌐 worldscan.org</a> ' +
+    '<a href="https://worldscan.org/" target="_blank" rel="noopener" style="color:var(--photon); font-weight:700; font-size:11px;"> worldscan.org</a> ' +
     '<span style="color:var(--slate);">(or search \'Worldscan\' on Google)</span>' +
     '</div>' +
     '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(41,217,194,0.25); border-radius:8px; background:rgba(41,217,194,0.06); font-size:10.5px; line-height:1.55;">' +
@@ -3397,7 +3446,7 @@ function botShowTxInstructions() {
     '<b style="color:var(--photon);">Step 4</b> — Look for the <b style="color:var(--photon);">WLD payment</b> you sent at the exact time you played the match. Open that transaction.' +
     '</div>' +
     '<div style="margin:6px 0; padding:8px 10px; border:1px solid rgba(41,217,194,0.25); border-radius:8px; background:rgba(41,217,194,0.06); font-size:10.5px; line-height:1.55;">' +
-    '<b style="color:var(--photon);">Step 5</b> — Copy the <b style="color:var(--gold);">Transaction Hash</b> (starts with <span style="font-family:\'JetBrains Mono\',monospace; color:var(--photon);">0x...</span>, 66 characters) and paste it in the box below 👇' +
+    '<b style="color:var(--photon);">Step 5</b> — Copy the <b style="color:var(--gold);">Transaction Hash</b> (starts with <span style="font-family:\'JetBrains Mono\',monospace; color:var(--photon);">0x...</span>, 66 characters) and paste it in the box below' +
     '</div>');
 }
 
@@ -3406,14 +3455,14 @@ function botShowTxInput() {
   $('bot-input-area').style.display = 'block';
   $('bot-tx-input').value = '';
   $('bot-tx-input').focus();
-  botAddBtn('🔍 Verify Tx Hash', () => submitBotTxHash());
-  botAddBtn('↩️ Go back', () => {
+  botAddBtn('Verify Tx Hash', () => submitBotTxHash());
+  botAddBtn('Go back', () => {
     botClearBtns();
     $('bot-input-area').style.display = 'none';
     botAddMsg('bot', 'Did you make a payment for a match?');
     botStep = 1;
-    botAddBtn('✅ Yes, I paid', () => botHandleYes());
-    botAddBtn('❌ No', () => botHandleNo(), 'danger');
+    botAddBtn('Yes, I paid', () => botHandleYes());
+    botAddBtn('No', () => botHandleNo(), 'danger');
   });
 }
 
@@ -3434,15 +3483,15 @@ window.submitBotTxHash = async function() {
     myUsername = localStorage.getItem('myUsername') || '';
   }
   if (!myAddress) {
-    botAddMsg('error', '⚠️ Please sign in first so I can verify your transaction.');
-    botAddBtn('👍 Got it', () => closeSupportBot());
+    botAddMsg('error', 'Please sign in first so I can verify your transaction.');
+    botAddBtn('Got it', () => closeSupportBot());
     return;
   }
 
   $('bot-input-area').style.display = 'none';
   $('bot-btn-area').innerHTML = '';
   botAddMsg('user', `Tx: ${txHash.slice(0, 10)}...${txHash.slice(-8)}`);
-  botAddMsg('system', '🔗 Verifying on-chain...');
+  botAddMsg('system', 'Verifying on-chain...');
   botShowTyping();
 
   try {
@@ -3474,9 +3523,9 @@ window.submitBotTxHash = async function() {
     botHideTyping();
 
     if (!txData) {
-      botAddMsg('error', '❌ Transaction not found on-chain. Please double-check the hash.');
-      botAddBtn('🔄 Try again', () => botShowTxInput());
-      botAddBtn('🏠 Go back', () => closeSupportBot());
+      botAddMsg('error', 'Transaction not found on-chain. Please double-check the hash.');
+      botAddBtn('Try again', () => botShowTxInput());
+      botAddBtn('Go back', () => closeSupportBot());
       return;
     }
 
@@ -3488,17 +3537,17 @@ window.submitBotTxHash = async function() {
     const isToContract = toAddr === DICE_DUEL_CONTRACT.toLowerCase();
 
     if (!isFromUser) {
-      botAddMsg('error', '❌ This transaction was not sent from your wallet. Please provide a transaction you sent.');
-      botAddBtn('🔄 Try again', () => botShowTxInput());
-      botAddBtn('🏠 Go back', () => closeSupportBot());
+      botAddMsg('error', 'This transaction was not sent from your wallet. Please provide a transaction you sent.');
+      botAddBtn('Try again', () => botShowTxInput());
+      botAddBtn('Go back', () => closeSupportBot());
       return;
     }
 
     if (!isToContract) {
       botAddMsg('error', 'This transaction was not sent to our game contract. Please provide a valid payment transaction.');
       botAddMsg('bot', `Expected contract: ${DICE_DUEL_CONTRACT.slice(0,10)}...${DICE_DUEL_CONTRACT.slice(-6)}`);
-      botAddBtn('🔄 Try again', () => botShowTxInput());
-      botAddBtn('🏠 Go back', () => closeSupportBot());
+      botAddBtn('Try again', () => botShowTxInput());
+      botAddBtn('Go back', () => closeSupportBot());
       return;
     }
 
@@ -3529,9 +3578,9 @@ window.submitBotTxHash = async function() {
 
     const txSuccess = txReceipt ? txReceipt.status === '0x1' : false;
     if (txReceipt && !txSuccess) {
-      botAddMsg('error', '❌ This transaction failed on-chain. No payment was made.');
+      botAddMsg('error', 'This transaction failed on-chain. No payment was made.');
       botAddMsg('bot', 'You can try paying again — your funds were never deducted.');
-      botAddBtn('🏠 Go back', () => closeSupportBot());
+      botAddBtn('Go back', () => closeSupportBot());
       return;
     }
 
@@ -3540,19 +3589,19 @@ window.submitBotTxHash = async function() {
     const inputData = txData.input || '';
     const isTokenTransfer = inputData.startsWith('0xa9059cbb');
 
-    botAddMsg('bot', '✅ Transaction verified on-chain!');
-    botAddHtmlMsg('bot', `📋 <b>From:</b> ${fromAddr.slice(0,10)}...<br><b>To:</b> ${toAddr.slice(0,10)}...<br><b>Status:</b> Confirmed ✅`);
+    botAddMsg('bot', 'Transaction verified on-chain!');
+    botAddHtmlMsg('bot', `<b>From:</b> ${fromAddr.slice(0,10)}...<br><b>To:</b> ${toAddr.slice(0,10)}...<br><b>Status:</b> Confirmed`);
 
     // ----------------------------------------------------------
     // DUPLICATE / ALREADY-REFUNDED CHECK
     // A real payment tx hash can only ever belong to ONE match
     // (server-side dedupe). Find that match, then check whether a
     // refund already exists for it:
-    //   - 'done' with a tx_hash -> refund already processed, show
-    //     the refund hash + copy + explorer link
-    //   - 'pending'/'processing' -> already queued, wait a minute
-    //   - 'failed' -> try re-queueing it
-    //   - none -> proceed to the normal refund flow below
+    // - 'done' with a tx_hash -> refund already processed, show
+    // the refund hash + copy + explorer link
+    // - 'pending'/'processing' -> already queued, wait a minute
+    // - 'failed' -> try re-queueing it
+    // - none -> proceed to the normal refund flow below
     // ----------------------------------------------------------
     const { data: paidMatches } = await supabaseClient
       .from('matches')
@@ -3578,27 +3627,27 @@ window.submitBotTxHash = async function() {
       if (refund && refund.status === 'done' && refund.tx_hash) {
         const refundTx = refund.tx_hash;
         const rShort = `${refundTx.slice(0,10)}...${refundTx.slice(-8)}`;
-        botAddMsg('success', `✅ Refund ALREADY PROCESSED for this payment!`);
+        botAddMsg('success', `Refund ALREADY PROCESSED for this payment!`);
         botAddMsg('bot', `Your ${refund.fee} WLD refund was already sent on-chain. Here is your refund transaction hash:`);
         botAddHtmlMsg('bot', `<div style="font-family:'JetBrains Mono',monospace; font-size:10px; word-break:break-all; background:rgba(41,217,194,0.08); border:1px solid rgba(41,217,194,0.35); border-radius:8px; padding:8px 10px; color:var(--photon);">${refundTx}</div>` +
           `<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">` +
-          `<button onclick="navigator.clipboard.writeText('${refundTx}'); this.textContent='✅ Copied!';" style="background:rgba(41,217,194,0.15); border:1px solid rgba(41,217,194,0.5); color:var(--photon); font-size:10px; padding:5px 10px; border-radius:6px; cursor:pointer;">📋 Copy refund hash</button>` +
-          `<a href="https://worldscan.org/tx/${refundTx}" target="_blank" rel="noopener" style="background:rgba(255,179,0,0.15); border:1px solid rgba(255,179,0,0.5); color:var(--gold); font-size:10px; padding:5px 10px; border-radius:6px; text-decoration:none;">🔍 View on explorer</a>` +
+          `<button onclick="navigator.clipboard.writeText('${refundTx}'); this.textContent='Copied!';" style="background:rgba(41,217,194,0.15); border:1px solid rgba(41,217,194,0.5); color:var(--photon); font-size:10px; padding:5px 10px; border-radius:6px; cursor:pointer;"> Copy refund hash</button>` +
+          `<a href="https://worldscan.org/tx/${refundTx}" target="_blank" rel="noopener" style="background:rgba(255,179,0,0.15); border:1px solid rgba(255,179,0,0.5); color:var(--gold); font-size:10px; padding:5px 10px; border-radius:6px; text-decoration:none;"> View on explorer</a>` +
           `</div>`);
-        botAddMsg('bot', 'You can copy it and paste it anywhere to verify (e.g. worldscan.org). No further action needed! 🎲');
-        botAddBtn('👍 Done', () => closeSupportBot());
+        botAddMsg('bot', 'You can copy it and paste it anywhere to verify (e.g. worldscan.org). No further action needed!');
+        botAddBtn('Done', () => closeSupportBot());
         return;
       }
 
       if (refund && (refund.status === 'pending' || refund.status === 'processing')) {
-        botAddMsg('bot', `⏳ Your ${refund.fee} WLD refund is ALREADY QUEUED and being processed. It will arrive within ~1 minute.`);
-        botAddMsg('bot', 'No need to submit again — sit tight! 🎲');
-        botAddBtn('👍 Done', () => closeSupportBot());
+        botAddMsg('bot', `Your ${refund.fee} WLD refund is ALREADY QUEUED and being processed. It will arrive within ~1 minute.`);
+        botAddMsg('bot', 'No need to submit again — sit tight!');
+        botAddBtn('Done', () => closeSupportBot());
         return;
       }
 
       if (refund && refund.status === 'failed') {
-        botAddMsg('bot', `⚠️ A previous refund attempt for this payment failed (${refund.error || 'unknown error'}). Let me try again for you...`);
+        botAddMsg('bot', `A previous refund attempt for this payment failed (${refund.error || 'unknown error'}). Let me try again for you...`);
         // fall through to the re-queue flow below
       }
     }
@@ -3606,15 +3655,15 @@ window.submitBotTxHash = async function() {
     // Also guard against re-using a hash that was already recorded on
     // a completed match (fake re-submission of a settled payment).
     if (hashMatch && hashMatch.status === 'completed') {
-      botAddMsg('bot', 'ℹ️ This payment belongs to a match that was already completed. If the match finished normally, the winner payout was already handled.');
+      botAddMsg('bot', 'This payment belongs to a match that was already completed. If the match finished normally, the winner payout was already handled.');
       botAddMsg('bot', 'If you think something is wrong, contact @TNVTEAMWLD on Telegram.');
-      botAddBtn('💬 Open Telegram', () => window.open('https://t.me/TNVTEAMWLD', '_blank'));
-      botAddBtn('👍 Done', () => closeSupportBot());
+      botAddBtn('Open Telegram', () => window.open('https://t.me/TNVTEAMWLD', '_blank'));
+      botAddBtn('Done', () => closeSupportBot());
       return;
     }
 
     // Now find the match this payment was for and queue refund
-    botAddMsg('system', '🔄 Looking up your match and processing refund...');
+    botAddMsg('system', 'Looking up your match and processing refund...');
     botShowTyping();
 
     // Find recent match for this user
@@ -3646,8 +3695,8 @@ window.submitBotTxHash = async function() {
           });
           if (refundResult && (refundResult.success === true || refundResult.error === 'already_queued')) {
             refundQueued = true;
-            botAddMsg('success', `✅ Refund queued for ${m.fee} WLD match (${m.status})!`);
-            botAddMsg('bot', 'Your WLD will be returned within ~1 minute. Thank you for your patience! 🎲');
+            botAddMsg('success', `Refund queued for ${m.fee} WLD match (${m.status})!`);
+            botAddMsg('bot', 'Your WLD will be returned within ~1 minute. Thank you for your patience!');
             break;
           }
         } catch(e) { /* try next match */ }
@@ -3655,22 +3704,22 @@ window.submitBotTxHash = async function() {
 
       if (!refundQueued) {
         botAddMsg('bot', 'I found your match but couldn\'t queue the refund automatically. Our team has been notified.');
-        botAddMsg('system', '📧 Please contact @TNVTEAMWLD on Telegram with your transaction hash for manual processing.');
-        botAddBtn('💬 Open Telegram', () => window.open('https://t.me/TNVTEAMWLD', '_blank'));
+        botAddMsg('system', 'Please contact @TNVTEAMWLD on Telegram with your transaction hash for manual processing.');
+        botAddBtn('Open Telegram', () => window.open('https://t.me/TNVTEAMWLD', '_blank'));
       }
     } else {
       botAddMsg('bot', 'Transaction verified but I couldn\'t find a matching game record. Our team will help.');
-      botAddMsg('system', '📧 Contact @TNVTEAMWLD on Telegram with this tx hash for manual processing.');
-      botAddBtn('💬 Open Telegram', () => window.open('https://t.me/TNVTEAMWLD', '_blank'));
+      botAddMsg('system', 'Contact @TNVTEAMWLD on Telegram with this tx hash for manual processing.');
+      botAddBtn('Open Telegram', () => window.open('https://t.me/TNVTEAMWLD', '_blank'));
     }
 
-    botAddBtn('👍 Done', () => closeSupportBot());
+    botAddBtn('Done', () => closeSupportBot());
 
   } catch (e) {
     botHideTyping();
-    botAddMsg('error', '❌ Error verifying transaction. Please try again or contact support.');
-    botAddBtn('🔄 Try again', () => botShowTxInput());
-    botAddBtn('💬 Contact Support', () => window.open('https://t.me/TNVTEAMWLD', '_blank'));
+    botAddMsg('error', 'Error verifying transaction. Please try again or contact support.');
+    botAddBtn('Try again', () => botShowTxInput());
+    botAddBtn('Contact Support', () => window.open('https://t.me/TNVTEAMWLD', '_blank'));
 
   }
 };
@@ -3838,7 +3887,7 @@ window.submitBotTxHash = async function() {
     window._tapTimestamps.push(now);
     // Keep only last 3 seconds of timestamps
     window._tapTimestamps = window._tapTimestamps.filter(t => now - t < 3000);
-    // If more than 8 taps in 3 seconds → suspicious
+    // If more than 8 taps in 3 seconds suspicious
     if (window._tapTimestamps.length > 8) {
       window._isTapBlocked = true;
       showNeonToast('Auto-clicker detected! Tap blocked for 10 seconds.', 'error');
@@ -3915,7 +3964,7 @@ window.submitBotTxHash = async function() {
 // Monitors all app errors, network failures, RPC failures,
 // stuck matches, broken states. Auto-fixes what it can.
 // Logs everything to Supabase for admin review.
-// Admin can paste error screenshots → system auto-diagnoses.
+// Admin can paste error screenshots system auto-diagnoses.
 // ============================================
 (function aiAgentInit() {
   'use strict';
@@ -4229,7 +4278,7 @@ window.submitBotTxHash = async function() {
   }
 
   // ---- 7. AUTO-DIAGNOSIS FROM ERROR DESCRIPTIONS ----
-  // Admin can paste an error description → system diagnoses and suggests fixes
+  // Admin can paste an error description system diagnoses and suggests fixes
   function diagnoseError(errorText) {
     const lower = (errorText || '').toLowerCase();
     const diagnoses = [];
