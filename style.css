@@ -228,6 +228,31 @@ h1.brand {
 .wd-approved { background: rgba(41,217,194,0.1); color: var(--accent); }
 .wd-rejected { background: var(--danger-dim); color: var(--danger); }
 
+/* ---- HOME: HOW IT WORKS ---- */
+/* Fills the empty lower half of the Home tab with real information. The
+   step numbers are deliberately muted rather than filled discs: this is an
+   explanation, not a progress indicator, and a bright numeral would read
+   as decorative. */
+.home-steps {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.step { display: flex; align-items: flex-start; gap: 12px; }
+.step-num {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; margin-top: 1px;
+  border: 1px solid var(--border); color: var(--text-muted);
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+}
+.step-body { display: flex; flex-direction: column; gap: 2px; }
+.step-body b { font-size: 13px; font-weight: 600; color: var(--text); }
+/* Kept to a single line on a 360px screen. At 11px/1.5 a longer
+   description wrapped to two lines and pushed the Home tab 47px past the
+   viewport on a 360x640 phone, breaking the no-scroll fit. */
+.step-body span { font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
+
 /* ---- MORE TAB GRID ---- */
 .more-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 .more-tile {
