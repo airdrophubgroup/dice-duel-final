@@ -2,7 +2,22 @@
 // MiniKit.commandsAsync (the API this app uses). Do not bump this CDN
 // version without migrating every command call to the v2 API.
 import { MiniKit, Tokens, tokenToDecimals } from "https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@1.9.6/+esm";  
-import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";  
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+// Set as soon as the module graph (both CDN deps above) has evaluated. If a
+// CDN request fails, this file never runs and modal-fallback.js shows a retry
+// panel instead of leaving the user on a dead screen.
+window.__appBooted = true;
+// Storage that never throws. Mirrors window.safeStorage from modal-fallback.js
+// so this module is safe even if that file is ever loaded without it. A blocked
+// localStorage must never abort boot (it used to lock the user out of the app).
+const safeStorage = (typeof window !== "undefined" && window.safeStorage) || (() => {
+  const _mem = {};
+  return {
+    getItem: (k) => { try { return localStorage.getItem(k); } catch (e) { return Object.prototype.hasOwnProperty.call(_mem, k) ? _mem[k] : null; } },
+    setItem: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { _mem[k] = String(v); } },
+    removeItem: (k) => { try { localStorage.removeItem(k); } catch (e) { delete _mem[k]; } },
+  };
+})();  
 
 const SB_URL = "https://efmkazyrxllcyvcwmewd.supabase.co";  
 const SB_KEY = "sb_publishable_px6Myv6S29bTXRYmYLAkgQ_WDHDb7da";  
@@ -139,12 +154,12 @@ function setWaitStatus(status, sub) {
 
 // Privacy consent
 globalThis.acceptConsent = function() {
-  localStorage.setItem('tnv_consent', '1');
+  safeStorage.setItem('tnv_consent', '1');
   const cm = document.getElementById('consent-modal');
   if (cm) cm.style.display = 'none';
 };
 function checkConsent() {
-  if (localStorage.getItem('tnv_consent') === '1') {
+  if (safeStorage.getItem('tnv_consent') === '1') {
     const cm = document.getElementById('consent-modal');
     if (cm) cm.style.display = 'none';
   }
@@ -228,8 +243,8 @@ function waitForMiniKitReady(timeoutMs = 15000) {
   // page load instead of sitting at 0/0.00 until the silent auth
   // completes (which may require a user gesture in the WebView). The
   // silent sign-in below refreshes/validates it.
-  const savedAddress = localStorage.getItem('myAddress');  
-  const savedUsername = localStorage.getItem('myUsername');  
+  const savedAddress = safeStorage.getItem('myAddress');  
+  const savedUsername = safeStorage.getItem('myUsername');  
   if (savedAddress && !myAddress) {  
     myAddress = savedAddress.toLowerCase();  
     myUsername = savedUsername || ('@W_' + savedAddress.substring(2, 8));  
@@ -267,8 +282,8 @@ function waitForMiniKitReady(timeoutMs = 15000) {
   }  
 
   // RECONNECTION: if user was in a game when app was cut, try to rejoin
-  const savedMatchId = localStorage.getItem('currentMatchId');
-  const savedIsP1 = localStorage.getItem('isP1');
+  const savedMatchId = safeStorage.getItem('currentMatchId');
+  const savedIsP1 = safeStorage.getItem('isP1');
   if (savedMatchId && myAddress) {
     try {
       const { data: m } = await supabaseClient
@@ -280,16 +295,16 @@ function waitForMiniKitReady(timeoutMs = 15000) {
         const isOwner = (m.p1_address && m.p1_address.toLowerCase() === myAddr) ||
                         (m.p2_address && m.p2_address.toLowerCase() === myAddr);
         if (!isOwner) {
-          localStorage.removeItem('currentMatchId');
-          localStorage.removeItem('isP1');
+          safeStorage.removeItem('currentMatchId');
+          safeStorage.removeItem('isP1');
           return;
         }
         // ANTI-CHEAT: Limit reconnections per match (max 3)
         _reconnectCount++;
         if (_reconnectCount > _MAX_RECONNECTS) {
           showNeonToast('Too many reconnections. Match forfeited.', 'error');
-          localStorage.removeItem('currentMatchId');
-          localStorage.removeItem('isP1');
+          safeStorage.removeItem('currentMatchId');
+          safeStorage.removeItem('isP1');
           return;
         }
         const elapsed = Math.floor((Date.now() - new Date(m.start_time).getTime()) / 1000);
@@ -323,8 +338,8 @@ function waitForMiniKitReady(timeoutMs = 15000) {
         }
       } else if (m && (m.status === 'completed' || m.status === 'cancelled')) {
         // Match already done — clear stale localStorage
-        localStorage.removeItem('currentMatchId');
-        localStorage.removeItem('isP1');
+        safeStorage.removeItem('currentMatchId');
+        safeStorage.removeItem('isP1');
       }
     } catch (e) { /* match not found or DB error — proceed normally */ }
   }
@@ -428,7 +443,7 @@ function showLiveBetNotification(username, fee) {
 
 function loadAndCleanChatHistory() {  
   try {  
-    const raw = localStorage.getItem(CHAT_STORAGE_KEY);  
+    const raw = safeStorage.getItem(CHAT_STORAGE_KEY);  
     if (!raw) return;  
     let history = JSON.parse(raw);  
     const now = Date.now();  
@@ -436,7 +451,7 @@ function loadAndCleanChatHistory() {
     // Cap stored history so localStorage + initial render stay tiny on
     // low-end phones even with 300+ users chatting (perf guard).
     if (history.length > 100) history = history.slice(history.length - 100);  
-    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(history));  
+    safeStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(history));  
 
     const container = $('chat-messages-container');  
     container.innerHTML = '';  
@@ -465,13 +480,13 @@ function loadAndCleanChatHistory() {
 
 function saveAndAppendChatMessage(sender, message, senderAddress, timestamp) {  
   try {  
-    const raw = localStorage.getItem(CHAT_STORAGE_KEY);  
+    const raw = safeStorage.getItem(CHAT_STORAGE_KEY);  
     let history = raw ? JSON.parse(raw) : [];  
     history.push({ sender, message, address: senderAddress, timestamp });  
     const now = Date.now();  
     history = history.filter(item => (now - item.timestamp) < CHAT_EXPIRY_MS);  
     if (history.length > 100) history = history.slice(history.length - 100);  
-    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(history));  
+    safeStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(history));  
     renderChatMessageUI(sender, message, senderAddress, timestamp);  
     // Keep the live DOM capped too (trim oldest bubbles past 150) so the
     // chat can never balloon into an unbounded DOM tree during a session.
@@ -1636,6 +1651,15 @@ function leaderboardName(row) {
   return 'Player ' + String(1000 + (h % 9000));
 }
 
+// Bound every leaderboard request: a hanging or never-settling request must
+// not leave the Ranks tab on a permanent "Loading..." placeholder.
+function _withTimeout(promise, ms) {
+  return Promise.race([
+    Promise.resolve(promise).then(v => v, () => null),
+    new Promise(resolve => setTimeout(() => resolve(null), ms)),
+  ]);
+}
+
 async function fetchLeaderboard() {
   const lbContainer = $('lb-container');
   if (!lbContainer) return;
@@ -1643,22 +1667,24 @@ async function fetchLeaderboard() {
   // Preferred path: server-side RPC that resolves usernames and never
   // returns wallet addresses to the client at all.
   try {
-    const { data, error } = await supabaseClient.rpc('get_leaderboard');
-    if (!error && Array.isArray(data)) rows = data;
+    const res = await _withTimeout(supabaseClient.rpc('get_leaderboard'), 8000);
+    if (res && !res.error && Array.isArray(res.data)) rows = res.data;
   } catch (e) { /* RPC not deployed yet — fall through to legacy read */ }
   if (!rows) {
     try {
-      const { data } = await supabaseClient.from('user_rewards')
+      const res = await _withTimeout(supabaseClient.from('user_rewards')
         .select('wallet_address, tnv_balance')
-        .order('tnv_balance', { ascending: false }).limit(10);
-      rows = data || [];
+        .order('tnv_balance', { ascending: false }).limit(10), 8000);
+      rows = (res && res.data) || [];
     } catch (e) { rows = []; }
   }
-  rows = (rows || []).filter(r => Number(r.tnv_balance) > 0);
+  if (!Array.isArray(rows)) rows = [];
+  rows = rows.filter(r => Number(r.tnv_balance) > 0);
   if (!rows.length) {
     lbContainer.innerHTML = '<div class="lb-item" style="justify-content:center; color:var(--slate);">No leaders yet</div>';
     return;
   }
+  try {
   lbContainer.innerHTML = rows.map((row, index) => {
     const rank = Number(row.rank) || index + 1;
     const rankClass = index === 0 ? 'top-1' : (index === 1 ? 'top-2' : (index === 2 ? 'top-3' : ''));
@@ -1669,6 +1695,9 @@ async function fetchLeaderboard() {
       + `<span class="lb-score">${escapeHtml(Number(row.tnv_balance).toLocaleString())} TNV</span>`
       + `</div>`;
   }).join('');
+  } catch (e) {
+    lbContainer.innerHTML = '<div class="lb-item" style="justify-content:center; color:var(--slate);">Leaderboard unavailable</div>';
+  }
 }
 
 // LIVE STATS: fetch withdrawal requests, agent messages, total matches, online players
@@ -1704,6 +1733,12 @@ setInterval(fetchLiveStats, 30000);
 // Resolve the Home tab's withdrawal placeholder even before sign-in, so a
 // visitor never sees a permanent "Loading..." state.
 setTimeout(refreshHomeWithdrawStatus, 600);
+setTimeout(fetchLeaderboard, 1200);
+
+// Same safety net for the Ranks tab. fetchLeaderboard() is called at the very
+// end of boot, AFTER a 15s waitForMiniKitReady() — and the reconnection branch
+// above can `return` before it ever runs. Without this the Ranks tab can sit on
+// "Loading..." for the whole session.
 
 window.openWithdrawModal = function() {  
   if (currentTnvBalance < 5000) { showNeonToast('Min 5,000 TNV required!', 'warning'); return; }  
@@ -2075,8 +2110,8 @@ async function performWalletAuth(silent = false){
       realWorldIdUser = true;  
       const username = await resolveUsername(finalPayload.address);  
       setUserData(username, finalPayload.address);  
-      localStorage.setItem("myAddress", myAddress);  
-      localStorage.setItem("myUsername", username);  
+      safeStorage.setItem("myAddress", myAddress);  
+      safeStorage.setItem("myUsername", username);  
       return true;  
     }  
 
@@ -2564,8 +2599,8 @@ async function cancelMatchmaking(showAlert = true) {
   if (data.p1_paid === true && data.p2_paid === true && (data.status === 'matched' || data.status === 'playing')){
     if (pollTimer) clearInterval(pollTimer);
     $('opp-name-tag').innerText = (isP1 ? data.p2_username : data.p1_username) || 'OPP';
-    localStorage.setItem("currentMatchId", matchId);
-    localStorage.setItem("isP1", isP1);
+    safeStorage.setItem("currentMatchId", matchId);
+    safeStorage.setItem("isP1", isP1);
 
     if (data.match_id) {
       matchIdBytes32Global = await matchIdToBytes32(data.match_id);
@@ -2869,10 +2904,10 @@ async function tapSkillMeter() {
 async function finalizeGame(){  
   if (!gameActive) return;  
   gameActive = false;  
-  if (!myAddress) myAddress = localStorage.getItem("myAddress") || "";  
+  if (!myAddress) myAddress = safeStorage.getItem("myAddress") || "";  
 
-  localStorage.removeItem("currentMatchId");  
-  localStorage.removeItem("isP1");  
+  safeStorage.removeItem("currentMatchId");  
+  safeStorage.removeItem("isP1");  
 
   const { data: m } = await supabaseClient.from('matches').select('*').eq('id', matchId).single();  
   if (!m) { resetToHome(); return; }  
@@ -3157,8 +3192,8 @@ async function botHandleYes() {
 
   // Ensure wallet is available — restore from localStorage if needed
   if (!myAddress) {
-    myAddress = (localStorage.getItem('myAddress') || '').toLowerCase();
-    myUsername = localStorage.getItem('myUsername') || '';
+    myAddress = (safeStorage.getItem('myAddress') || '').toLowerCase();
+    myUsername = safeStorage.getItem('myUsername') || '';
   }
   if (!myAddress) {
     botHideTyping();
@@ -3497,8 +3532,8 @@ window.submitBotTxHash = async function() {
 
   // Ensure wallet is available
   if (!myAddress) {
-    myAddress = (localStorage.getItem('myAddress') || '').toLowerCase();
-    myUsername = localStorage.getItem('myUsername') || '';
+    myAddress = (safeStorage.getItem('myAddress') || '').toLowerCase();
+    myUsername = safeStorage.getItem('myUsername') || '';
   }
   if (!myAddress) {
     botAddMsg('error', 'Please sign in first so I can verify your transaction.');
@@ -4077,11 +4112,16 @@ window.submitBotTxHash = async function() {
   // Every 60 seconds, scan for stuck matches and auto-fix them
   async function autoRecoverStuckMatches() {
     if (!myAddress) return;
+    const wallet = myAddress.toLowerCase().trim();
     try {
       // Find matches stuck in 'playing' for > 60 seconds (should max 35s)
       const { data: stuckMatches } = await supabaseClient
         .from('matches')
         .select('id, status, fee, created_at, p1_address, p2_address, p1_paid, p2_paid')
+        // SECURITY: only ever touch matches the caller is in. This used to scan
+        // EVERY match globally and complete them as p1_address, letting any client
+        // force-settle other players' games.
+        .or(`p1_address.eq.${wallet},p2_address.eq.${wallet}`)
         .eq('status', 'playing')
         .lt('created_at', new Date(Date.now() - 60000).toISOString())
         .limit(20);
@@ -4092,7 +4132,7 @@ window.submitBotTxHash = async function() {
         try {
           // Try to complete the match server-side
           await supabaseClient.rpc('secure_complete_match', {
-            p_match_id: m.id, p_wallet: m.p1_address
+            p_match_id: m.id, p_wallet: wallet
           });
           logAppError('auto_recovery', `Fixed stuck match ${m.id} (${m.fee} WLD)`, '', 'info', {
             action: 'complete_stuck_match',
@@ -4453,6 +4493,10 @@ window.submitBotTxHash = async function() {
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     const panel = document.getElementById('tab-' + tab);
     if (panel) panel.classList.add('active');
+
+    // Refresh the board when the Ranks tab is opened so it never shows a stale
+    // or empty state after a failed load.
+    if (tab === 'leaderboard' && typeof fetchLeaderboard === 'function') fetchLeaderboard();
 
     // Show/hide game screen when Play tab is active
     // (game screen is separate from tab panels)
